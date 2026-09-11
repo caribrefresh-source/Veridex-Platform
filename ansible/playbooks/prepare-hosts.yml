@@ -1,0 +1,7 @@
+---
+- name: Prepare hosts for k3s
+  hosts: all
+  become: true
+  roles:
+    - common
+    - firewall

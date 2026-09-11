@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+kubeconfig
+*.kubeconfig
+
+# Claude Code runtime state
+.claude/worktrees/
+.claude/scheduled_tasks.lock
+
+# Build / scratch
+dist/
+build/
+.tmp/
+*.log

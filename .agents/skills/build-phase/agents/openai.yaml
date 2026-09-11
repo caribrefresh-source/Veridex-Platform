@@ -1,0 +1,4 @@
+interface:
+  display_name: "Build Phase"
+  short_description: "Build and verify one platform phase"
+  default_prompt: "Use $build-phase to build and verify Phase 1 through its measured Exit Gate."

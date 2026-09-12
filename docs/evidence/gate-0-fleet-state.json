@@ -1,0 +1,2314 @@
+{
+  "servers": [
+    {
+      "id": 938801,
+      "name": "v2202609417155518911",
+      "disabled": false,
+      "hostname": "v2202609417155518911.megasrv.de",
+      "nickname": "veridex-server-1",
+      "template": {
+        "id": 1351,
+        "name": "RS 1000 G12"
+      }
+    },
+    {
+      "id": 938802,
+      "name": "v2202609417155518912",
+      "disabled": false,
+      "hostname": "v2202609417155518912.quicksrv.de",
+      "nickname": "veridex-server-2",
+      "template": {
+        "id": 1351,
+        "name": "RS 1000 G12"
+      }
+    },
+    {
+      "id": 938803,
+      "name": "v2202609417155518913",
+      "disabled": false,
+      "hostname": "v2202609417155518913.hotsrv.de",
+      "nickname": "veridex-server-3",
+      "template": {
+        "id": 1351,
+        "name": "RS 1000 G12"
+      }
+    },
+    {
+      "id": 939122,
+      "name": "v2202609417155519279",
+      "disabled": false,
+      "hostname": "v2202609417155519279.happysrv.de",
+      "nickname": "veridex-agent-1",
+      "template": {
+        "id": 1354,
+        "name": "RS 2000 G12"
+      }
+    },
+    {
+      "id": 939123,
+      "name": "v2202609417155519280",
+      "disabled": false,
+      "hostname": "v2202609417155519280.ultrasrv.de",
+      "nickname": "veridex-agent-2",
+      "template": {
+        "id": 1354,
+        "name": "RS 2000 G12"
+      }
+    }
+  ],
+  "vlans": [
+    {
+      "bandwidthClass": {
+        "id": 4,
+        "name": "1000Mbit",
+        "speedInMBit": 1000
+      },
+      "name": "veridex-netcup-prod-k3s",
+      "site": {
+        "city": "Nuremberg",
+        "id": 1
+      },
+      "user": {
+        "note": "account holder block removed before commit (name/email/company/SCP login username)"
+      },
+      "vlanId": 1006740
+    }
+  ],
+  "detail": [
+    {
+      "id": 938801,
+      "server": {
+        "id": 938801,
+        "name": "v2202609417155518911",
+        "disabled": false,
+        "hostname": "v2202609417155518911.megasrv.de",
+        "nickname": "veridex-server-1",
+        "template": {
+          "id": 1351,
+          "name": "RS 1000 G12"
+        },
+        "architecture": "AMD64",
+        "disksAvailableSpaceInMiB": 8126464,
+        "gpuDriverAvailable": false,
+        "ipv4Addresses": [
+          {
+            "broadcast": "152.53.179.255",
+            "gateway": "152.53.176.1",
+            "id": 230748,
+            "ip": "152.53.177.26",
+            "netmask": "255.255.252.0"
+          }
+        ],
+        "ipv6Addresses": [
+          {
+            "gateway": "fe80::1",
+            "id": 1006481,
+            "networkPrefix": "2a0a:4cc0:c0:d42a::",
+            "networkPrefixLength": 64
+          }
+        ],
+        "maxCpuCount": 4,
+        "rescueSystemActive": false,
+        "serverLiveInfo": {
+          "autostart": true,
+          "bootorder": [
+            "HDD",
+            "CDROM",
+            "NETWORK"
+          ],
+          "cloudinitAttached": false,
+          "configChanged": true,
+          "coresPerSocket": 1,
+          "cpuCount": 4,
+          "cpuMaxCount": 4,
+          "currentServerMemoryInMiB": 8192,
+          "disks": [
+            {
+              "allocationInMiB": 1392,
+              "capacityInMiB": 262144,
+              "dev": "vda",
+              "driver": "virtio"
+            }
+          ],
+          "interfaces": [
+            {
+              "driver": "virtio",
+              "ipv4Addresses": [
+                "152.53.177.26"
+              ],
+              "ipv6LinkLocalAddresses": [
+                "fe80::38e4:08ff:feaf:959c"
+              ],
+              "ipv6NetworkPrefixes": [
+                "2a0a:4cc0:c0:d42a::/64"
+              ],
+              "mac": "3a:e4:08:af:95:9c",
+              "mtu": 1500,
+              "rxMonthlyInMiB": 0,
+              "speedInMBits": 2500,
+              "trafficThrottled": false,
+              "txMonthlyInMiB": 0,
+              "vlanId": null,
+              "vlanInterface": false
+            },
+            {
+              "driver": "virtio",
+              "ipv4Addresses": [],
+              "ipv6LinkLocalAddresses": [],
+              "ipv6NetworkPrefixes": [],
+              "mac": "3a:e4:08:af:95:9d",
+              "mtu": 0,
+              "rxMonthlyInMiB": 0,
+              "speedInMBits": 1000,
+              "trafficThrottled": false,
+              "txMonthlyInMiB": 0,
+              "vlanId": 1006740,
+              "vlanInterface": true
+            }
+          ],
+          "keyboardLayout": "en-us",
+          "latestQemu": true,
+          "machineType": "pc-i440fx-9.2",
+          "maxServerMemoryInMiB": 8192,
+          "nestedGuest": false,
+          "osOptimization": "LINUX",
+          "requiredStorageOptimization": "NO",
+          "sockets": 4,
+          "state": "RUNNING",
+          "template": "RS 1000 G12",
+          "uefi": false,
+          "uptimeInSeconds": 40363
+        },
+        "site": {
+          "city": "Nuremberg",
+          "id": 1
+        },
+        "snapshotAllowed": true,
+        "snapshotCount": 1
+      },
+      "interfaces": [
+        {
+          "driver": "virtio",
+          "ipv4Addresses": [
+            {
+              "cidr": "152.53.177.26/22",
+              "destinationIp": null,
+              "editable": false,
+              "gateway": "152.53.176.1",
+              "id": 230748,
+              "interfaceMac": "3a:e4:08:af:95:9c",
+              "ip": "152.53.177.26",
+              "rdns": "v2202609417155518911.megasrv.de",
+              "type": "IP"
+            }
+          ],
+          "ipv6Addresses": [
+            {
+              "cidr": "fe80::38e4:08ff:feaf:959c/10",
+              "destinationIp": null,
+              "editable": false,
+              "gateway": null,
+              "id": 0,
+              "interfaceMac": "3a:e4:08:af:95:9c",
+              "linkLocal": true,
+              "networkPrefix": "fe80::38e4:08ff:feaf:959c",
+              "rdns": {},
+              "type": "IP"
+            },
+            {
+              "cidr": "2a0a:4cc0:c0:d42a::/64",
+              "destinationIp": null,
+              "editable": false,
+              "gateway": "fe80::1",
+              "id": 1006481,
+              "interfaceMac": "3a:e4:08:af:95:9c",
+              "linkLocal": false,
+              "networkPrefix": "2a0a:4cc0:c0:d42a::",
+              "rdns": {},
+              "type": "IP"
+            }
+          ],
+          "mac": "3a:e4:08:af:95:9c",
+          "speedInMBits": 2500
+        },
+        {
+          "driver": "virtio",
+          "ipv4Addresses": [],
+          "ipv6Addresses": [],
+          "mac": "3a:e4:08:af:95:9d",
+          "speedInMBits": 1000
+        }
+      ],
+      "imageflavours": [
+        {
+          "alias": "Minimal",
+          "id": 123,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 35,
+            "name": "AlmaLinux 10.2 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 52,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 20,
+            "name": "AlmaLinux 8.10 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 22,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 12,
+            "name": "AlmaLinux 9.6 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 126,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 38,
+            "name": "AlmaLinux 9.8 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 12,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 9,
+            "name": "ArchLinux 2026.08.01 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 10,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 7,
+            "name": "Debian (11) Bullseye"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 111,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 29,
+            "name": "Debian 12.15.0 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 119,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 32,
+            "name": "Debian 13.6.0 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 128,
+          "name": "minimal",
+          "text": "Minimal image",
+          "image": {
+            "id": 39,
+            "name": "Debian 13.6.0 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 110,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 10,
+            "name": "FreeBSD 14.4 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 129,
+          "name": "minimal",
+          "text": "Minimal",
+          "image": {
+            "id": 40,
+            "name": "FreeBSD 14.4 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 136,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 44,
+            "name": "FreeBSD 15.1 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 135,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 45,
+            "name": "FreeBSD 15.1 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 83,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 26,
+            "name": "OpenSUSE 15.6 BIOS amd64"
+          }
+        },
+        {
+          "alias": "minimal",
+          "id": 127,
+          "name": "minimal",
+          "text": "Minimal",
+          "image": {
+            "id": 31,
+            "name": "OpenSUSE 15.6 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 121,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 17,
+            "name": "RockyLinux 10.2 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 80,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 25,
+            "name": "RockyLinux 8.10 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 21,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 11,
+            "name": "RockyLinux 9.6 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 125,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 37,
+            "name": "RockyLinux 9.8 UEFI amd64"
+          }
+        },
+        {
+          "alias": "minimal",
+          "id": 131,
+          "name": "minimal",
+          "text": "Minimal",
+          "image": {
+            "id": 41,
+            "name": "Ubuntu 22.04.5 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 11,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 8,
+            "name": "Ubuntu 22.04.5 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 100,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 18,
+            "name": "Ubuntu 24.04.4 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 116,
+          "name": "minimal",
+          "text": "Minimal image",
+          "image": {
+            "id": 24,
+            "name": "Ubuntu 24.04.4 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 141,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 3,
+            "name": "Ubuntu 26.04.1 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 142,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 48,
+            "name": "Ubuntu 26.04.1 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 117,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 14,
+            "name": "Ubuntu cloudimg 24.04.4 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 144,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 50,
+            "name": "Ubuntu cloudimg 26.04.1 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 137,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 47,
+            "name": "Ubuntu openclaw 24.04.4 UEFI amd64"
+          }
+        }
+      ]
+    },
+    {
+      "id": 938802,
+      "server": {
+        "id": 938802,
+        "name": "v2202609417155518912",
+        "disabled": false,
+        "hostname": "v2202609417155518912.quicksrv.de",
+        "nickname": "veridex-server-2",
+        "template": {
+          "id": 1351,
+          "name": "RS 1000 G12"
+        },
+        "architecture": "AMD64",
+        "disksAvailableSpaceInMiB": 8126464,
+        "gpuDriverAvailable": false,
+        "ipv4Addresses": [
+          {
+            "broadcast": "152.53.143.255",
+            "gateway": "152.53.140.1",
+            "id": 234721,
+            "ip": "152.53.140.210",
+            "netmask": "255.255.252.0"
+          }
+        ],
+        "ipv6Addresses": [
+          {
+            "gateway": "fe80::1",
+            "id": 1024211,
+            "networkPrefix": "2a0a:4cc0:c1:96c::",
+            "networkPrefixLength": 64
+          }
+        ],
+        "maxCpuCount": 4,
+        "rescueSystemActive": false,
+        "serverLiveInfo": {
+          "autostart": true,
+          "bootorder": [
+            "HDD",
+            "CDROM",
+            "NETWORK"
+          ],
+          "cloudinitAttached": false,
+          "configChanged": true,
+          "coresPerSocket": 1,
+          "cpuCount": 4,
+          "cpuMaxCount": 4,
+          "currentServerMemoryInMiB": 8192,
+          "disks": [
+            {
+              "allocationInMiB": 2003,
+              "capacityInMiB": 262144,
+              "dev": "vda",
+              "driver": "virtio"
+            }
+          ],
+          "interfaces": [
+            {
+              "driver": "virtio",
+              "ipv4Addresses": [
+                "152.53.140.210"
+              ],
+              "ipv6LinkLocalAddresses": [
+                "fe80::c8b5:7fff:fe4b:2a46"
+              ],
+              "ipv6NetworkPrefixes": [
+                "2a0a:4cc0:c1:96c::/64"
+              ],
+              "mac": "ca:b5:7f:4b:2a:46",
+              "mtu": 1500,
+              "rxMonthlyInMiB": 0,
+              "speedInMBits": 2500,
+              "trafficThrottled": false,
+              "txMonthlyInMiB": 0,
+              "vlanId": null,
+              "vlanInterface": false
+            },
+            {
+              "driver": "virtio",
+              "ipv4Addresses": [],
+              "ipv6LinkLocalAddresses": [],
+              "ipv6NetworkPrefixes": [],
+              "mac": "ca:b5:7f:4b:2a:47",
+              "mtu": 0,
+              "rxMonthlyInMiB": 0,
+              "speedInMBits": 1000,
+              "trafficThrottled": false,
+              "txMonthlyInMiB": 0,
+              "vlanId": 1006740,
+              "vlanInterface": true
+            }
+          ],
+          "keyboardLayout": "en-us",
+          "latestQemu": true,
+          "machineType": "pc-i440fx-9.2",
+          "maxServerMemoryInMiB": 8192,
+          "nestedGuest": false,
+          "osOptimization": "LINUX",
+          "requiredStorageOptimization": "NO",
+          "sockets": 4,
+          "state": "RUNNING",
+          "template": "RS 1000 G12",
+          "uefi": false,
+          "uptimeInSeconds": 40360
+        },
+        "site": {
+          "city": "Nuremberg",
+          "id": 1
+        },
+        "snapshotAllowed": true,
+        "snapshotCount": 1
+      },
+      "interfaces": [
+        {
+          "driver": "virtio",
+          "ipv4Addresses": [
+            {
+              "cidr": "152.53.140.210/22",
+              "destinationIp": null,
+              "editable": false,
+              "gateway": "152.53.140.1",
+              "id": 234721,
+              "interfaceMac": "ca:b5:7f:4b:2a:46",
+              "ip": "152.53.140.210",
+              "rdns": "v2202609417155518912.quicksrv.de",
+              "type": "IP"
+            }
+          ],
+          "ipv6Addresses": [
+            {
+              "cidr": "fe80::c8b5:7fff:fe4b:2a46/10",
+              "destinationIp": null,
+              "editable": false,
+              "gateway": null,
+              "id": 0,
+              "interfaceMac": "ca:b5:7f:4b:2a:46",
+              "linkLocal": true,
+              "networkPrefix": "fe80::c8b5:7fff:fe4b:2a46",
+              "rdns": {},
+              "type": "IP"
+            },
+            {
+              "cidr": "2a0a:4cc0:c1:96c::/64",
+              "destinationIp": null,
+              "editable": false,
+              "gateway": "fe80::1",
+              "id": 1024211,
+              "interfaceMac": "ca:b5:7f:4b:2a:46",
+              "linkLocal": false,
+              "networkPrefix": "2a0a:4cc0:c1:96c::",
+              "rdns": {},
+              "type": "IP"
+            }
+          ],
+          "mac": "ca:b5:7f:4b:2a:46",
+          "speedInMBits": 2500
+        },
+        {
+          "driver": "virtio",
+          "ipv4Addresses": [],
+          "ipv6Addresses": [],
+          "mac": "ca:b5:7f:4b:2a:47",
+          "speedInMBits": 1000
+        }
+      ],
+      "imageflavours": [
+        {
+          "alias": "Minimal",
+          "id": 123,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 35,
+            "name": "AlmaLinux 10.2 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 52,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 20,
+            "name": "AlmaLinux 8.10 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 22,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 12,
+            "name": "AlmaLinux 9.6 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 126,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 38,
+            "name": "AlmaLinux 9.8 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 12,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 9,
+            "name": "ArchLinux 2026.08.01 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 10,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 7,
+            "name": "Debian (11) Bullseye"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 111,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 29,
+            "name": "Debian 12.15.0 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 119,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 32,
+            "name": "Debian 13.6.0 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 128,
+          "name": "minimal",
+          "text": "Minimal image",
+          "image": {
+            "id": 39,
+            "name": "Debian 13.6.0 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 110,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 10,
+            "name": "FreeBSD 14.4 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 129,
+          "name": "minimal",
+          "text": "Minimal",
+          "image": {
+            "id": 40,
+            "name": "FreeBSD 14.4 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 136,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 44,
+            "name": "FreeBSD 15.1 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 135,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 45,
+            "name": "FreeBSD 15.1 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 83,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 26,
+            "name": "OpenSUSE 15.6 BIOS amd64"
+          }
+        },
+        {
+          "alias": "minimal",
+          "id": 127,
+          "name": "minimal",
+          "text": "Minimal",
+          "image": {
+            "id": 31,
+            "name": "OpenSUSE 15.6 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 121,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 17,
+            "name": "RockyLinux 10.2 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 80,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 25,
+            "name": "RockyLinux 8.10 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 21,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 11,
+            "name": "RockyLinux 9.6 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 125,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 37,
+            "name": "RockyLinux 9.8 UEFI amd64"
+          }
+        },
+        {
+          "alias": "minimal",
+          "id": 131,
+          "name": "minimal",
+          "text": "Minimal",
+          "image": {
+            "id": 41,
+            "name": "Ubuntu 22.04.5 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 11,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 8,
+            "name": "Ubuntu 22.04.5 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 100,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 18,
+            "name": "Ubuntu 24.04.4 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 116,
+          "name": "minimal",
+          "text": "Minimal image",
+          "image": {
+            "id": 24,
+            "name": "Ubuntu 24.04.4 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 141,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 3,
+            "name": "Ubuntu 26.04.1 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 142,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 48,
+            "name": "Ubuntu 26.04.1 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 117,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 14,
+            "name": "Ubuntu cloudimg 24.04.4 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 144,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 50,
+            "name": "Ubuntu cloudimg 26.04.1 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 137,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 47,
+            "name": "Ubuntu openclaw 24.04.4 UEFI amd64"
+          }
+        }
+      ]
+    },
+    {
+      "id": 938803,
+      "server": {
+        "id": 938803,
+        "name": "v2202609417155518913",
+        "disabled": false,
+        "hostname": "v2202609417155518913.hotsrv.de",
+        "nickname": "veridex-server-3",
+        "template": {
+          "id": 1351,
+          "name": "RS 1000 G12"
+        },
+        "architecture": "AMD64",
+        "disksAvailableSpaceInMiB": 8126464,
+        "gpuDriverAvailable": false,
+        "ipv4Addresses": [
+          {
+            "broadcast": "152.53.143.255",
+            "gateway": "152.53.140.1",
+            "id": 235154,
+            "ip": "152.53.142.131",
+            "netmask": "255.255.252.0"
+          }
+        ],
+        "ipv6Addresses": [
+          {
+            "gateway": "fe80::1",
+            "id": 1024958,
+            "networkPrefix": "2a0a:4cc0:c1:c57::",
+            "networkPrefixLength": 64
+          }
+        ],
+        "maxCpuCount": 4,
+        "rescueSystemActive": false,
+        "serverLiveInfo": {
+          "autostart": true,
+          "bootorder": [
+            "HDD",
+            "CDROM",
+            "NETWORK"
+          ],
+          "cloudinitAttached": false,
+          "configChanged": true,
+          "coresPerSocket": 1,
+          "cpuCount": 4,
+          "cpuMaxCount": 4,
+          "currentServerMemoryInMiB": 8192,
+          "disks": [
+            {
+              "allocationInMiB": 2001,
+              "capacityInMiB": 262144,
+              "dev": "vda",
+              "driver": "virtio"
+            }
+          ],
+          "interfaces": [
+            {
+              "driver": "virtio",
+              "ipv4Addresses": [
+                "152.53.142.131"
+              ],
+              "ipv6LinkLocalAddresses": [
+                "fe80::2444:f8ff:fe59:8c67"
+              ],
+              "ipv6NetworkPrefixes": [
+                "2a0a:4cc0:c1:c57::/64"
+              ],
+              "mac": "26:44:f8:59:8c:67",
+              "mtu": 1500,
+              "rxMonthlyInMiB": 0,
+              "speedInMBits": 2500,
+              "trafficThrottled": false,
+              "txMonthlyInMiB": 0,
+              "vlanId": null,
+              "vlanInterface": false
+            },
+            {
+              "driver": "virtio",
+              "ipv4Addresses": [],
+              "ipv6LinkLocalAddresses": [],
+              "ipv6NetworkPrefixes": [],
+              "mac": "26:44:f8:59:8c:68",
+              "mtu": 0,
+              "rxMonthlyInMiB": 0,
+              "speedInMBits": 1000,
+              "trafficThrottled": false,
+              "txMonthlyInMiB": 0,
+              "vlanId": 1006740,
+              "vlanInterface": true
+            }
+          ],
+          "keyboardLayout": "en-us",
+          "latestQemu": true,
+          "machineType": "pc-i440fx-9.2",
+          "maxServerMemoryInMiB": 8192,
+          "nestedGuest": false,
+          "osOptimization": "LINUX",
+          "requiredStorageOptimization": "NO",
+          "sockets": 4,
+          "state": "RUNNING",
+          "template": "RS 1000 G12",
+          "uefi": false,
+          "uptimeInSeconds": 40358
+        },
+        "site": {
+          "city": "Nuremberg",
+          "id": 1
+        },
+        "snapshotAllowed": true,
+        "snapshotCount": 1
+      },
+      "interfaces": [
+        {
+          "driver": "virtio",
+          "ipv4Addresses": [
+            {
+              "cidr": "152.53.142.131/22",
+              "destinationIp": null,
+              "editable": false,
+              "gateway": "152.53.140.1",
+              "id": 235154,
+              "interfaceMac": "26:44:f8:59:8c:67",
+              "ip": "152.53.142.131",
+              "rdns": "v2202609417155518913.hotsrv.de",
+              "type": "IP"
+            }
+          ],
+          "ipv6Addresses": [
+            {
+              "cidr": "fe80::2444:f8ff:fe59:8c67/10",
+              "destinationIp": null,
+              "editable": false,
+              "gateway": null,
+              "id": 0,
+              "interfaceMac": "26:44:f8:59:8c:67",
+              "linkLocal": true,
+              "networkPrefix": "fe80::2444:f8ff:fe59:8c67",
+              "rdns": {},
+              "type": "IP"
+            },
+            {
+              "cidr": "2a0a:4cc0:c1:c57::/64",
+              "destinationIp": null,
+              "editable": false,
+              "gateway": "fe80::1",
+              "id": 1024958,
+              "interfaceMac": "26:44:f8:59:8c:67",
+              "linkLocal": false,
+              "networkPrefix": "2a0a:4cc0:c1:c57::",
+              "rdns": {},
+              "type": "IP"
+            }
+          ],
+          "mac": "26:44:f8:59:8c:67",
+          "speedInMBits": 2500
+        },
+        {
+          "driver": "virtio",
+          "ipv4Addresses": [],
+          "ipv6Addresses": [],
+          "mac": "26:44:f8:59:8c:68",
+          "speedInMBits": 1000
+        }
+      ],
+      "imageflavours": [
+        {
+          "alias": "Minimal",
+          "id": 123,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 35,
+            "name": "AlmaLinux 10.2 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 52,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 20,
+            "name": "AlmaLinux 8.10 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 22,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 12,
+            "name": "AlmaLinux 9.6 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 126,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 38,
+            "name": "AlmaLinux 9.8 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 12,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 9,
+            "name": "ArchLinux 2026.08.01 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 10,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 7,
+            "name": "Debian (11) Bullseye"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 111,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 29,
+            "name": "Debian 12.15.0 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 119,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 32,
+            "name": "Debian 13.6.0 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 128,
+          "name": "minimal",
+          "text": "Minimal image",
+          "image": {
+            "id": 39,
+            "name": "Debian 13.6.0 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 110,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 10,
+            "name": "FreeBSD 14.4 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 129,
+          "name": "minimal",
+          "text": "Minimal",
+          "image": {
+            "id": 40,
+            "name": "FreeBSD 14.4 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 136,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 44,
+            "name": "FreeBSD 15.1 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 135,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 45,
+            "name": "FreeBSD 15.1 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 83,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 26,
+            "name": "OpenSUSE 15.6 BIOS amd64"
+          }
+        },
+        {
+          "alias": "minimal",
+          "id": 127,
+          "name": "minimal",
+          "text": "Minimal",
+          "image": {
+            "id": 31,
+            "name": "OpenSUSE 15.6 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 121,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 17,
+            "name": "RockyLinux 10.2 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 80,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 25,
+            "name": "RockyLinux 8.10 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 21,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 11,
+            "name": "RockyLinux 9.6 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 125,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 37,
+            "name": "RockyLinux 9.8 UEFI amd64"
+          }
+        },
+        {
+          "alias": "minimal",
+          "id": 131,
+          "name": "minimal",
+          "text": "Minimal",
+          "image": {
+            "id": 41,
+            "name": "Ubuntu 22.04.5 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 11,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 8,
+            "name": "Ubuntu 22.04.5 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 100,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 18,
+            "name": "Ubuntu 24.04.4 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 116,
+          "name": "minimal",
+          "text": "Minimal image",
+          "image": {
+            "id": 24,
+            "name": "Ubuntu 24.04.4 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 141,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 3,
+            "name": "Ubuntu 26.04.1 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 142,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 48,
+            "name": "Ubuntu 26.04.1 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 117,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 14,
+            "name": "Ubuntu cloudimg 24.04.4 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 144,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 50,
+            "name": "Ubuntu cloudimg 26.04.1 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 137,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 47,
+            "name": "Ubuntu openclaw 24.04.4 UEFI amd64"
+          }
+        }
+      ]
+    },
+    {
+      "id": 939122,
+      "server": {
+        "id": 939122,
+        "name": "v2202609417155519279",
+        "disabled": false,
+        "hostname": "v2202609417155519279.happysrv.de",
+        "nickname": "veridex-agent-1",
+        "template": {
+          "id": 1354,
+          "name": "RS 2000 G12"
+        },
+        "architecture": "AMD64",
+        "disksAvailableSpaceInMiB": 7864320,
+        "gpuDriverAvailable": false,
+        "ipv4Addresses": [
+          {
+            "broadcast": "159.195.199.255",
+            "gateway": "159.195.196.1",
+            "id": 281250,
+            "ip": "159.195.197.136",
+            "netmask": "255.255.252.0"
+          }
+        ],
+        "ipv6Addresses": [
+          {
+            "gateway": "fe80::1",
+            "id": 1213859,
+            "networkPrefix": "2a0a:4cc0:c2:9c3c::",
+            "networkPrefixLength": 64
+          }
+        ],
+        "maxCpuCount": 8,
+        "rescueSystemActive": false,
+        "serverLiveInfo": {
+          "autostart": true,
+          "bootorder": [
+            "HDD",
+            "CDROM",
+            "NETWORK"
+          ],
+          "cloudinitAttached": false,
+          "configChanged": true,
+          "coresPerSocket": 1,
+          "cpuCount": 8,
+          "cpuMaxCount": 8,
+          "currentServerMemoryInMiB": 16384,
+          "disks": [
+            {
+              "allocationInMiB": 1421,
+              "capacityInMiB": 524288,
+              "dev": "vda",
+              "driver": "virtio"
+            }
+          ],
+          "interfaces": [
+            {
+              "driver": "virtio",
+              "ipv4Addresses": [
+                "159.195.197.136"
+              ],
+              "ipv6LinkLocalAddresses": [
+                "fe80::c4e3:81ff:fea1:5a73"
+              ],
+              "ipv6NetworkPrefixes": [
+                "2a0a:4cc0:c2:9c3c::/64"
+              ],
+              "mac": "c6:e3:81:a1:5a:73",
+              "mtu": 1500,
+              "rxMonthlyInMiB": 0,
+              "speedInMBits": 2500,
+              "trafficThrottled": false,
+              "txMonthlyInMiB": 0,
+              "vlanId": null,
+              "vlanInterface": false
+            },
+            {
+              "driver": "virtio",
+              "ipv4Addresses": [],
+              "ipv6LinkLocalAddresses": [],
+              "ipv6NetworkPrefixes": [],
+              "mac": "c6:e3:81:a1:5a:74",
+              "mtu": 0,
+              "rxMonthlyInMiB": 0,
+              "speedInMBits": 1000,
+              "trafficThrottled": false,
+              "txMonthlyInMiB": 0,
+              "vlanId": 1006740,
+              "vlanInterface": true
+            }
+          ],
+          "keyboardLayout": "en-us",
+          "latestQemu": true,
+          "machineType": "pc-i440fx-9.2",
+          "maxServerMemoryInMiB": 16384,
+          "nestedGuest": false,
+          "osOptimization": "LINUX",
+          "requiredStorageOptimization": "NO",
+          "sockets": 8,
+          "state": "RUNNING",
+          "template": "RS 2000 G12",
+          "uefi": false,
+          "uptimeInSeconds": 5172
+        },
+        "site": {
+          "city": "Nuremberg",
+          "id": 1
+        },
+        "snapshotAllowed": true,
+        "snapshotCount": 1
+      },
+      "interfaces": [
+        {
+          "driver": "virtio",
+          "ipv4Addresses": [
+            {
+              "cidr": "159.195.197.136/22",
+              "destinationIp": null,
+              "editable": false,
+              "gateway": "159.195.196.1",
+              "id": 281250,
+              "interfaceMac": "c6:e3:81:a1:5a:73",
+              "ip": "159.195.197.136",
+              "rdns": "v2202609417155519279.happysrv.de",
+              "type": "IP"
+            }
+          ],
+          "ipv6Addresses": [
+            {
+              "cidr": "fe80::c4e3:81ff:fea1:5a73/10",
+              "destinationIp": null,
+              "editable": false,
+              "gateway": null,
+              "id": 0,
+              "interfaceMac": "c6:e3:81:a1:5a:73",
+              "linkLocal": true,
+              "networkPrefix": "fe80::c4e3:81ff:fea1:5a73",
+              "rdns": {},
+              "type": "IP"
+            },
+            {
+              "cidr": "2a0a:4cc0:c2:9c3c::/64",
+              "destinationIp": null,
+              "editable": false,
+              "gateway": "fe80::1",
+              "id": 1213859,
+              "interfaceMac": "c6:e3:81:a1:5a:73",
+              "linkLocal": false,
+              "networkPrefix": "2a0a:4cc0:c2:9c3c::",
+              "rdns": {},
+              "type": "IP"
+            }
+          ],
+          "mac": "c6:e3:81:a1:5a:73",
+          "speedInMBits": 2500
+        },
+        {
+          "driver": "virtio",
+          "ipv4Addresses": [],
+          "ipv6Addresses": [],
+          "mac": "c6:e3:81:a1:5a:74",
+          "speedInMBits": 1000
+        }
+      ],
+      "imageflavours": [
+        {
+          "alias": "Minimal",
+          "id": 123,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 35,
+            "name": "AlmaLinux 10.2 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 52,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 20,
+            "name": "AlmaLinux 8.10 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 22,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 12,
+            "name": "AlmaLinux 9.6 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 126,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 38,
+            "name": "AlmaLinux 9.8 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 12,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 9,
+            "name": "ArchLinux 2026.08.01 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 10,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 7,
+            "name": "Debian (11) Bullseye"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 111,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 29,
+            "name": "Debian 12.15.0 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 119,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 32,
+            "name": "Debian 13.6.0 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 128,
+          "name": "minimal",
+          "text": "Minimal image",
+          "image": {
+            "id": 39,
+            "name": "Debian 13.6.0 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 110,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 10,
+            "name": "FreeBSD 14.4 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 129,
+          "name": "minimal",
+          "text": "Minimal",
+          "image": {
+            "id": 40,
+            "name": "FreeBSD 14.4 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 136,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 44,
+            "name": "FreeBSD 15.1 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 135,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 45,
+            "name": "FreeBSD 15.1 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 83,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 26,
+            "name": "OpenSUSE 15.6 BIOS amd64"
+          }
+        },
+        {
+          "alias": "minimal",
+          "id": 127,
+          "name": "minimal",
+          "text": "Minimal",
+          "image": {
+            "id": 31,
+            "name": "OpenSUSE 15.6 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 121,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 17,
+            "name": "RockyLinux 10.2 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 80,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 25,
+            "name": "RockyLinux 8.10 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 21,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 11,
+            "name": "RockyLinux 9.6 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 125,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 37,
+            "name": "RockyLinux 9.8 UEFI amd64"
+          }
+        },
+        {
+          "alias": "minimal",
+          "id": 131,
+          "name": "minimal",
+          "text": "Minimal",
+          "image": {
+            "id": 41,
+            "name": "Ubuntu 22.04.5 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 11,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 8,
+            "name": "Ubuntu 22.04.5 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 100,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 18,
+            "name": "Ubuntu 24.04.4 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 116,
+          "name": "minimal",
+          "text": "Minimal image",
+          "image": {
+            "id": 24,
+            "name": "Ubuntu 24.04.4 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 141,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 3,
+            "name": "Ubuntu 26.04.1 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 142,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 48,
+            "name": "Ubuntu 26.04.1 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 117,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 14,
+            "name": "Ubuntu cloudimg 24.04.4 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 144,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 50,
+            "name": "Ubuntu cloudimg 26.04.1 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 137,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 47,
+            "name": "Ubuntu openclaw 24.04.4 UEFI amd64"
+          }
+        }
+      ]
+    },
+    {
+      "id": 939123,
+      "server": {
+        "id": 939123,
+        "name": "v2202609417155519280",
+        "disabled": false,
+        "hostname": "v2202609417155519280.ultrasrv.de",
+        "nickname": "veridex-agent-2",
+        "template": {
+          "id": 1354,
+          "name": "RS 2000 G12"
+        },
+        "architecture": "AMD64",
+        "disksAvailableSpaceInMiB": 7864320,
+        "gpuDriverAvailable": false,
+        "ipv4Addresses": [
+          {
+            "broadcast": "159.195.199.255",
+            "gateway": "159.195.196.1",
+            "id": 281154,
+            "ip": "159.195.197.40",
+            "netmask": "255.255.252.0"
+          }
+        ],
+        "ipv6Addresses": [
+          {
+            "gateway": "fe80::1",
+            "id": 1214041,
+            "networkPrefix": "2a0a:4cc0:c2:9cf2::",
+            "networkPrefixLength": 64
+          }
+        ],
+        "maxCpuCount": 8,
+        "rescueSystemActive": false,
+        "serverLiveInfo": {
+          "autostart": true,
+          "bootorder": [
+            "HDD",
+            "CDROM",
+            "NETWORK"
+          ],
+          "cloudinitAttached": false,
+          "configChanged": true,
+          "coresPerSocket": 1,
+          "cpuCount": 8,
+          "cpuMaxCount": 8,
+          "currentServerMemoryInMiB": 16384,
+          "disks": [
+            {
+              "allocationInMiB": 1970,
+              "capacityInMiB": 524288,
+              "dev": "vda",
+              "driver": "virtio"
+            }
+          ],
+          "interfaces": [
+            {
+              "driver": "virtio",
+              "ipv4Addresses": [
+                "159.195.197.40"
+              ],
+              "ipv6LinkLocalAddresses": [
+                "fe80::6801:47ff:fe82:8c3c"
+              ],
+              "ipv6NetworkPrefixes": [
+                "2a0a:4cc0:c2:9cf2::/64"
+              ],
+              "mac": "6a:01:47:82:8c:3c",
+              "mtu": 1500,
+              "rxMonthlyInMiB": 0,
+              "speedInMBits": 2500,
+              "trafficThrottled": false,
+              "txMonthlyInMiB": 0,
+              "vlanId": null,
+              "vlanInterface": false
+            },
+            {
+              "driver": "virtio",
+              "ipv4Addresses": [],
+              "ipv6LinkLocalAddresses": [],
+              "ipv6NetworkPrefixes": [],
+              "mac": "6a:01:47:82:8c:3d",
+              "mtu": 0,
+              "rxMonthlyInMiB": 0,
+              "speedInMBits": 1000,
+              "trafficThrottled": false,
+              "txMonthlyInMiB": 0,
+              "vlanId": 1006740,
+              "vlanInterface": true
+            }
+          ],
+          "keyboardLayout": "en-us",
+          "latestQemu": true,
+          "machineType": "pc-i440fx-9.2",
+          "maxServerMemoryInMiB": 16384,
+          "nestedGuest": false,
+          "osOptimization": "LINUX",
+          "requiredStorageOptimization": "NO",
+          "sockets": 8,
+          "state": "RUNNING",
+          "template": "RS 2000 G12",
+          "uefi": false,
+          "uptimeInSeconds": 5195
+        },
+        "site": {
+          "city": "Nuremberg",
+          "id": 1
+        },
+        "snapshotAllowed": true,
+        "snapshotCount": 1
+      },
+      "interfaces": [
+        {
+          "driver": "virtio",
+          "ipv4Addresses": [
+            {
+              "cidr": "159.195.197.40/22",
+              "destinationIp": null,
+              "editable": false,
+              "gateway": "159.195.196.1",
+              "id": 281154,
+              "interfaceMac": "6a:01:47:82:8c:3c",
+              "ip": "159.195.197.40",
+              "rdns": "v2202609417155519280.ultrasrv.de",
+              "type": "IP"
+            }
+          ],
+          "ipv6Addresses": [
+            {
+              "cidr": "fe80::6801:47ff:fe82:8c3c/10",
+              "destinationIp": null,
+              "editable": false,
+              "gateway": null,
+              "id": 0,
+              "interfaceMac": "6a:01:47:82:8c:3c",
+              "linkLocal": true,
+              "networkPrefix": "fe80::6801:47ff:fe82:8c3c",
+              "rdns": {},
+              "type": "IP"
+            },
+            {
+              "cidr": "2a0a:4cc0:c2:9cf2::/64",
+              "destinationIp": null,
+              "editable": false,
+              "gateway": "fe80::1",
+              "id": 1214041,
+              "interfaceMac": "6a:01:47:82:8c:3c",
+              "linkLocal": false,
+              "networkPrefix": "2a0a:4cc0:c2:9cf2::",
+              "rdns": {},
+              "type": "IP"
+            }
+          ],
+          "mac": "6a:01:47:82:8c:3c",
+          "speedInMBits": 2500
+        },
+        {
+          "driver": "virtio",
+          "ipv4Addresses": [],
+          "ipv6Addresses": [],
+          "mac": "6a:01:47:82:8c:3d",
+          "speedInMBits": 1000
+        }
+      ],
+      "imageflavours": [
+        {
+          "alias": "Minimal",
+          "id": 123,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 35,
+            "name": "AlmaLinux 10.2 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 52,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 20,
+            "name": "AlmaLinux 8.10 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 22,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 12,
+            "name": "AlmaLinux 9.6 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 126,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 38,
+            "name": "AlmaLinux 9.8 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 12,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 9,
+            "name": "ArchLinux 2026.08.01 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 10,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 7,
+            "name": "Debian (11) Bullseye"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 111,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 29,
+            "name": "Debian 12.15.0 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 119,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 32,
+            "name": "Debian 13.6.0 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 128,
+          "name": "minimal",
+          "text": "Minimal image",
+          "image": {
+            "id": 39,
+            "name": "Debian 13.6.0 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 110,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 10,
+            "name": "FreeBSD 14.4 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 129,
+          "name": "minimal",
+          "text": "Minimal",
+          "image": {
+            "id": 40,
+            "name": "FreeBSD 14.4 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 136,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 44,
+            "name": "FreeBSD 15.1 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 135,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 45,
+            "name": "FreeBSD 15.1 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 83,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 26,
+            "name": "OpenSUSE 15.6 BIOS amd64"
+          }
+        },
+        {
+          "alias": "minimal",
+          "id": 127,
+          "name": "minimal",
+          "text": "Minimal",
+          "image": {
+            "id": 31,
+            "name": "OpenSUSE 15.6 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 121,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 17,
+            "name": "RockyLinux 10.2 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 80,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 25,
+            "name": "RockyLinux 8.10 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 21,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 11,
+            "name": "RockyLinux 9.6 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 125,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 37,
+            "name": "RockyLinux 9.8 UEFI amd64"
+          }
+        },
+        {
+          "alias": "minimal",
+          "id": 131,
+          "name": "minimal",
+          "text": "Minimal",
+          "image": {
+            "id": 41,
+            "name": "Ubuntu 22.04.5 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 11,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 8,
+            "name": "Ubuntu 22.04.5 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 100,
+          "name": "minimal",
+          "text": "minimal system with ssh preinstalled",
+          "image": {
+            "id": 18,
+            "name": "Ubuntu 24.04.4 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 116,
+          "name": "minimal",
+          "text": "Minimal image",
+          "image": {
+            "id": 24,
+            "name": "Ubuntu 24.04.4 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 141,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 3,
+            "name": "Ubuntu 26.04.1 BIOS amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 142,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 48,
+            "name": "Ubuntu 26.04.1 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 117,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 14,
+            "name": "Ubuntu cloudimg 24.04.4 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 144,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 50,
+            "name": "Ubuntu cloudimg 26.04.1 UEFI amd64"
+          }
+        },
+        {
+          "alias": "Minimal",
+          "id": 137,
+          "name": "minimal",
+          "text": "Minimal installation",
+          "image": {
+            "id": 47,
+            "name": "Ubuntu openclaw 24.04.4 UEFI amd64"
+          }
+        }
+      ]
+    }
+  ]
+}

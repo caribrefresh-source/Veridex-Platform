@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  provider-drift:
+    name: Provider drift (no Hetzner assumptions)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # This platform is rebuilt on netcup using the Hetzner K3s-HA cluster as
+      # the reference. The reference is read constantly during migration, so
+      # provider-specific values (hcloud StorageClasses, 10.1.x addresses,
+      # Hetzner locations) get copied across by reflex. Each works right up
+      # until it silently does not: netcup has no hcloud CSI, no 10.1.0.0/16,
+      # and no Hetzner datacenters.
+      #
+      # Run --strict once the pod/service CIDR decision is settled, so the
+      # derived values (CoreDNS ClusterIP, Cilium's API ClusterIP fallback)
+      # cannot be left pointing at the old service CIDR.
+      - name: Lint for Hetzner provider drift
+        run: python3 scripts/lint-provider-drift.py
+
+  yaml-lint:
+    name: YAML lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install yamllint
+        run: pip install --disable-pip-version-check yamllint
+
+      - name: Lint inventory and manifests
+        run: yamllint -d relaxed ansible/ kubernetes/ gitops/
+
+  ansible-syntax:
+    name: Ansible syntax check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Installed from the same pinned file the local control node uses, so
+      # CI and a developer machine cannot run different Ansible versions.
+      # ansible-lint is deliberately not installed here: this job does not run
+      # it, and installing tools a job never invokes hides what it depends on.
+      - name: Install Ansible
+        run: |
+          pip install --disable-pip-version-check \
+            -r ansible/requirements-python.txt
+
+      - name: Inventory parses
+        run: ansible-inventory -i ansible/inventory/production/hosts.yml --graph
+
+      - name: Playbooks parse
+        run: |
+          for p in ansible/playbooks/*.yml; do
+            echo "== $p"
+            ansible-playbook -i ansible/inventory/production/hosts.yml \
+              "$p" --syntax-check
+          done

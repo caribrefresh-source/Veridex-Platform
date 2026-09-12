@@ -1,0 +1,6 @@
+---
+- name: Install Cilium CNI
+  hosts: k3s_servers
+  become: true
+  roles:
+    - cilium

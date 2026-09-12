@@ -141,19 +141,51 @@ k3s_service_cidr: "10.45.0.0/16"
 #   9000 fails, so there are NO jumbo frames on this vLAN.
 #   eth0 (public) is also 1500, so the two never disagree.
 #
-# cilium_mtu stays UNSET, and that is deliberate rather than an omission.
-# Evidence from the live Hetzner cluster: its role passes `--set mtu=1360`,
-# yet `cilium-config` contains no `mtu` key and every Cilium device
-# (cilium_vxlan, cilium_host, cilium_net) runs at 1400 -- the auto-detected
-# host MTU. The setting has never taken effect there. Cilium auto-detects the
-# underlay and subtracts its own VXLAN and WireGuard overhead internally.
+# cilium_mtu MUST be set. An earlier revision left it unset on the reasoning
+# that Cilium auto-detects and subtracts its own overhead -- because on the
+# Hetzner cluster `--set mtu=1360` demonstrably never reaches cilium-config
+# and every Cilium device runs at the auto-detected host MTU. Those facts are
+# true; the conclusion drawn from them was not. Auto-detection is what
+# HAPPENS, not what is CORRECT.
 #
-# So: let Cilium auto-detect from the 1500 underlay, which is what Hetzner is
-# effectively doing already. Setting a hand-computed number would either be
-# ignored (as on Hetzner) or override a calculation Cilium does correctly.
-# Verify after install that cilium_vxlan lands at a sane value rather than
-# assuming it.
+# Measured on this cluster after installing Cilium with mtu unset:
+#   node-to-node underlay (eth1)        1500  PASS
+#   pod-to-pod cross-node, wire 1354    PASS
+#   pod-to-pod cross-node, wire 1356    FAIL
+#   pod interface MTU as configured     1500
+#
+# Pods were configured at 1500 but could only carry ~1354: a 146-byte gap
+# (VXLAN 50 + WireGuard ~60 + ~36) that Cilium was not subtracting. That is
+# silent packet loss. TCP largely survives it via MSS clamping, which is
+# exactly why it goes unnoticed -- large UDP and anything that fills the MTU
+# is simply dropped, with no error anywhere.
+#
+# Setting it explicitly was TRIED and reverted. What the experiment showed:
+#
+#   config      pod MTU   cilium_wg0   largest working payload
+#   auto (0)      1500       1405            ~1354
+#   MTU=1350      1350       1255            ~1200
+#
+# cilium_wg0 is always the configured MTU minus 95, and it is the binding
+# constraint. Pod MTU therefore exceeds the WireGuard device by 95 bytes at
+# ANY setting -- the gap is constant, not something a chosen number closes.
+# Setting 1350 simply shifted the whole scale down and cost 150 bytes of
+# usable payload. Auto-detect carries the identical relative gap with more
+# absolute capacity, so it is the better of two imperfect options.
+#
+# KNOWN GAP, accepted deliberately: pods advertise MTU 1500 but only ~1354
+# bytes survive the VXLAN + WireGuard path. TCP is unaffected (MSS clamping
+# negotiates below the limit), which is why this is invisible in normal
+# operation. Large single-datagram UDP can be dropped silently. Revisit if a
+# workload sends large UDP -- and note the Hetzner cluster has the same gap.
+#
+# One finding worth keeping regardless: the Helm key is MTU (uppercase).
+# `--set mtu=` is accepted by Helm without complaint and silently discarded,
+# which is exactly why the Hetzner role's cilium_mtu: 1360 has never applied.
+# The role now passes MTU= correctly, so this value is honoured if changed.
 netcup_vlan_path_mtu_measured: 1500
+cilium_pod_mtu_effective_measured: 1354
+cilium_mtu: 0
 # =============================================================================
 cni_plugin: "cilium"
 

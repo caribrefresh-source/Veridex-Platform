@@ -1,0 +1,7 @@
+---
+# cilium role handlers
+#
+# Deliberately empty. Restarting the Cilium DaemonSet is prohibited by the
+# repository operating contract without root-cause analysis and explicit
+# authorisation, so this role must never carry a "restart cilium" handler
+# that a config change could trigger silently.

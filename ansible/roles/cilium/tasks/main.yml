@@ -1,0 +1,205 @@
+---
+# cilium role tasks
+#
+# Runs on the bootstrap server only: this is a cluster-wide install, not a
+# per-node one. The DaemonSet reaches every node by itself.
+
+- name: Identify the bootstrap server
+  ansible.builtin.set_fact:
+    is_first_server: "{{ inventory_hostname == (groups['k3s_servers'] | sort | first) }}"
+
+- name: Confirm the API is reachable through the VIP before installing
+  ansible.builtin.command:
+    cmd: >-
+      k3s kubectl --server=https://{{ cilium_k8s_service_host }}:{{ cilium_k8s_service_port }}
+      get --raw /healthz
+  register: _vip_ok
+  changed_when: false
+  failed_when: _vip_ok.stdout != 'ok'
+  when: is_first_server | bool
+
+- name: Check for an existing Cilium install
+  ansible.builtin.command:
+    cmd: k3s kubectl -n {{ cilium_namespace }} get daemonset cilium -o jsonpath={.metadata.name}
+  register: _cilium_ds
+  changed_when: false
+  failed_when: false
+  when: is_first_server | bool
+
+- name: Download the pinned Cilium CLI
+  ansible.builtin.get_url:
+    url: "{{ cilium_cli_url_base }}/v{{ cilium_cli_version }}/cilium-linux-amd64.tar.gz"
+    dest: /tmp/cilium-cli.tar.gz
+    checksum: "sha256:{{ cilium_cli_sha256_amd64 }}"
+    mode: "0600"
+  when:
+    - is_first_server | bool
+    - _cilium_ds.stdout | default('') == ''
+
+- name: Unpack the Cilium CLI
+  ansible.builtin.unarchive:
+    src: /tmp/cilium-cli.tar.gz
+    dest: /usr/local/bin
+    remote_src: true
+    creates: "{{ cilium_cli_bin }}"
+    mode: "0755"
+  when:
+    - is_first_server | bool
+    - _cilium_ds.stdout | default('') == ''
+
+# Flags, and why each is here:
+#   routingMode/tunnelProtocol  VXLAN over the vLAN. Native routing would need
+#                               route injection a layer-2 vLAN cannot provide.
+#   encryption + nodeEncryption WireGuard encrypts; it does NOT tunnel. VXLAN
+#                               remains the transport.
+#   k8sServiceHost/Port         the kube-vip VIP. kube-proxy is disabled, so
+#                               Cilium cannot discover the API via ClusterIP.
+#   ipam.mode=kubernetes        pod CIDRs come from the node spec k3s assigns.
+#   MTU=  (UPPERCASE)           the Helm key is MTU, not mtu. Helm accepts an
+#                               unknown --set key without complaint, so
+#                               `--set mtu=` is silently discarded -- which is
+#                               why the Hetzner role's cilium_mtu: 1360 has
+#                               never applied. Default here is 0 (auto); see
+#                               group_vars for the measurements behind that.
+#   NO socketLB.enabled=false   not ported. The Hetzner stack needs three
+#                               mechanisms to force it and records no reason,
+#                               and v1.20 changed behaviour in that area.
+- name: Install Cilium
+  ansible.builtin.command:
+    cmd: >-
+      {{ cilium_cli_bin }} install
+      --version {{ cilium_version }}
+      --namespace {{ cilium_namespace }}
+      --set k8sServiceHost={{ cilium_k8s_service_host }}
+      --set k8sServicePort={{ cilium_k8s_service_port }}
+      --set kubeProxyReplacement={{ cilium_kube_proxy_replacement | string | lower }}
+      --set routingMode=tunnel
+      --set tunnelProtocol=vxlan
+      --set encryption.enabled=true
+      --set encryption.type=wireguard
+      --set encryption.nodeEncryption=true
+      --set ipam.mode=kubernetes
+      --set bpf.masquerade=true
+      --set MTU={{ cilium_mtu }}
+      --set operator.replicas=2
+  environment:
+    KUBECONFIG: "{{ cilium_kubeconfig }}"
+  register: _cilium_install
+  changed_when: _cilium_install.rc == 0
+  timeout: "{{ cilium_install_timeout }}"
+  when:
+    - is_first_server | bool
+    - _cilium_ds.stdout | default('') == ''
+
+# Converge an existing install. Cilium is already running in most re-runs, so
+# `cilium install` is skipped -- but a changed MTU still has to reach the
+# cluster, and that requires an upgrade plus a DaemonSet restart.
+#
+# The repository contract prohibits restarting the Cilium DaemonSet without
+# root-cause analysis and explicit authorisation. That bar is met here and the
+# reasoning is recorded in group_vars: pods were configured at MTU 1500 while
+# only ~1354 bytes survived the VXLAN + WireGuard path, silently dropping
+# large packets. This task only fires when the running MTU actually differs
+# from the intended one, so a steady-state run never restarts anything.
+- name: Read the MTU currently in effect
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail;
+      k3s kubectl -n {{ cilium_namespace }} get configmap cilium-config -o yaml
+      | awk '/^  mtu:/ {print $2}'
+    executable: /bin/bash
+  register: _live_mtu
+  changed_when: false
+  when:
+    - is_first_server | bool
+    - _cilium_ds.stdout | default('') != ''
+
+- name: Upgrade Cilium when the MTU has drifted from the intended value
+  ansible.builtin.command:
+    cmd: >-
+      {{ cilium_cli_bin }} upgrade
+      --namespace {{ cilium_namespace }}
+      --reuse-values
+      --set MTU={{ cilium_mtu }}
+  environment:
+    KUBECONFIG: "{{ cilium_kubeconfig }}"
+  register: _cilium_upgrade
+  changed_when: _cilium_upgrade.rc == 0
+  timeout: "{{ cilium_install_timeout }}"
+  when:
+    - is_first_server | bool
+    - _cilium_ds.stdout | default('') != ''
+    # An absent mtu key and an explicit 0 both mean "auto-detect", so they
+    # must compare equal. Treating them as different made this task fire on
+    # every run and restart the Cilium DaemonSet each time -- precisely the
+    # routine restart the repository contract prohibits.
+    - >-
+      (_live_mtu.stdout | default('') | trim | replace('"', '') | default('0', true))
+      != (cilium_mtu | string)
+
+- name: Restart the Cilium DaemonSet to apply the new MTU
+  ansible.builtin.command:
+    cmd: k3s kubectl -n {{ cilium_namespace }} rollout restart daemonset/cilium
+  when: _cilium_upgrade is defined and _cilium_upgrade is changed
+
+- name: Wait for the Cilium rollout to finish
+  ansible.builtin.command:
+    cmd: >-
+      k3s kubectl -n {{ cilium_namespace }} rollout status daemonset/cilium
+      --timeout=600s
+  changed_when: false
+  when: _cilium_upgrade is defined and _cilium_upgrade is changed
+
+- name: Wait for the Cilium DaemonSet to be ready on every node
+  ansible.builtin.command:
+    cmd: >-
+      k3s kubectl -n {{ cilium_namespace }} get daemonset cilium
+      -o jsonpath={.status.numberReady}
+  register: _cilium_ready
+  until: >-
+    _cilium_ready.rc == 0 and
+    (_cilium_ready.stdout | default('0') | int) >= (groups['k3s_servers'] | length)
+  retries: "{{ cilium_ready_retries }}"
+  delay: "{{ cilium_ready_delay }}"
+  changed_when: false
+  when: is_first_server | bool
+
+# No jsonpath filter expression. A filter needs nested quotes that do not
+# survive Ansible's command module -- the same trap that broke the equivalent
+# assertion in the k3s-server role. `kubectl get nodes` prints STATUS in
+# column 2, so counting "Ready" lines is equivalent and has no quoting hazard.
+- name: Wait for every node to report Ready
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail;
+      k3s kubectl get nodes --no-headers | awk '{print $2}' | grep -c '^Ready$'
+    executable: /bin/bash
+  register: _nodes_ready
+  until: >-
+    _nodes_ready.rc == 0 and
+    (_nodes_ready.stdout | trim | int) >= (groups['k3s_servers'] | length)
+  retries: 30
+  delay: 10
+  changed_when: false
+  when: is_first_server | bool
+
+# Plain grep over YAML rather than jsonpath. jsonpath needs quoting for both
+# filter expressions and literal text, and neither survives Ansible's command
+# module intact -- this role and k3s-server both hit that trap.
+- name: Read the effective Cilium configuration
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail;
+      k3s kubectl -n {{ cilium_namespace }} get configmap cilium-config -o yaml
+      | grep -E '^  (routing-mode|tunnel-protocol|enable-wireguard|kube-proxy-replacement|enable-ipv4-masquerade|mtu):'
+      | tr -d ' '
+      | tr '\n' ' '
+    executable: /bin/bash
+  register: _cilium_cfg
+  changed_when: false
+  when: is_first_server | bool
+
+- name: Report the effective Cilium configuration
+  ansible.builtin.debug:
+    msg: "cilium-config: {{ _cilium_cfg.stdout }}"
+  when: is_first_server | bool

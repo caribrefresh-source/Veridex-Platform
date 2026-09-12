@@ -1,2 +1,56 @@
 ---
 # k3s-server role default variables
+
+k3s_install_url: "https://get.k3s.io"
+k3s_install_timeout: 360
+k3s_service_name: k3s
+
+k3s_data_dir: /var/lib/rancher/k3s
+k3s_config_dir: /etc/rancher/k3s
+k3s_config_file: /etc/rancher/k3s/config.yaml
+k3s_kubeconfig_path: /etc/rancher/k3s/k3s.yaml
+
+k3s_bind_address: 0.0.0.0
+k3s_flannel_backend: "none"          # Cilium provides the CNI
+k3s_control_plane_taint: "node-role.kubernetes.io/control-plane=true:PreferNoSchedule"
+
+# Hourly etcd snapshots to meet the platform RPO <= 1h target for control-plane
+# state. 48 retained = two days of hourly restore points.
+k3s_etcd_snapshot_cron: "0 * * * *"
+k3s_etcd_snapshot_retention: 48
+
+# Off-cluster etcd snapshots. Deliberately unset for now: the template only
+# emits the etcd-s3 block when BOTH keys are actually present, so a missing
+# credential disables the block loudly (visible as `etcd-s3: true` absent from
+# the rendered config) rather than enabling S3 upload with blank credentials
+# and failing every upload silently -- which is exactly what happened on the
+# Hetzner cluster and went unnoticed until an audit found the bucket empty.
+etcd_s3_endpoint: ""
+etcd_s3_bucket: ""
+etcd_s3_folder: "etcd-snapshots"
+etcd_s3_access_key: "{{ lookup('env', 'ETCD_S3_ACCESS_KEY') | default('', true) }}"
+etcd_s3_secret_key: "{{ lookup('env', 'ETCD_S3_SECRET_KEY') | default('', true) }}"
+
+k3s_kubelet_system_reserved: "cpu=500m,memory=512Mi"
+k3s_kubelet_kube_reserved: "cpu=500m,memory=512Mi"
+k3s_kubelet_eviction_hard: "memory.available<200Mi,nodefs.available<5%"
+
+# API audit logging. The policy file must exist before the API server starts
+# or kube-apiserver refuses to come up -- this role writes it.
+k3s_audit_enabled: true
+k3s_audit_log_dir: /var/log/kubernetes/audit
+k3s_audit_log_maxage: 30
+k3s_audit_log_maxbackup: 10
+k3s_audit_log_maxsize: 100
+
+k3s_limit_nofile: 1048576
+k3s_oom_score_adjust: -999
+k3s_restart_sec: 10
+
+# Never wipe an existing cluster's state unless explicitly told to.
+k3s_force_clean_bootstrap: false
+
+k3s_api_ready_retries: 40
+k3s_api_ready_delay: 5
+k3s_node_register_retries: 60
+k3s_node_register_delay: 10

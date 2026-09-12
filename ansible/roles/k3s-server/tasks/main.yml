@@ -1,2 +1,184 @@
 ---
 # k3s-server role tasks
+#
+# Bootstraps an HA control plane with embedded etcd. The first server (by
+# sorted inventory order) runs --cluster-init; the others join it.
+#
+# Note what is NOT here, versus the Hetzner reference: that role re-inserts a
+# dozen iptables ACCEPT rules after k3s starts, because k3s installs rules
+# that shadow per-port ones. This cluster's firewall trusts the whole
+# 10.2.0.0/16 vLAN in a single nftables rule, so there is nothing to restore.
+
+- name: Assert the node identity matches the inventory
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['hostname'] == inventory_hostname
+      - private_ip is defined and private_ip | length > 0
+    fail_msg: >-
+      Hostname is {{ ansible_facts['hostname'] }} but inventory says
+      {{ inventory_hostname }}, or private_ip is unset. k3s registers the node
+      under node-name and binds to private_ip; a mismatch produces a node that
+      joins under the wrong identity.
+    quiet: true
+
+- name: Identify the bootstrap server
+  ansible.builtin.set_fact:
+    is_first_server: "{{ inventory_hostname == (groups['k3s_servers'] | sort | first) }}"
+
+- name: Ensure config and audit directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  loop:
+    - "{{ k3s_config_dir }}"
+    - "{{ k3s_audit_log_dir }}"
+
+# Written before install: kube-apiserver reads the policy at startup and
+# refuses to start if --audit-policy-file points at nothing.
+- name: Write the API audit policy
+  ansible.builtin.template:
+    src: audit-policy.yaml.j2
+    dest: "{{ k3s_config_dir }}/audit-policy.yaml"
+    owner: root
+    group: root
+    mode: "0600"
+  when: k3s_audit_enabled | bool
+  notify: restart k3s
+
+- name: Write k3s config.yaml
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: "{{ k3s_config_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+  notify: restart k3s
+
+- name: Check whether k3s is already installed and running
+  ansible.builtin.command:
+    cmd: systemctl is-active {{ k3s_service_name }}
+  register: _k3s_active
+  changed_when: false
+  failed_when: false
+
+- name: Check whether this node already holds cluster state
+  ansible.builtin.stat:
+    path: "{{ k3s_data_dir }}/server/token"
+  register: _k3s_token
+
+# Guard against the worst outcome this role could produce: wiping a live
+# cluster's etcd because a config file went missing.
+- name: Refuse to bootstrap over a running cluster
+  ansible.builtin.fail:
+    msg: >-
+      k3s is active on {{ inventory_hostname }} and holds cluster state, but
+      k3s_force_clean_bootstrap is set. Refusing: this would destroy etcd.
+      Unset the flag, or stop k3s deliberately if the wipe is intended.
+  when:
+    - _k3s_active.stdout == "active"
+    - _k3s_token.stat.exists
+    - k3s_force_clean_bootstrap | bool
+
+- name: Install k3s
+  ansible.builtin.shell:
+    cmd: "curl -sfL {{ k3s_install_url }} | sh -"
+  environment:
+    INSTALL_K3S_VERSION: "{{ k3s_version }}"
+    INSTALL_K3S_SKIP_START: "true"
+    K3S_TOKEN: "{{ k3s_token }}"
+  register: _k3s_install
+  # The installer is idempotent for a matching version; treat a no-op as
+  # unchanged so re-runs do not report drift.
+  changed_when: "'Skipping installation' not in _k3s_install.stdout"
+  timeout: "{{ k3s_install_timeout }}"
+  when: not _k3s_token.stat.exists or _k3s_active.stdout != "active"
+
+# The installer creates k3s.service but not a drop-in directory, so this has
+# to exist before the override is written.
+- name: Ensure the systemd drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/systemd/system/k3s.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Apply systemd hardening for the k3s unit
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/k3s.service.d/override.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # MANAGED BY ANSIBLE -- roles/k3s-server
+      [Service]
+      # Protect the control plane from the kernel OOM killer: if k3s is
+      # killed the node stops being a control-plane member entirely.
+      OOMScoreAdjust={{ k3s_oom_score_adjust }}
+      LimitNOFILE={{ k3s_limit_nofile }}
+      Restart=always
+      RestartSec={{ k3s_restart_sec }}
+  notify: restart k3s
+
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Start and enable k3s
+  ansible.builtin.systemd:
+    name: "{{ k3s_service_name }}"
+    state: started
+    enabled: true
+
+- name: Flush handlers so any config change is live before verification
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for the API server to answer /healthz
+  ansible.builtin.command:
+    cmd: k3s kubectl get --raw /healthz
+  register: _healthz
+  until: _healthz.rc == 0 and _healthz.stdout == 'ok'
+  retries: "{{ k3s_api_ready_retries }}"
+  delay: "{{ k3s_api_ready_delay }}"
+  changed_when: false
+
+- name: Wait for this node to register in the API
+  ansible.builtin.command:
+    cmd: k3s kubectl get node {{ inventory_hostname }} -o jsonpath={.metadata.name}
+  register: _node_reg
+  until: _node_reg.rc == 0 and _node_reg.stdout == inventory_hostname
+  retries: "{{ k3s_node_register_retries }}"
+  delay: "{{ k3s_node_register_delay }}"
+  changed_when: false
+
+- name: Verify the installed version matches the pin
+  ansible.builtin.command:
+    cmd: k3s --version
+  register: _k3s_ver
+  changed_when: false
+  failed_when: k3s_version not in _k3s_ver.stdout
+
+# Lists every address rather than filtering for type InternalIP: a jsonpath
+# filter needs nested double quotes, which do not survive the round trip
+# through Ansible's command module. Checking membership is equivalent here
+# and has no quoting hazard.
+- name: Read the node's advertised addresses
+  ansible.builtin.command:
+    cmd: k3s kubectl get node {{ inventory_hostname }} -o jsonpath={.status.addresses[*].address}
+  register: _node_addrs
+  changed_when: false
+
+- name: Assert the node advertises its vLAN address, not the public one
+  ansible.builtin.assert:
+    that:
+      - private_ip in _node_addrs.stdout
+      - ansible_host not in _node_addrs.stdout
+    fail_msg: >-
+      Node advertises "{{ _node_addrs.stdout }}", expected to contain
+      {{ private_ip }} and NOT the public address {{ ansible_host }}.
+      Cluster traffic would traverse the public interface.
+    success_msg: "node advertises {{ private_ip }} on the vLAN"
+    quiet: true

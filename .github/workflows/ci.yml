@@ -58,6 +58,12 @@ jobs:
   ansible-syntax:
     name: Ansible syntax check
     runs-on: ubuntu-latest
+    # ansible.cfg lives in ansible/, but these steps run from the repo root,
+    # and Ansible only reads a cfg from the current directory. Its roles_path
+    # therefore never applies and roles resolve to playbooks/roles, which does
+    # not exist. Set it explicitly rather than depending on cwd.
+    env:
+      ANSIBLE_ROLES_PATH: ansible/roles
     steps:
       - uses: actions/checkout@v4
 

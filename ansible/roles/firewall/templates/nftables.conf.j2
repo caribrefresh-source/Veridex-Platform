@@ -1,0 +1,59 @@
+#!/usr/sbin/nft -f
+# MANAGED BY ANSIBLE -- roles/firewall/templates/nftables.conf.j2
+# Manual edits are overwritten on the next run. Change the inventory instead.
+
+flush ruleset
+
+table inet filter {
+  chain input {
+    type filter hook input priority filter; policy drop;
+
+    # Established traffic first: this is what keeps an in-flight SSH session
+    # alive while the ruleset is being replaced.
+    ct state established,related accept
+    ct state invalid drop
+
+    iif lo accept
+
+    # ICMP, including path-MTU discovery. Dropping this breaks PMTUD and
+    # produces stalls that look like application bugs.
+    ip protocol icmp accept
+    ip6 nexthdr ipv6-icmp accept
+
+    # The private vLAN is trusted in full. This covers the entire k3s and
+    # Cilium port surface -- 6443, 2379-2380, 10250, 8472/udp VXLAN,
+    # 51871/udp WireGuard, 4240 health -- without enumerating ports that
+    # would then need maintaining as Cilium's needs change.
+{% for net in firewall_trusted_networks %}
+    ip saddr {{ net }} accept
+{% endfor %}
+
+    # SSH on the public interface. Always allowed: locking this out costs a
+    # VNC-console recovery on every node.
+{% if firewall_ssh_ratelimit %}
+    tcp dport {{ firewall_ssh_port }} ct state new limit rate {{ firewall_ssh_rate }} accept
+    tcp dport {{ firewall_ssh_port }} ct state new drop
+{% else %}
+    tcp dport {{ firewall_ssh_port }} accept
+{% endif %}
+
+{% if firewall_public_tcp_ports | length > 0 %}
+    # Explicitly published TCP
+    tcp dport { {{ firewall_public_tcp_ports | join(', ') }} } accept
+{% endif %}
+{% if firewall_public_udp_ports | length > 0 %}
+    # Explicitly published UDP
+    udp dport { {{ firewall_public_udp_ports | join(', ') }} } accept
+{% endif %}
+  }
+
+  # Pod traffic is routed, not bridged, so it traverses the forward chain.
+  # Cilium installs its own rules; this chain must not drop what it forwards.
+  chain forward {
+    type filter hook forward priority filter; policy accept;
+  }
+
+  chain output {
+    type filter hook output priority filter; policy accept;
+  }
+}

@@ -194,6 +194,91 @@ cilium_k8s_service_port: 6443
 # across all five nodes (only two agents exist, so 3-way replication cannot be
 # satisfied inside the agent pool alone -- this is why the control-plane taint
 # stays PreferNoSchedule rather than NoSchedule).
+#
+# Relationship to K3s-HA ADR-0003 ("node-local storage, rebuild-on-loss"):
+# that ADR rejected a replicated block layer, but the option it rejected was
+# Rook-Ceph, on the grounds of a measured 10-15% resource tax. That figure
+# does not transfer to Longhorn. Ceph's MON/MGR/OSD control plane alone runs
+# 6-10 GB RAM on a comparable 3-node cluster; Longhorn's overhead scales with
+# volume count rather than cluster size, and its documented minimum is
+# 3 nodes / 4 vCPU / 4 GiB per node -- met by every node here. Measured live
+# data is 20.7 GiB across 28 PVCs, so the instance-manager footprint is small.
+#
+# More decisive: ADR-0003 could accept node-local because hcloud-volumes is
+# network-attached and SURVIVES node loss (the volume detaches and reattaches
+# elsewhere). netcup Local Block Storage is host-local -- the API exposes no
+# create/delete/attach/detach for disks, only list, format and driver change,
+# while it DOES model NICs as attachable. So under local-path here, node loss
+# means actual data loss, not a reattach. That is a materially different
+# trade-off from the one ADR-0003 weighed, and it is why this cluster takes
+# the replicated layer that ADR-0003 declined.
+#
+# Engine: V1 (iSCSI), not V2 (SPDK). V2 consumes a dedicated CPU core per node
+# at ~100% for spdk_tgt polling, plus 2 GiB of hugepages per node. On the
+# 4 vCPU / 8 GiB RS 1000 control-plane nodes that is a quarter of both CPU and
+# RAM before any workload runs, against measured memory already at 44-68%.
+#
+# Replica count 2, matching Longhorn's documented production default. An
+# earlier revision set 3 on the reasoning that "disk is nearly free" -- that
+# priced the wrong resource. The binding cost is per-replica process CPU and
+# memory, not disk: 28 volumes at 3 replicas is 84 replica processes across
+# five nodes (~17/node) versus 56 (~11/node) at 2. Two replicas also halves
+# write amplification over the vLAN, since Longhorn replication is synchronous
+# and a write acks only once every replica confirms.
+#
+# Two replicas survives single-node loss, and Longhorn is a SECOND redundancy
+# layer here, not the only one: CNPG runs 2 instances with PITR, MinIO
+# erasure-codes across nodes, NATS is R3, and Qdrant/Memgraph/Meilisearch
+# rebuild from snapshots.
+#
+# All 28 PVCs are ReadWriteOnce (verified live) -- no RWX, so the known
+# ganesha.nfsd memory leak on RWX volumes does not apply. Re-check if any
+# workload later needs shared-filesystem semantics.
+#
+# guaranteedInstanceManagerCPU stays at the 12% default initially; it is the
+# first lever to pull (8% is a documented lower setting) if instance-manager
+# reservation proves tight on the 4 vCPU nodes.
 # =============================================================================
 storage_provisioner: "longhorn"
-longhorn_replica_count: 3
+longhorn_version: "1.12.1"
+longhorn_data_engine: "v1"
+longhorn_replica_count: 2
+
+# Longhorn 1.12.1 documented production settings. Recorded explicitly rather
+# than left at chart defaults, because three of the four differ from default
+# and all four affect availability behaviour.
+#   soft anti-affinity false  -- replicas of one volume never share a node
+#   degraded availability false -- refuse to create a volume that cannot meet
+#                              its replica count, instead of silently
+#                              creating it degraded
+#   auto-balance least-effort -- rebalance replicas after a node returns
+#   data locality best-effort -- keep one replica on the node running the
+#                              workload; documented StorageClass default
+longhorn_replica_soft_anti_affinity: false
+longhorn_allow_degraded_availability: false
+longhorn_replica_auto_balance: "least-effort"
+longhorn_data_locality: "best-effort"
+
+# Only ONE data engine should be enabled per cluster: running both means two
+# sets of instance-manager pods and the CPU overhead of both. V1 only here.
+#
+# kubelet root dir needs NO override. Longhorn auto-detects /var/lib/kubelet,
+# which is correct for every k3s >= v0.10.0 (this cluster runs v1.36.4+k3s1).
+# The <data-dir>/agent/kubelet override applies only to k3s older than
+# v0.10.0. Recorded because getting this wrong produces "Cannot get kubelet
+# root dir, no related proc for root-dir detection" and a CrashLoopBackOff in
+# longhorn-driver-deployer, which reads like a Longhorn bug rather than a
+# path setting.
+#
+# Node prerequisites for the V1 engine, to be installed by the common role:
+#   open-iscsi  -- and the iscsid DAEMON must be RUNNING, not merely installed
+#   nfs-common  -- NFSv4 client, needed for the backup target
+#   cryptsetup, dmsetup -- only if volume encryption is enabled
+# The Hetzner base role already installs open-iscsi and nfs-common, so this
+# is parity rather than new ground.
+#
+# CoreDNS must run at least 2 replicas (Longhorn documented requirement);
+# the Hetzner value of 2 carries over unchanged.
+#
+# Preflight: `longhornctl check preflight` validates node prerequisites and
+# is the natural gate before installing the chart.

@@ -117,14 +117,22 @@ def is_consumer(rel: str) -> bool:
 
 def discover(rel: str, text: str, found: dict[tuple[str, str], list[str]]) -> None:
     yamlish = rel.endswith((".yml", ".yaml", ".j2"))
+
+    def at(offset: int) -> str:
+        return f"{rel}:{text.count(chr(10), 0, offset) + 1}"
+
+    # Environment reads can span lines -- a lookup folded across a YAML block
+    # scalar, a call split over two lines -- so they are matched on the whole
+    # text and located by offset rather than scanned line by line.
+    for call in ANSIBLE_ENV_CALL.finditer(text):
+        for name in QUOTED_NAME.findall(call.group(1)):
+            found[("env", name)].append(at(call.start()))
+    for pattern in PYTHON_ENV_PATTERNS:
+        for match in pattern.finditer(text):
+            found[("env", match.group(1))].append(at(match.start()))
+
     for lineno, line in enumerate(text.splitlines(), 1):
         where = f"{rel}:{lineno}"
-        for call in ANSIBLE_ENV_CALL.finditer(line):
-            for name in QUOTED_NAME.findall(call.group(1)):
-                found[("env", name)].append(where)
-        for pattern in PYTHON_ENV_PATTERNS:
-            for name in pattern.findall(line):
-                found[("env", name)].append(where)
         for name in ACTIONS_PATTERN.findall(line):
             if name not in ACTIONS_BUILTIN:
                 found[("github-actions", name)].append(where)

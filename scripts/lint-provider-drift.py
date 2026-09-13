@@ -53,6 +53,7 @@ import argparse
 import re
 import subprocess
 import sys
+import unicodedata
 from pathlib import Path, PurePosixPath
 
 # The linter necessarily contains every pattern it looks for.
@@ -75,6 +76,18 @@ def suppressed(line: str) -> bool:
     reason = COMMENT_CLOSERS.sub("", m.group(1)).strip()
     return re.search(r"[A-Za-z0-9]", reason) is not None
 COMMENT_PREFIXES = ("#", "//", "<!--")
+
+# Characters that look like a hyphen or dot but are not ASCII, so a rule for
+# "K3s-HA" or "argocd.entrepeai.com" could be dodged by pasting a typographic
+# variant. NFKC folds fullwidth forms (e.g. U+FF0E full stop); the table folds
+# the dash family (U+2010-U+2015, U+2212, U+FE58, U+FE63, U+FF0D).
+DASHES = dict.fromkeys(
+    map(ord, "‐‑‒–—―−﹘﹣－"), "-"
+)
+
+
+def normalize(line: str) -> str:
+    return unicodedata.normalize("NFKC", line).translate(DASHES)
 
 # (severity, compiled pattern, human explanation)
 RULES: list[tuple[str, re.Pattern, str]] = [
@@ -163,8 +176,9 @@ def scan_text(text: str) -> list[tuple[int, str, str, str]]:
             continue  # comment-only line: prose may name Hetzner freely
         if suppressed(raw):
             continue
+        line = normalize(raw)
         for severity, pattern, why in RULES:
-            m = pattern.search(raw)
+            m = pattern.search(line)
             if m:
                 findings.append((lineno, severity, m.group(0), why))
     return findings

@@ -1,6 +1,6 @@
 # cert-rotation
 
-Rotate TLS certificates across the K3s-HA cluster (manual and forced rotation).
+Rotate TLS certificates across the Veridex netcup cluster (manual and forced rotation).
 
 ## 1. Current Certificate Status
 Run /cert-expiry-check first to identify which certs need rotation.
@@ -54,7 +54,8 @@ kubectl wait --for=condition=Ready certificate -n data-plane --all --timeout=120
 ## 7. Verify Post-Rotation
 ```
 kubectl get certificate -A -o custom-columns='NS:.metadata.namespace,NAME:.metadata.name,READY:.status.conditions[0].status,EXPIRY:.status.notAfter'
-echo | openssl s_client -connect argocd.entrepeai.com:443 -servername argocd.entrepeai.com 2>/dev/null | openssl x509 -noout -dates
+# ARGOCD_HOST / HUBBLE_HOST: platform hostnames under veridexeai.com (created at Gates 10 and 15)
+echo | openssl s_client -connect "$ARGOCD_HOST:443" -servername "$ARGOCD_HOST" 2>/dev/null | openssl x509 -noout -dates
 ```
 Pass: All certs Ready. Live endpoint TLS not-after is updated.
 

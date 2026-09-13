@@ -106,6 +106,22 @@ RULES: list[tuple[str, re.Pattern, str]] = [
                          r"|\brobot(-ws)?\.your-server\.de\b"),
      "Hetzner API, DNS or console endpoint -- no netcup dependency on it"),
 
+    # Old cluster identity. Gate 0 stops on "ambiguous cluster identity": an
+    # instruction that targets the K3s-HA cluster, one of its hostnames or its
+    # repository runs against Hetzner while looking like platform tooling.
+    # entrepeai.com is delegated to Hetzner DNS with a wildcard to the K3s-HA
+    # cluster (verified 2026-09-13); platform hostnames live under
+    # veridexeai.com. Label genuine history with .provider-drift-historical.
+    ("ERROR", re.compile(r"\bK3s-HA\b"),
+     "names the Hetzner K3s-HA cluster as a target -- instructions must target "
+     "the netcup cluster; label historical references"),
+    ("ERROR", re.compile(r"\b[a-z0-9-]+\.entrepeai\.com\b", re.IGNORECASE),
+     "entrepeai.com hostname -- resolves through Hetzner DNS to the K3s-HA "
+     "cluster; platform hostnames live under veridexeai.com"),
+    ("ERROR", re.compile(r"caribrefresh-source/k3s-ha\b", re.IGNORECASE),
+     "K3s-HA repository -- the netcup platform's source of truth is "
+     "caribrefresh-source/Veridex-Platform"),
+
     # Context-dependent: only drift if the cluster keeps distinct pod/service
     # CIDRs. Pending that decision these report without failing.
     ("WARN", re.compile(r"\b10\.4[23]\.\d{1,3}\.\d{1,3}\b|10\.4[23]\.0\.0/16"),

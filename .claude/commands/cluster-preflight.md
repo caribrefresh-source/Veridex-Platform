@@ -1,6 +1,6 @@
 # cluster-preflight
 
-Validate the K3s-HA cluster (entrepeai.com) is healthy before any deployment or change.
+Validate the Veridex netcup cluster is healthy before any deployment or change.
 
 ## 1. Node Readiness
 ```

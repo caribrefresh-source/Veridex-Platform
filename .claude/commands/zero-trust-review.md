@@ -1,6 +1,6 @@
 # zero-trust-review
 
-Comprehensive zero-trust security posture review for the K3s-HA cluster.
+Comprehensive zero-trust security posture review for the Veridex netcup cluster.
 
 ## 1. mTLS Coverage (Cilium SPIFFE)
 Run /cilium-mtls-verify to confirm all 5 critical paths enforced.

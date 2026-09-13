@@ -1,6 +1,6 @@
 # architecture-review
 
-Review the overall K3s-HA + DIP platform architecture for soundness and gaps.
+Review the overall Veridex netcup cluster + DIP platform architecture for soundness and gaps.
 
 ## 1. Control Plane Architecture
 ```

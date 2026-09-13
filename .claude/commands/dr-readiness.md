@@ -1,6 +1,6 @@
 # dr-readiness
 
-Disaster recovery readiness assessment for K3s-HA cluster.
+Disaster recovery readiness assessment for the Veridex netcup cluster.
 
 ## 1. Multi-Node Control Plane (HA)
 ```

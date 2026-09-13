@@ -1,6 +1,6 @@
 # node-health
 
-Detailed per-node health assessment for the K3s-HA cluster.
+Detailed per-node health assessment for the Veridex netcup cluster.
 
 ## 1. Node Status + Conditions
 ```

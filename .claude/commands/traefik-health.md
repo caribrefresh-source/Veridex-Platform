@@ -1,6 +1,6 @@
 # traefik-health
 
-Validate Traefik v3.7 ingress, WAF (Coraza), and ForwardAuth middleware on entrepeai.com.
+Validate Traefik v3.7 ingress, WAF (Coraza), and ForwardAuth middleware for the platform's veridexeai.com hostnames.
 
 ## 1. Traefik Pod Status
 ```
@@ -12,7 +12,7 @@ Pass: Traefik pods Running. HostNetwork mode active (required for Cilium probe b
 ```
 kubectl get ingressroute -A -o custom-columns='NS:.metadata.namespace,NAME:.metadata.name,HOST:.spec.routes[0].match'
 ```
-Verify: argocd.entrepeai.com, hubble.entrepeai.com, and any DIP endpoints present.
+Verify: the Argo CD, Hubble and DIP hostnames under veridexeai.com are present.
 
 ## 3. TLS Options
 ```
@@ -43,8 +43,9 @@ Pass: Bouncer pod Running. Logs show ban decisions being applied.
 
 ## 7. TLS Certificate Valid
 ```
-kubectl get certificate -A | grep -E 'entrepeai|argocd|hubble'
-echo | openssl s_client -connect argocd.entrepeai.com:443 -servername argocd.entrepeai.com 2>/dev/null | openssl x509 -noout -dates
+kubectl get certificate -A | grep -E 'veridexeai|argocd|hubble'
+# ARGOCD_HOST / HUBBLE_HOST: platform hostnames under veridexeai.com (created at Gates 10 and 15)
+echo | openssl s_client -connect "$ARGOCD_HOST:443" -servername "$ARGOCD_HOST" 2>/dev/null | openssl x509 -noout -dates
 ```
 Pass: Certificate Ready. Not-after > 14 days from today.
 

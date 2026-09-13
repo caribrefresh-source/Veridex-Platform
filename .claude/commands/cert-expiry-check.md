@@ -1,6 +1,6 @@
 # cert-expiry-check
 
-Check all TLS certificate expiry dates across the K3s-HA cluster.
+Check all TLS certificate expiry dates across the Veridex netcup cluster.
 
 ## 1. cert-manager Certificate Resources
 ```
@@ -36,8 +36,9 @@ Pass: `letsencrypt-dns` Ready=True.
 
 ## 4. Live TLS Check (External Endpoints)
 ```
-echo | openssl s_client -connect argocd.entrepeai.com:443 -servername argocd.entrepeai.com 2>/dev/null | openssl x509 -noout -dates -subject
-echo | openssl s_client -connect hubble.entrepeai.com:443 -servername hubble.entrepeai.com 2>/dev/null | openssl x509 -noout -dates -subject
+# ARGOCD_HOST / HUBBLE_HOST: platform hostnames under veridexeai.com (created at Gates 10 and 15)
+echo | openssl s_client -connect "$ARGOCD_HOST:443" -servername "$ARGOCD_HOST" 2>/dev/null | openssl x509 -noout -dates -subject
+echo | openssl s_client -connect "$HUBBLE_HOST:443" -servername "$HUBBLE_HOST" 2>/dev/null | openssl x509 -noout -dates -subject
 ```
 Pass: `notAfter` > 14 days from today. Subject matches expected domain.
 

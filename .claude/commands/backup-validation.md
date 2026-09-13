@@ -1,6 +1,6 @@
 # backup-validation
 
-Validate all backup systems across K3s-HA cluster.
+Validate all backup systems across the Veridex netcup cluster.
 
 ## 1. CNPG PostgreSQL Backups
 ```

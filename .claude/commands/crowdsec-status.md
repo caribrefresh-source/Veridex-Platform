@@ -1,6 +1,6 @@
 # crowdsec-status
 
-Validate CrowdSec IDS/WAF deployment on the K3s-HA cluster.
+Validate CrowdSec IDS/WAF deployment on the Veridex netcup cluster.
 
 ## 1. CrowdSec LAPI Pod
 ```

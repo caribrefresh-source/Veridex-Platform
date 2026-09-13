@@ -1,6 +1,6 @@
 # loki-log-review
 
-Query Loki for errors, crashes, and anomalies across the K3s-HA platform.
+Query Loki for errors, crashes, and anomalies across the Veridex platform.
 
 ## 1. Loki Stack Health
 ```

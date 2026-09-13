@@ -133,3 +133,25 @@ jobs:
       # the vLAN register, or hosts declared in any other inventory.
       - name: Validate inventory against schemas/inventory.schema.json
         run: python3 scripts/validate-inventory.py
+
+  secret-register:
+    name: Secret register (names only)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install pinned lint dependencies
+        run: |
+          pip install --disable-pip-version-check \
+            -r scripts/requirements-lint.txt
+
+      # Every secret the repo reads must say where its value is held, and no
+      # destination may be Hetzner. Prints names and file:line only, never
+      # values, and fails on a literal assignment or a private key block.
+      - name: Check every consumed secret has a registered destination
+        run: python3 scripts/lint-secret-register.py

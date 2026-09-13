@@ -80,9 +80,10 @@ COMMENT_PREFIXES = ("#", "//", "<!--")
 # Characters that look like a hyphen or dot but are not ASCII, so a rule for
 # "K3s-HA" or "argocd.entrepeai.com" could be dodged by pasting a typographic
 # variant. NFKC folds fullwidth forms (e.g. U+FF0E full stop); the table folds
-# the dash family (U+2010-U+2015, U+2212, U+FE58, U+FE63, U+FF0D).
+# the dash family (U+2010-U+2015, U+2212, U+FE58, U+FE63, U+FF0D). Written as
+# escapes so the characters are visible in review.
 DASHES = dict.fromkeys(
-    map(ord, "‐‑‒–—―−﹘﹣－"), "-"
+    map(ord, "\u2010\u2011\u2012\u2013\u2014\u2015\u2212\ufe58\ufe63\uff0d"), "-"
 )
 
 

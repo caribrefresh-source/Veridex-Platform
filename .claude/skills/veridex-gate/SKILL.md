@@ -26,9 +26,21 @@ Legacy files `docs/evidence/gate-*.md` predate Revision 3 numbering. They are no
 closure records. Cite them at most as `DOCUMENTED` history, and only under the
 Revision 3 gate their content actually matches, never by file-name number.
 
-**Plan identity.** At the start of every run record the plan's Git commit
-(`git log -1 --format=%H -- "<plan path>"`) and SHA-256. Recheck the SHA-256
-before writing any record. If it changed mid-run: stop, `SOURCE_DRIFT`.
+**Plan identity.** At the start of every run record:
+
+- `plan_commit` — `git log -1 --format=%H -- "<plan path>"`
+- `plan_sha256` — the hash of the plan **as stored in Git** at that commit:
+  `git show "<plan_commit>:<plan path>" | sha256sum`
+
+Never hash the working copy. Git's line-ending conversion makes a Windows
+checkout and a Linux checkout of the same commit hash differently, so a
+working-copy hash would report false drift between operators. Only an
+uncommitted plan (`build`/`audit`) is hashed from the working copy, and the
+record must mark it `uncommitted`.
+
+Before writing any record, recheck that `plan_commit` is unchanged and
+`git status --porcelain -- "<plan path>"` is still empty. If either changed
+mid-run: stop, `SOURCE_DRIFT`.
 
 - `close` and `reopen` require the plan to be committed and unmodified
   (`git status --porcelain -- "<plan path>"` is empty). Otherwise stop,

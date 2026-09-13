@@ -1,2 +1,146 @@
 ---
 # k3s-agent role tasks
+#
+# Joins worker nodes to the control plane. Agents carry no cluster state, so
+# unlike the server role there is nothing here to guard against wiping.
+#
+# Two things this role deliberately does NOT wait for, both consequences of
+# running before the CNI exists:
+#
+#   node Ready        the servers set flannel-backend=none, so a joining agent
+#                     has no CNI at all. kubelet reports Ready=False on every
+#                     agent until Cilium's DaemonSet lands a pod on it, which
+#                     happens in a later play. Gating on Ready here deadlocks:
+#                     Cilium cannot schedule onto a node that never registers.
+#
+#   service active    k3s-agent.service is a Type=notify unit and does not
+#                     call sd_notify(READY=1) until well past kubelet
+#                     registration -- observed on the reference cluster still
+#                     "activating" 8+ minutes after the node had registered,
+#                     gated on that same CNI initialization.
+#
+# Registration in the API is therefore the only sound gate at this stage.
+# Full readiness is verified after Cilium is up.
+
+- name: Assert the node identity matches the inventory
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['hostname'] == inventory_hostname
+      - private_ip is defined and private_ip | length > 0
+    fail_msg: >-
+      Hostname is {{ ansible_facts['hostname'] }} but inventory says
+      {{ inventory_hostname }}, or private_ip is unset. k3s registers the node
+      under node-name and binds to private_ip; a mismatch produces a node that
+      joins under the wrong identity.
+    quiet: true
+
+- name: Ensure the config directory exists
+  ansible.builtin.file:
+    path: "{{ k3s_agent_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Write k3s agent config.yaml
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: "{{ k3s_agent_config_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+  notify: restart k3s-agent
+
+- name: Check whether the agent is already installed and running
+  ansible.builtin.command:
+    cmd: systemctl is-active {{ k3s_agent_service_name }}
+  register: _k3s_agent_active
+  changed_when: false
+  failed_when: false
+
+# K3S_URL is what makes the installer lay down an agent rather than a server.
+# The token is passed through the environment, not written into config.yaml:
+# the installer persists it to the unit's env file with root-only permissions.
+- name: Install the k3s agent
+  ansible.builtin.shell:
+    cmd: "curl -sfL {{ k3s_agent_install_url }} | sh -"
+  environment:
+    INSTALL_K3S_VERSION: "{{ k3s_version }}"
+    INSTALL_K3S_SKIP_START: "true"
+    K3S_URL: "{{ k3s_agent_join_url }}"
+    K3S_TOKEN: "{{ k3s_token }}"
+  register: _k3s_agent_install
+  # The installer is idempotent for a matching version; treat a no-op as
+  # unchanged so re-runs do not report drift.
+  changed_when: "'Skipping installation' not in _k3s_agent_install.stdout"
+  timeout: "{{ k3s_agent_install_timeout }}"
+  when: _k3s_agent_active.stdout != "active"
+
+- name: Ensure the systemd drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/systemd/system/{{ k3s_agent_service_name }}.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Apply systemd hardening for the k3s-agent unit
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/{{ k3s_agent_service_name }}.service.d/override.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # MANAGED BY ANSIBLE -- roles/k3s-agent
+      [Service]
+      LimitNOFILE={{ k3s_agent_limit_nofile }}
+      Restart=always
+      RestartSec={{ k3s_agent_restart_sec }}
+  notify: restart k3s-agent
+
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Start and enable the k3s agent
+  ansible.builtin.systemd:
+    name: "{{ k3s_agent_service_name }}"
+    state: started
+    enabled: true
+
+- name: Flush handlers so any config change is live before verification
+  ansible.builtin.meta: flush_handlers
+
+# Delegated to the bootstrap server: agents hold no kubeconfig, so there is no
+# API client on this host to ask.
+- name: Wait for this node to register in the API
+  ansible.builtin.command:
+    cmd: k3s kubectl get node {{ inventory_hostname }} -o jsonpath={.metadata.name}
+  register: _agent_reg
+  until: _agent_reg.rc == 0 and _agent_reg.stdout == inventory_hostname
+  retries: "{{ k3s_agent_register_retries }}"
+  delay: "{{ k3s_agent_register_delay }}"
+  changed_when: false
+  delegate_to: "{{ groups['k3s_servers'] | sort | first }}"
+
+- name: Verify the installed version matches the pin
+  ansible.builtin.command:
+    cmd: k3s --version
+  register: _k3s_agent_ver
+  changed_when: false
+  failed_when: k3s_version not in _k3s_agent_ver.stdout
+
+# Informational: expected to be False until Cilium lands. Recorded rather than
+# asserted, so the run log shows what the node looked like at this stage.
+# shell, not command: the jsonpath filter needs nested double quotes, and the
+# command module's shlex split strips them -- leaving @.type==Ready, which is
+# not valid jsonpath. Single-quoting the expression for the shell preserves it.
+- name: Report readiness (expected False until Cilium is installed)
+  ansible.builtin.shell:
+    cmd: >-
+      k3s kubectl get node {{ inventory_hostname }}
+      -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
+  register: _agent_ready
+  changed_when: false
+  failed_when: false
+  delegate_to: "{{ groups['k3s_servers'] | sort | first }}"

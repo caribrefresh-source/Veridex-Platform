@@ -1,2 +1,32 @@
 ---
 # k3s-agent role default variables
+
+k3s_agent_install_url: "https://get.k3s.io"
+k3s_agent_install_timeout: 360
+k3s_agent_service_name: k3s-agent
+
+k3s_agent_config_dir: /etc/rancher/k3s
+k3s_agent_config_file: /etc/rancher/k3s/config.yaml
+
+# Agents join through the kube-vip VIP, unlike servers, which join through the
+# bootstrap server's private address. The server role has no choice: the VIP
+# is not being announced yet while the control plane is still forming. By the
+# time agents run, it is -- so joining through the VIP means an agent does not
+# depend on one named server still being alive.
+k3s_agent_join_url: "https://{{ k3s_api_vip }}:{{ api_port }}"
+
+# Workers reserve less than control-plane nodes: no etcd, no API server.
+k3s_agent_kubelet_system_reserved: "cpu=250m,memory=256Mi"
+k3s_agent_kubelet_kube_reserved: "cpu=250m,memory=256Mi"
+k3s_agent_kubelet_eviction_hard: "memory.available<200Mi,nodefs.available<5%"
+
+k3s_agent_node_labels:
+  - "node-role.kubernetes.io/worker=true"
+  - "veridex.io/cni=cilium"
+
+k3s_agent_limit_nofile: 1048576
+k3s_agent_restart_sec: 10
+
+# Registration only -- see tasks/main.yml for why readiness is not gated here.
+k3s_agent_register_retries: 40
+k3s_agent_register_delay: 10

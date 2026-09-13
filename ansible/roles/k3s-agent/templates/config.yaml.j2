@@ -1,0 +1,24 @@
+# MANAGED BY ANSIBLE -- roles/k3s-agent/templates/config.yaml.j2
+# Manual edits are overwritten on the next run. Change the inventory instead.
+
+server: {{ k3s_agent_join_url }}
+
+node-name: {{ inventory_hostname }}
+# Bind to the vLAN, not the public interface, so pod and node traffic stays on
+# the private network -- same rule the servers follow.
+node-ip: {{ private_ip }}
+
+node-label:
+{% for label in k3s_agent_node_labels %}
+  - "{{ label }}"
+{% endfor %}
+
+# Deliberately absent: cloud-provider=external. The reference cluster sets it,
+# but this cluster disables the cloud controller entirely (no netcup CCM
+# exists). Setting it here would taint the node
+# node.cloudprovider.kubernetes.io/uninitialized with nothing running to clear
+# it, and nothing would ever schedule on this agent.
+kubelet-arg:
+  - "system-reserved={{ k3s_agent_kubelet_system_reserved }}"
+  - "kube-reserved={{ k3s_agent_kubelet_kube_reserved }}"
+  - "eviction-hard={{ k3s_agent_kubelet_eviction_hard }}"

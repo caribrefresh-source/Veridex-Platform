@@ -88,7 +88,14 @@ DASHES = dict.fromkeys(
 
 
 def normalize(line: str) -> str:
-    return unicodedata.normalize("NFKC", line).translate(DASHES)
+    """Fold look-alikes to ASCII and drop invisible format characters.
+
+    Unicode category Cf (zero-width space and joiners, soft hyphen, bidi
+    controls) renders as nothing, so "K3s-" + U+200B + "HA" would otherwise
+    split a match while reading as K3s-HA.
+    """
+    folded = unicodedata.normalize("NFKC", line).translate(DASHES)
+    return "".join(ch for ch in folded if unicodedata.category(ch) != "Cf")
 
 # (severity, compiled pattern, human explanation)
 RULES: list[tuple[str, re.Pattern, str]] = [

@@ -35,6 +35,14 @@ jobs:
       # Run --strict once the pod/service CIDR decision is settled, so the
       # derived values (CoreDNS ClusterIP, Cilium's API ClusterIP fallback)
       # cannot be left pointing at the old service CIDR.
+      #
+      # PyYAML lets the lint scan YAML values after unescaping, so an escape
+      # sequence cannot hide a provider value.
+      - name: Install pinned lint dependencies
+        run: |
+          pip install --disable-pip-version-check \
+            -r scripts/requirements-lint.txt
+
       - name: Lint for Hetzner provider drift
         run: python3 scripts/lint-provider-drift.py
 

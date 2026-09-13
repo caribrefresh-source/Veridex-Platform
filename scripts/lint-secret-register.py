@@ -54,7 +54,12 @@ CONSUMER_FILES = ("Makefile",)
 
 NAME = r"([A-Za-z_][A-Za-z0-9_]*)"
 ENV_PATTERNS = (
-    re.compile(r"lookup\(\s*['\"]env['\"]\s*,\s*['\"]" + NAME + r"['\"]"),
+    # lookup / query / q, short or fully qualified plugin name, with quotes
+    # optionally backslash-escaped inside a double-quoted YAML string.
+    re.compile(
+        r"(?:lookup|query|q)\(\s*\?['\"](?:ansible\.builtin\.)?env\?['\"]\s*,\s*\?['\"]"
+        + NAME + r"\?['\"]"
+    ),
     re.compile(r"os\.environ(?:\.get)?\s*[\[(]\s*['\"]" + NAME + r"['\"]"),
     re.compile(r"os\.getenv\(\s*['\"]" + NAME + r"['\"]"),
 )

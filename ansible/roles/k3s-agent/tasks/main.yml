@@ -102,11 +102,21 @@
   ansible.builtin.systemd:
     daemon_reload: true
 
-- name: Start and enable the k3s agent
+- name: Enable the k3s agent
   ansible.builtin.systemd:
     name: "{{ k3s_agent_service_name }}"
-    state: started
     enabled: true
+
+# --no-block, because the unit is Type=notify and does not signal READY=1
+# until the CNI is up. Cilium only schedules onto this node once it has
+# registered, and registration happens after start -- so a blocking start
+# waits on something that cannot complete until after it returns, and
+# systemd fails the job. Registration is the gate, below.
+- name: Start the k3s agent without waiting for the notify barrier
+  ansible.builtin.command:
+    cmd: systemctl start --no-block {{ k3s_agent_service_name }}
+  when: _k3s_agent_active.stdout != "active"
+  changed_when: _k3s_agent_active.stdout != "active"
 
 - name: Flush handlers so any config change is live before verification
   ansible.builtin.meta: flush_handlers
@@ -121,6 +131,17 @@
   retries: "{{ k3s_agent_register_retries }}"
   delay: "{{ k3s_agent_register_delay }}"
   changed_when: false
+  delegate_to: "{{ groups['k3s_servers'] | sort | first }}"
+
+# node-role labels cannot be self-applied by kubelet, so this runs through
+# the API after the node exists.
+- name: Apply the worker role label
+  ansible.builtin.command:
+    cmd: >-
+      k3s kubectl label node {{ inventory_hostname }}
+      {{ k3s_agent_role_label }} --overwrite
+  register: _agent_label
+  changed_when: "'not labeled' not in _agent_label.stdout"
   delegate_to: "{{ groups['k3s_servers'] | sort | first }}"
 
 - name: Verify the installed version matches the pin

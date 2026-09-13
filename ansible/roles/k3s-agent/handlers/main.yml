@@ -3,8 +3,9 @@
 
 # Restarted, not reloaded: k3s reads config.yaml only at start, exactly as on
 # the servers. A config change that is not restarted has not taken effect.
+# --no-block for the same reason the start task uses it: this unit does not
+# signal READY=1 until the CNI is up, so a blocking restart fails the job.
 - name: restart k3s-agent
-  ansible.builtin.systemd:
-    name: "{{ k3s_agent_service_name }}"
-    state: restarted
-    enabled: true
+  ansible.builtin.command:
+    cmd: systemctl restart --no-block {{ k3s_agent_service_name }}
+  changed_when: true

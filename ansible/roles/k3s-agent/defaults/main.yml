@@ -20,9 +20,19 @@ k3s_agent_kubelet_system_reserved: "cpu=250m,memory=256Mi"
 k3s_agent_kubelet_kube_reserved: "cpu=250m,memory=256Mi"
 k3s_agent_kubelet_eviction_hard: "memory.available<200Mi,nodefs.available<5%"
 
+# Self-applied kubelet labels. These must NOT be in the kubernetes.io
+# namespace: kubelet validates --node-labels against a fixed allowlist and
+# exits outright on anything else, which takes k3s-agent down with it and
+# leaves systemd restarting a node that can never register.
+# node-role.kubernetes.io/worker is specifically rejected here -- it is
+# applied server-side after registration instead, see tasks/main.yml.
 k3s_agent_node_labels:
-  - "node-role.kubernetes.io/worker=true"
+  - "veridex.io/role=worker"
   - "veridex.io/cni=cilium"
+
+# Applied through the API once the node exists, which is the only way a
+# node-role label can be set.
+k3s_agent_role_label: "node-role.kubernetes.io/worker="
 
 k3s_agent_limit_nofile: 1048576
 k3s_agent_restart_sec: 10

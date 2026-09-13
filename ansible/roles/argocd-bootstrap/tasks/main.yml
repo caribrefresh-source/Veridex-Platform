@@ -1,2 +1,91 @@
 ---
 # argocd-bootstrap role tasks
+#
+# Scope: the repository credential Argo CD needs to clone a PRIVATE repo.
+# Installing Argo CD itself is not implemented here yet.
+#
+# Why this credential is created by Ansible and not reconciled from Git:
+# Argo CD needs it in order to read the repository at all, so a Secret
+# delivered from that repository -- sealed, SOPS-encrypted or otherwise --
+# cannot exist before Argo CD can already authenticate. It is a bootstrap
+# secret, and Ansible owns bootstrap. Everything downstream of Argo CD's
+# first successful sync should be a SealedSecret instead.
+
+- name: Identify the bootstrap server
+  ansible.builtin.set_fact:
+    is_first_server: "{{ inventory_hostname == (groups['k3s_servers'] | sort | first) }}"
+
+# Fails the run rather than creating a Secret with an empty password, which
+# Argo CD accepts without complaint and then reports only as an unauthorized
+# repository -- pointing at the repo, never at the blank credential.
+- name: Require a repository credential
+  ansible.builtin.assert:
+    that:
+      - argocd_repo_username | length > 0
+      - argocd_repo_pat | length > 0
+    fail_msg: >-
+      ARGOCD_REPO_USERNAME and ARGOCD_REPO_PAT must be set in the environment
+      of the control node running this play. The PAT needs read-only contents
+      on {{ argocd_repo_url }} and nothing else.
+  when: is_first_server | bool
+
+- name: Ensure the Argo CD namespace exists
+  # Mirrors gitops/bootstrap/namespace.yaml. That manifest stays the
+  # declarative source of truth; this only covers the bootstrap window
+  # before Argo CD is able to reconcile anything at all.
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail &&
+      k3s kubectl create namespace {{ argocd_namespace }}
+      --dry-run=client -o yaml | k3s kubectl apply -f -
+    executable: /bin/bash
+  environment:
+    KUBECONFIG: "{{ argocd_kubeconfig }}"
+  register: _argocd_ns
+  changed_when: "'created' in _argocd_ns.stdout or 'configured' in _argocd_ns.stdout"
+  when: is_first_server | bool
+
+- name: Install the repository credential
+  when: is_first_server | bool
+  block:
+    # Written to a root-only file rather than passed to kubectl as an
+    # argument: argv is world-readable through /proc for the life of the
+    # process, so --from-literal would expose the PAT to every local user.
+    - name: Render the repository credential
+      ansible.builtin.template:
+        src: repo-credential.yaml.j2
+        dest: "{{ argocd_repo_manifest_path }}"
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+
+    - name: Apply the repository credential
+      ansible.builtin.command:
+        cmd: k3s kubectl apply -f {{ argocd_repo_manifest_path }}
+      environment:
+        KUBECONFIG: "{{ argocd_kubeconfig }}"
+      register: _argocd_repo_secret
+      changed_when: >-
+        'created' in _argocd_repo_secret.stdout
+        or 'configured' in _argocd_repo_secret.stdout
+
+  always:
+    # Runs even when apply fails, so a failed play never leaves the PAT
+    # sitting in plaintext on disk.
+    - name: Remove the rendered credential
+      ansible.builtin.file:
+        path: "{{ argocd_repo_manifest_path }}"
+        state: absent
+
+- name: Confirm the credential is present and labelled
+  ansible.builtin.command:
+    cmd: >-
+      k3s kubectl -n {{ argocd_namespace }} get secret {{ argocd_repo_secret_name }}
+      -o jsonpath={.metadata.labels.argocd\.argoproj\.io/secret-type}
+  environment:
+    KUBECONFIG: "{{ argocd_kubeconfig }}"
+  register: _argocd_repo_label
+  changed_when: false
+  failed_when: _argocd_repo_label.stdout != 'repository'
+  when: is_first_server | bool

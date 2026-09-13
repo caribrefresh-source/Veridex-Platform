@@ -34,13 +34,13 @@ Never present `ASSUMED` or `UNKNOWN` information as fact. This applies to every 
 
 State as of last verification (verify before relying on any of these — see Section 1):
 
-- **Hetzner VLAN**: DHCP-assigned. Never hardcode node IPs.
-- **Host MTU**: 1400 (set via cloud-init/Ansible).
+- **netcup Cloud vLAN**: no DHCP. Every address is assigned by us from `10.2.0.0/16`, and interfaces use a /16 mask (not /24, or the kube-vip VIP falls outside the node subnet). Addresses are defined ONLY in the address register (`ansible/inventory/production/group_vars/all.yml`) and `ansible/inventory/production/hosts.yml`. Never hardcode an IP anywhere else — reference the inventory variables.
+- **Host / vLAN MTU**: 1500, measured 2026-09-12 (`ping -M do`: 1472-byte payload passes, 1473 fails; no jumbo frames). Set by `roles/common` (`vlan_mtu`). Re-measure before changing.
 - **Cilium**: VXLAN tunnel; WireGuard provides encryption only, not tunneling.
-- **Cilium MTU**: intended value is 1360, but `cilium_mtu` is NOT currently wired to `cilium-values.yaml.j2`. Treat the effective value as `UNKNOWN` until you check the rendered manifest and runtime value directly — do not assume 1360 is actually in effect.
+- **Cilium MTU**: `cilium_mtu: 0` (auto-detect), chosen deliberately after testing — setting 1350 only lowered usable payload. Accepted gap: pods advertise 1500 but only ~1354 bytes cross nodes over VXLAN + WireGuard. TCP is unaffected (MSS clamping); large single-datagram UDP can be dropped silently. The Helm key is `MTU` (uppercase): `--set mtu=` is accepted and silently discarded. Measurements and reasoning: `ansible/inventory/production/group_vars/all.yml`.
 - **Cilium API**: `k8sServiceHost` and `k8sServicePort: 6443` are required settings.
 - **Cilium stability**: no routine DaemonSet restarts (see Section 9 — this is the one authoritative statement of that rule; do not duplicate it).
-- **Recovery**: order is Control plane → GitOps → Stateful (native mechanism) → Remaining. Full procedure: `docs/data-plane/backup-dr-runbook.md`.
+- **Recovery**: order is Control plane → GitOps → Stateful (native mechanism) → Remaining. Full procedure: `docs/data-plane/backup-dr-runbook.md` — NOT YET WRITTEN for the netcup cluster. Until it exists and a dated drill is recorded, recovery is unproven.
 - **RPO/RTO targets**: ≤ 1h / ≤ 30m. These are targets to measure against, not confirmed current performance — do not report them as met without a recent, dated recovery-test result.
 
 If repo evidence conflicts with any item above, STOP and report per Section 0.
@@ -101,7 +101,7 @@ Platform focus: document intelligence, workflow automation, AI services.
 ## 9. Reliability & Disaster Recovery
 
 - Every stateful component needs: backups, a written restore procedure, and a recovery test that has actually been exercised (not just designed).
-- **Full-cluster recovery**: follow `docs/data-plane/backup-dr-runbook.md`:
+- **Full-cluster recovery**: follow `docs/data-plane/backup-dr-runbook.md` (not yet written — see Section 2):
   1. Validate control plane.
   2. Restore GitOps/operators/CRDs.
   3. Each data set gets exactly one authoritative restore mechanism.

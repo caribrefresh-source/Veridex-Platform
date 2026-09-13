@@ -4,14 +4,14 @@ Review Kubernetes API audit logs for security events and anomalies.
 
 ## 1. Audit Policy Check
 ```
-ansible servers -i ansible/inventory/hcloud.yml -m shell -a \
-  "cat /etc/rancher/k3s/server/audit-policy.yaml" --limit "$(ansible servers -i ansible/inventory/hcloud.yml --list-hosts | grep -m1 -v 'hosts')" 2>/dev/null
+ansible k3s_servers -i ansible/inventory/production/hosts.yml -m shell -a \
+  "cat /etc/rancher/k3s/server/audit-policy.yaml" --limit "$(ansible k3s_servers -i ansible/inventory/production/hosts.yml --list-hosts | grep -m1 -v 'hosts')" 2>/dev/null
 ```
 Verify: Audit policy exists with RequestResponse level for sensitive verbs (secrets, exec, create, delete).
 
 ## 2. Audit Log File Presence
 ```
-ansible servers -i ansible/inventory/hcloud.yml -m shell -a \
+ansible k3s_servers -i ansible/inventory/production/hosts.yml -m shell -a \
   "ls -lh /var/log/kubernetes/audit.log && tail -1 /var/log/kubernetes/audit.log | python3 -m json.tool | head -20"
 ```
 Pass: Audit log exists and has recent entries (timestamp within last minute).

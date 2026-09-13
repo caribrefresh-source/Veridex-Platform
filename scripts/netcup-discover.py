@@ -13,7 +13,7 @@ assumption:
     network and do not transfer
   * the current IPv4 layout per interface
   * the imageFlavourId for Ubuntu 24.04, for parity with the Hetzner pin in
-    terraform/environments/prod/main.tf (`data "hcloud_image" "ubuntu"`)
+    terraform/environments/prod/main.tf (its Ubuntu image data source)
 
 Safety
 ------

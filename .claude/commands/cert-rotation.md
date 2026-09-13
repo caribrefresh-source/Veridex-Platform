@@ -26,7 +26,7 @@ kubectl describe certificate <cert-name> -n <namespace> | grep -A5 'Status\|Mess
 ```
 
 ## 4. Rotate letsencrypt-dns ClusterIssuer Credentials
-If DNS-01 credentials (Hetzner DNS API key) need rotation:
+If DNS-01 credentials need rotation (none exist yet: veridexeai.com DNS is at Squarespace, which offers no DNS API, so no DNS-01 issuer is configured):
 ```
 # Update the secret referenced by the ClusterIssuer
 kubectl get clusterissuer letsencrypt-dns -o yaml | grep secretName
@@ -38,7 +38,7 @@ After rotation: trigger re-issue on a test cert to verify DNS-01 still works.
 ## 5. K3s Internal Certificate Rotation
 K3s auto-rotates internal certs annually. For manual rotation:
 ```
-ansible servers -i ansible/inventory/hcloud.yml -m shell -a \
+ansible k3s_servers -i ansible/inventory/production/hosts.yml -m shell -a \
   "systemctl stop k3s && k3s certificate rotate && systemctl start k3s" \
   --limit <server-node> 2>/dev/null
 ```

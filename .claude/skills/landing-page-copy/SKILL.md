@@ -5,7 +5,7 @@ description: "Use whenever writing or reviewing copy and content structure for m
 
 # Landing Page Copy & Structure
 
-This is about information architecture and persuasion structure for entrepeai.com's public marketing pages — a different concern from `frontend-ui-engineering` (component implementation) or `design-system-consistency` (visual tokens). A landing page can be pixel-perfect and still fail if the copy doesn't answer "what is this, who's it for, why should I believe it, what do I do next" in that rough order.
+This is about information architecture and persuasion structure for entrepeai.com's public marketing pages (entrepeai.com is the separate company site, outside the Veridex netcup platform; decided 2026-09-13) — a different concern from `frontend-ui-engineering` (component implementation) or `design-system-consistency` (visual tokens). A landing page can be pixel-perfect and still fail if the copy doesn't answer "what is this, who's it for, why should I believe it, what do I do next" in that rough order.
 
 ## Structure to check for, in priority order
 

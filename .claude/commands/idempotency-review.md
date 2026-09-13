@@ -3,9 +3,9 @@
 Verify all Ansible playbooks and kubectl manifests are safe to re-run without side effects.
 
 ## 1. Ansible Idempotency Check
-Run the site.yml playbook in check mode (dry run) — should report 0 changes if cluster is already configured:
+Run each playbook in check mode (dry run) — should report 0 changes if cluster is already configured:
 ```
-ansible-playbook -i ansible/inventory/hcloud.yml ansible/playbooks/site.yml --check --diff 2>&1 | \
+for p in ansible/playbooks/prepare-hosts.yml ansible/playbooks/install-k3s-servers.yml ansible/playbooks/install-k3s-agents.yml ansible/playbooks/install-cilium.yml; do ansible-playbook -i ansible/inventory/production/hosts.yml "$p" --check --diff; done 2>&1 | \
   grep -E 'changed|failed|TASK' | tail -40
 ```
 Pass: All tasks show `ok` (not `changed`). Zero `failed`. This is the gold standard.
@@ -26,7 +26,7 @@ Pass: No OutOfSync apps. All Helm releases match gitops state.
 
 ## 4. Phase Playbooks (check individually)
 ```
-ansible-playbook -i ansible/inventory/hcloud.yml ansible/playbooks/phase-kubevip.yml --check --diff 2>&1 | \
+ansible-playbook -i ansible/inventory/production/hosts.yml ansible/playbooks/install-k3s-servers.yml --check --diff 2>&1 | \
   grep -E 'changed|failed' | wc -l
 ```
 Pass: 0 changes when VIP already configured.

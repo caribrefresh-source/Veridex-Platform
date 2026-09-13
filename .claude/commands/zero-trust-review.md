@@ -32,10 +32,10 @@ Pass: No external IngressRoute without forward-auth middleware (or explicitly pu
 ## 4. Secret Encryption at Rest
 ```
 kubectl get encryptionconfig 2>/dev/null || \
-  ansible servers -i ansible/inventory/hcloud.yml -m shell -a "cat /etc/rancher/k3s/server/encryption-config.json" 2>/dev/null | grep -i aescbc
+  ansible k3s_servers -i ansible/inventory/production/hosts.yml -m shell -a "cat /etc/rancher/k3s/server/encryption-config.json" 2>/dev/null | grep -i aescbc
 ```
 Pass: etcd encryption config exists with AES-CBC for Secrets.
-(Confirmed via `phase-etcd-encryption.yml` playbook presence.)
+(Configured by `secrets-encryption` in `ansible/roles/k3s-server/templates/config.yaml.j2`.)
 
 ## 5. Pod Security Standards
 ```

@@ -5,7 +5,7 @@ description: "Use whenever building or reviewing marketing/landing pages intende
 
 # SEO & Crawlability
 
-Marketing/landing pages for entrepeai.com are public and need to rank and preview correctly. This is a different concern from `apps/frontend`'s existing authenticated screens (admin-rbac, files, review, signin, tenant-admin) — those are behind login and should generally NOT be indexed (verify `noindex` is set on them, don't add SEO tooling there).
+Marketing/landing pages for entrepeai.com (the separate company site, outside the Veridex netcup platform; decided 2026-09-13) are public and need to rank and preview correctly. This is a different concern from `apps/frontend`'s existing authenticated screens (admin-rbac, files, review, signin, tenant-admin) — those are behind login and should generally NOT be indexed (verify `noindex` is set on them, don't add SEO tooling there).
 
 ## The rendering-strategy decision comes first
 

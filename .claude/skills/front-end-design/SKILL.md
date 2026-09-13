@@ -41,7 +41,7 @@ React 19, Vite 6, Tailwind v4, TypeScript, Radix UI primitives (`@radix-ui/react
 
 ## Marketing/landing pages (home bundle and beyond)
 
-The `home` bundle is currently the only public marketing page (`entrepeai.com/`), and it's CSR-only today — no SSR/prerendering. Building new landing pages under it inherits that limitation; if SEO matters for the page being built, flag the rendering-strategy question (see `seo-crawlability`) before investing in on-page meta/structured-data work that a crawler may never see. Copy and page structure decisions belong to `landing-page-copy`, not this skill.
+The `home` bundle is currently the only public marketing page (`entrepeai.com/`, the separate company site outside the Veridex netcup platform), and it's CSR-only today — no SSR/prerendering. Building new landing pages under it inherits that limitation; if SEO matters for the page being built, flag the rendering-strategy question (see `seo-crawlability`) before investing in on-page meta/structured-data work that a crawler may never see. Copy and page structure decisions belong to `landing-page-copy`, not this skill.
 
 ## Output
 

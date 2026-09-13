@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail the build when Hetzner-specific assumptions leak into netcup config.
+"""Fail the build when a Hetzner dependency or Hetzner-specific value is in the repo.
 
 Why this exists
 ---------------
@@ -13,22 +13,33 @@ and no Hetzner locations.
 A grep run once during migration catches today's leaks. This runs on every
 commit and catches tomorrow's.
 
+Why every tracked file
+----------------------
+Revision 3 of the cluster plan (Gate 0) requires that no Hetzner endpoint,
+variable, backend configuration, bucket, DNS, credential, documentation
+instruction or workflow dependency remains anywhere -- not only in live
+configuration -- and that historical references are explicitly labelled
+historical. A command file telling an operator to ping a Hetzner VIP is as
+much a dependency as a manifest that uses it. So this scans every file Git
+tracks, and it flags Hetzner Object Storage endpoints: backups go to Wasabi.
+
 What it does NOT flag
 ---------------------
-Hetzner Object Storage endpoints (`your-objectstorage.com`). Backups
-deliberately continue to land in the existing WORM buckets: S3 is reachable
-over the internet, so the dependency is on an S3 endpoint rather than on being
-hosted at Hetzner, and keeping compute and backups at different providers is
-better isolation than co-locating them.
+Prose that names Hetzner. The rules match provider-specific values, not the
+word, so explaining why netcup differs never fails the build. Comment-only
+lines are skipped for the same reason.
 
-Comment lines are skipped. Explaining *why* netcup differs from Hetzner
-requires naming Hetzner, and that prose must not fail the build.
+Labelling exceptions
+--------------------
+One line: put `provider-drift-ok: <reason>` on the line, in whatever comment
+syntax the file uses (`# ...`, `<!-- ... -->`, `// ...`). The reason is
+mandatory -- an unexplained suppression is the thing this linter exists to
+prevent.
 
-Escape hatch
-------------
-Append `# provider-drift-ok: <reason>` to a line that must legitimately keep a
-flagged value. The reason is mandatory -- an unexplained suppression is the
-thing this linter exists to prevent.
+Historical records: a file named `.provider-drift-historical` marks its
+directory and everything beneath it as historical. Its content is the reason
+and must not be empty. Findings there are reported as HISTORICAL and never
+fail the build, so they stay visible without blocking.
 
 Usage
 -----
@@ -40,24 +51,41 @@ from __future__ import annotations
 
 import argparse
 import re
+import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
-# Directories that hold live configuration. docs/ and scripts/ are excluded:
-# prose and tooling reference Hetzner legitimately and constantly.
-SCAN_DIRS = ("ansible", "kubernetes", "gitops")
-SCAN_SUFFIXES = (".yml", ".yaml", ".yaml.j2", ".yml.j2", ".j2", ".tf", ".sh", ".env")
+# The linter necessarily contains every pattern it looks for.
+SELF = Path(__file__).resolve()
 
-SUPPRESS = re.compile(r"#\s*provider-drift-ok:\s*\S+")
+HISTORICAL_MARKER = ".provider-drift-historical"
+SUPPRESS = re.compile(r"provider-drift-ok:(.*)")
+COMMENT_CLOSERS = re.compile(r"(-->|\*/)\s*$")
+
+
+def suppressed(line: str) -> bool:
+    """True only when the suppression carries a real reason.
+
+    A comment terminator is not a reason: `<!-- provider-drift-ok: -->` would
+    otherwise pass a bare `\\S+` check on the `-->` alone.
+    """
+    m = SUPPRESS.search(line)
+    if not m:
+        return False
+    reason = COMMENT_CLOSERS.sub("", m.group(1)).strip()
+    return re.search(r"[A-Za-z0-9]", reason) is not None
+COMMENT_PREFIXES = ("#", "//", "<!--")
 
 # (severity, compiled pattern, human explanation)
 RULES: list[tuple[str, re.Pattern, str]] = [
     ("ERROR", re.compile(r"\bcsi\.hetzner\.cloud\b"),
-     "Hetzner CSI provisioner -- netcup has no CSI driver; storage is Longhorn"),
+     "Hetzner CSI provisioner -- netcup has no CSI driver"),
     ("ERROR", re.compile(r"\bhcloud-volumes\b"),
      "Hetzner StorageClass name -- does not exist on netcup"),
     ("ERROR", re.compile(r"\bhcloud_(token|network|ccm_version|csi_version)\b"),
      "Hetzner Cloud API variable -- no netcup equivalent"),
+    ("ERROR", re.compile(r"\bHCLOUD_TOKEN\b|hetznercloud/hcloud"),
+     "Hetzner Cloud credential or Terraform provider -- no netcup equivalent"),
     ("ERROR", re.compile(r"load-balancer\.hetzner\.cloud"),
      "Hetzner CCM LoadBalancer annotation -- netcup has no managed LB"),
     ("ERROR", re.compile(r"cloud-provider=external"),
@@ -67,10 +95,16 @@ RULES: list[tuple[str, re.Pattern, str]] = [
      "Hetzner private network (10.1.0.0/16) -- netcup uses 10.2.0.0/16"),
     ("ERROR", re.compile(r"\bk3s-ha-(server|agent)-\d"),
      "Hetzner node name -- netcup nodes are veridex-server-N / veridex-agent-N"),
-    ("ERROR", re.compile(r"\bnbg1\b|\bfsn1\b(?!\.your-objectstorage)"),
+    ("ERROR", re.compile(r"\b(nbg1|fsn1|hel1)\b"),
      "Hetzner datacenter location -- netcup uses site id 1 (Nuremberg)"),
     ("ERROR", re.compile(r"plugin:\s*hcloud"),
      "Hetzner dynamic inventory plugin -- netcup has none; inventory is static"),
+    ("ERROR", re.compile(r"your-objectstorage\.com"),
+     "Hetzner Object Storage endpoint -- backups go to Wasabi; no Hetzner "
+     "bucket may be required by production or recovery"),
+    ("ERROR", re.compile(r"\b(api|dns|console)\.hetzner\.(cloud|com)\b"
+                         r"|\brobot(-ws)?\.your-server\.de\b"),
+     "Hetzner API, DNS or console endpoint -- no netcup dependency on it"),
 
     # Context-dependent: only drift if the cluster keeps distinct pod/service
     # CIDRs. Pending that decision these report without failing.
@@ -79,17 +113,39 @@ RULES: list[tuple[str, re.Pattern, str]] = [
 ]
 
 
-def scan_file(path: Path) -> list[tuple[int, str, str, str]]:
-    findings = []
+def tracked_files(root: Path) -> list[str]:
+    """Files Git tracks, so CI and a local checkout scan the same set."""
     try:
-        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        out = subprocess.run(
+            ["git", "-C", str(root), "ls-files", "-z"],
+            capture_output=True, check=True,
+        ).stdout
+    except (OSError, subprocess.CalledProcessError):
+        return sorted(
+            p.relative_to(root).as_posix()
+            for p in root.rglob("*")
+            if p.is_file() and ".git" not in p.relative_to(root).parts
+        )
+    return sorted(f for f in out.decode("utf-8").split("\0") if f)
+
+
+def read_text(path: Path) -> str | None:
+    try:
+        data = path.read_bytes()
     except OSError:
-        return findings
-    for lineno, raw in enumerate(lines, 1):
+        return None
+    if b"\0" in data[:8192]:
+        return None  # binary
+    return data.decode("utf-8", errors="replace")
+
+
+def scan_text(text: str) -> list[tuple[int, str, str, str]]:
+    findings = []
+    for lineno, raw in enumerate(text.splitlines(), 1):
         stripped = raw.strip()
-        if not stripped or stripped.startswith("#"):
+        if not stripped or stripped.startswith(COMMENT_PREFIXES):
             continue  # comment-only line: prose may name Hetzner freely
-        if SUPPRESS.search(raw):
+        if suppressed(raw):
             continue
         for severity, pattern, why in RULES:
             m = pattern.search(raw)
@@ -99,38 +155,67 @@ def scan_file(path: Path) -> list[tuple[int, str, str, str]]:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Detect Hetzner drift in netcup config.")
+    ap = argparse.ArgumentParser(description="Detect Hetzner drift anywhere in the repo.")
     ap.add_argument("--strict", action="store_true", help="treat WARN as failure")
     ap.add_argument("--root", default=".", help="repository root (default: cwd)")
     args = ap.parse_args()
 
     root = Path(args.root).resolve()
-    errors = warns = scanned = 0
+    files = tracked_files(root)
 
-    for d in SCAN_DIRS:
-        base = root / d
-        if not base.is_dir():
+    historical_dirs: set[str] = set()
+    bad_markers: list[str] = []
+    for rel in files:
+        if PurePosixPath(rel).name != HISTORICAL_MARKER:
             continue
-        for path in sorted(base.rglob("*")):
-            if not path.is_file() or not path.name.endswith(SCAN_SUFFIXES):
-                continue
-            scanned += 1
-            for lineno, severity, matched, why in scan_file(path):
-                rel = path.relative_to(root).as_posix()
-                print(f"{severity}: {rel}:{lineno}: {matched!r}\n        {why}")
-                if severity == "ERROR":
-                    errors += 1
-                else:
-                    warns += 1
+        reason = (read_text(root / rel) or "").strip()
+        if reason:
+            historical_dirs.add(str(PurePosixPath(rel).parent))
+        else:
+            bad_markers.append(rel)
+
+    def is_historical(rel: str) -> bool:
+        return any(str(p) in historical_dirs for p in PurePosixPath(rel).parents)
+
+    errors = warns = historical = scanned = 0
+    for rel in files:
+        path = root / rel
+        if PurePosixPath(rel).name == HISTORICAL_MARKER or path.resolve() == SELF:
+            continue
+        text = read_text(path)
+        if text is None:
+            continue
+        scanned += 1
+        label_historical = is_historical(rel)
+        for lineno, severity, matched, why in scan_text(text):
+            if label_historical:
+                severity = "HISTORICAL"
+            print(f"{severity}: {rel}:{lineno}: {matched!r}\n        {why}")
+            if severity == "ERROR":
+                errors += 1
+            elif severity == "WARN":
+                warns += 1
+            else:
+                historical += 1
+
+    for rel in bad_markers:
+        print(f"ERROR: {rel}: historical marker has no reason")
+        errors += 1
+
+    # A scan of nothing proves nothing. This happens when --root is wrong or
+    # sits inside a Git repository that tracks none of its files.
+    if scanned == 0:
+        print(f"ERROR: no tracked text files found under {root}")
+        errors += 1
 
     print()
-    print(f"scanned {scanned} files in {'/, '.join(SCAN_DIRS)}/")
-    print(f"errors: {errors}   warnings: {warns}")
+    print(f"scanned {scanned} tracked text files")
+    print(f"errors: {errors}   warnings: {warns}   historical: {historical}")
 
     if errors or (args.strict and warns):
         print()
-        print("Provider drift detected. Either fix the value for netcup, or append")
-        print("  # provider-drift-ok: <reason>")
+        print("Provider drift detected. Either fix the value for netcup, or add")
+        print("  provider-drift-ok: <reason>")
         print("to the line if it is genuinely correct as written.")
         return 1
     print("No blocking provider drift.")

@@ -1,0 +1,1 @@
+Historical evidence recorded 2026-09-12 during the netcup bring-up, before Revision 3 gate numbering. These records compare netcup against the Hetzner K3s-HA reference cluster and quote its values; they describe what was, not what the platform depends on. See README.md in this directory.

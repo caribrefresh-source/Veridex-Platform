@@ -19,7 +19,7 @@ Pass: CoreDNS (2 replicas), kube-proxy, metrics-server — all Running. No Crash
 kubectl get pods -n kube-system -l app=kube-vip
 kubectl get configmap -n kube-system kubevip
 ```
-Pass: kube-vip pod Running on every server node. VIP 10.1.0.100 pingable from within cluster.
+Pass: kube-vip pod Running on every server node. VIP (`kubevip_vip` in ansible/inventory/production/group_vars/all.yml) pingable from within cluster.
 
 ## 4. Cilium CNI
 ```

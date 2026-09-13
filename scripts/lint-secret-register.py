@@ -12,7 +12,9 @@ What counts as a consumed secret
 --------------------------------
 Found in ansible/, scripts/, .github/, kubernetes/, gitops/ and the Makefile:
 
-  env                lookup('env', 'NAME') in Ansible; os.environ / os.getenv in Python
+  env                lookup / query / q of the env lookup (short or ansible.builtin.env,
+                     any number of names, across lines) and printenv / $NAME inside a
+                     pipe lookup in Ansible; os.environ, environ, os.getenv in Python
   github-actions     ${{ secrets.NAME }} in workflows (GITHUB_TOKEN is built in)
   kubernetes-secret  any YAML or template file containing `kind: Secret`
   file               ansible_ssh_private_key_file, and ~/.config/veridex/<file> paths
@@ -61,6 +63,14 @@ ANSIBLE_ENV_CALL = re.compile(
     r"((?:\s*,\s*\\?['\"][A-Za-z_][A-Za-z0-9_]*\\?['\"])+)"
 )
 QUOTED_NAME = re.compile(r"\\?['\"]([A-Za-z_][A-Za-z0-9_]*)\\?['\"]")
+# A pipe lookup reads the controller environment through the shell:
+# printenv NAME, $NAME or ${NAME} inside the command string.
+ANSIBLE_PIPE_CALL = re.compile(
+    r"\b(?:lookup|query|q)\(\s*\\?['\"](?:ansible\.builtin\.)?pipe\\?['\"]\s*,\s*\\?['\"]([^'\"]*)"
+)
+SHELL_ENV_READ = re.compile(
+    r"\bprintenv\s+([A-Za-z_][A-Za-z0-9_]*)|\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?"
+)
 # os.environ or a bare `environ` (from os import environ), indexed or via
 # .get / .pop / .setdefault; os.getenv or a bare getenv.
 PYTHON_ENV_PATTERNS = (
@@ -127,6 +137,9 @@ def discover(rel: str, text: str, found: dict[tuple[str, str], list[str]]) -> No
     for call in ANSIBLE_ENV_CALL.finditer(text):
         for name in QUOTED_NAME.findall(call.group(1)):
             found[("env", name)].append(at(call.start()))
+    for call in ANSIBLE_PIPE_CALL.finditer(text):
+        for printenv_name, dollar_name in SHELL_ENV_READ.findall(call.group(1)):
+            found[("env", printenv_name or dollar_name)].append(at(call.start()))
     for pattern in PYTHON_ENV_PATTERNS:
         for match in pattern.finditer(text):
             found[("env", match.group(1))].append(at(match.start()))

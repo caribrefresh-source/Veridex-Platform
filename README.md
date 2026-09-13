@@ -20,7 +20,12 @@ source for the Veridex platform.
 
 ## Conventions
 
-- Namespaces are declared **once**, in `kubernetes/cluster/namespaces/`. No other kustomization creates one.
+- Namespaces are declared exactly once. All Argo CD-managed workload and platform
+  namespaces are declared under `kubernetes/cluster/namespaces/`. The `argocd`
+  namespace is the sole bootstrap exception and is declared only in
+  `gitops/bootstrap/namespace.yaml`, because it must exist before Argo CD can
+  reconcile cluster state. No other manifest or kustomization may create a
+  Namespace.
 - `kubernetes/environments/<env>/` aggregates; it never introduces resources.
 - Cluster state is reconciled by Argo CD from `gitops/` — apply manifests by hand only while bootstrapping.
 

@@ -1,5 +1,17 @@
 ---
+# The sole bootstrap exception to the namespace rule. Argo CD cannot reconcile
+# the namespace it needs in order to run, so this one is applied by Ansible
+# before Argo CD exists and is declared nowhere else.
 apiVersion: v1
 kind: Namespace
 metadata:
   name: argocd
+  labels:
+    # ansible, not argocd: this namespace is created during bootstrap, before
+    # Argo CD is running. Claiming argocd manages it would assert exactly the
+    # circular dependency the bootstrap exception exists to avoid.
+    app.kubernetes.io/managed-by: ansible
+    app.kubernetes.io/part-of: veridex
+  annotations:
+    veridex.io/owner: platform-engineering
+    veridex.io/purpose: "Argo CD control plane; reconciles cluster state from gitops/"

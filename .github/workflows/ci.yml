@@ -38,6 +38,26 @@ jobs:
       - name: Lint for Hetzner provider drift
         run: python3 scripts/lint-provider-drift.py
 
+  namespace-rules:
+    name: Namespace declarations
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install PyYAML
+        run: pip install --disable-pip-version-check pyyaml
+
+      # Catches a namespace referenced but never declared, declared twice, or
+      # declared outside the one directory that owns it -- none of which fail
+      # a render, and all of which fail at apply time against a live cluster.
+      - name: Validate namespace declarations
+        run: python3 scripts/lint-namespaces.py
+
   yaml-lint:
     name: YAML lint
     runs-on: ubuntu-latest

@@ -5,8 +5,9 @@ Why this exists
 ---------------
 Gate 0 of the cluster plan requires that the inventory identifies only the
 five netcup nodes. A file that parses is not enough for that: a sixth host, a
-duplicated address, two bootstrap servers or a node outside the vLAN register
-all parse cleanly and fail later, against real machines.
+duplicated address, a node outside the vLAN register, or an identity quietly
+overridden somewhere Ansible also reads all parse cleanly and fail later,
+against real machines.
 
 Checks
 ------
@@ -18,13 +19,22 @@ Schema (schemas/inventory.schema.json):
 Cross-field (not expressible in JSON Schema):
   - every public address, private address, MAC and netcup server id is unique
   - node_index matches the number in the host name
-  - exactly one server, and no agent, sets k3s_bootstrap: true
+  - k3s_bootstrap is set on exactly the first server in sorted order, because
+    the roles bootstrap groups['k3s_servers'] | sort | first and never read
+    the flag
   - ansible_host is a public address; private_ip is inside both
     private_network_cidr and private_node_allocation_block from group_vars
   - kubevip_vip is inside private_network_cidr, outside the node allocation
     block, and is not any node's address
-  - every other inventory under ansible/inventory/ declares no hosts, and no
-    inventory source other than hosts.yml, group_vars/ and host_vars/ exists
+
+Identity is defined in one place:
+  - no group_vars or host_vars file anywhere under ansible/ (inventories or
+    playbooks) sets ansible_host, ansible_ssh_host, private_ip, vlan_mac,
+    netcup_server_id, node_index or k3s_bootstrap
+  - no file sits directly under ansible/inventory/, and each environment holds
+    only hosts.yml, group_vars/ and host_vars/
+  - every other environment's hosts.yml parses as a YAML mapping and declares
+    no hosts; host_vars exist only for the five production nodes
 
 Addresses are read from the inventory, never hardcoded here.
 
@@ -45,13 +55,20 @@ from pathlib import Path
 import yaml
 from jsonschema import Draft202012Validator
 
-INVENTORY_ROOT = Path("ansible/inventory")
+ANSIBLE_ROOT = Path("ansible")
+INVENTORY_ROOT = ANSIBLE_ROOT / "inventory"
 PRODUCTION = INVENTORY_ROOT / "production"
 SCHEMA = Path("schemas/inventory.schema.json")
 GROUPS = ("k3s_servers", "k3s_agents")
 NAME_RE = re.compile(r"^veridex-(?:server|agent)-(\d+)$")
 UNIQUE_KEYS = ("ansible_host", "private_ip", "vlan_mac", "netcup_server_id")
+IDENTITY_KEYS = frozenset({
+    "ansible_host", "ansible_ssh_host", "private_ip", "vlan_mac",
+    "netcup_server_id", "node_index", "k3s_bootstrap",
+})
 ALLOWED_INVENTORY_ENTRIES = {"hosts.yml", "group_vars", "host_vars"}
+VARS_DIRS = {"group_vars", "host_vars"}
+VARS_SUFFIXES = ("", ".yml", ".yaml", ".json")
 
 
 def load_yaml(path: Path):
@@ -86,6 +103,31 @@ def report(errors: list[str], summary: str) -> int:
         return 1
     print(summary)
     return 0
+
+
+def check_identity_overrides(root: Path, known_hosts: set[str], errors: list[str]) -> None:
+    ansible_root = root / ANSIBLE_ROOT
+    for path in sorted(ansible_root.rglob("*")):
+        if not path.is_file() or path.name == ".gitkeep":
+            continue
+        parents = set(path.relative_to(ansible_root).parts[:-1])
+        if not parents & VARS_DIRS or path.suffix not in VARS_SUFFIXES:
+            continue
+        rel = path.relative_to(root).as_posix()
+        if "host_vars" in parents and path.stem not in known_hosts:
+            errors.append(f"{rel}: host_vars for a host that is not one of the five production nodes")
+        try:
+            data = load_yaml(path)
+        except yaml.YAMLError:
+            errors.append(f"{rel}: does not parse as YAML")
+            continue
+        if isinstance(data, dict):
+            overridden = sorted(IDENTITY_KEYS & {str(key) for key in data})
+            if overridden:
+                errors.append(
+                    f"{rel}: sets {', '.join(overridden)}; node identity is defined only in "
+                    f"{PRODUCTION.as_posix()}/hosts.yml"
+                )
 
 
 def main() -> int:
@@ -169,46 +211,60 @@ def main() -> int:
             if host.get("k3s_bootstrap") is True:
                 bootstraps.append(f"{group}/{name}")
 
-    if len(bootstraps) != 1 or not bootstraps[0].startswith("k3s_servers/"):
+    first_server = sorted(children["k3s_servers"]["hosts"])[0]
+    if bootstraps != [f"k3s_servers/{first_server}"]:
         errors.append(
-            "exactly one k3s_servers host, and no agent, must set k3s_bootstrap: true; "
-            f"found {bootstraps or 'none'}"
+            f"k3s_bootstrap must be set on exactly one host, {first_server}: the roles bootstrap "
+            f"groups['k3s_servers'] | sort | first and never read the flag; found {bootstraps or 'none'}"
         )
 
     known_hosts = set(hosts_in(inventory))
+    check_identity_overrides(root, known_hosts, errors)
+
+    inventory_root = root / INVENTORY_ROOT
     other_inventories = 0
-    for env_dir in sorted(p for p in (root / INVENTORY_ROOT).iterdir() if p.is_dir()):
-        rel_env = env_dir.relative_to(root).as_posix()
-        for entry in sorted(env_dir.iterdir()):
-            if entry.name not in ALLOWED_INVENTORY_ENTRIES:
+    for entry in sorted(inventory_root.iterdir()):
+        rel_entry = entry.relative_to(root).as_posix()
+        if entry.is_file():
+            if entry.name != ".gitkeep":
+                errors.append(f"{rel_entry}: file directly under {INVENTORY_ROOT.as_posix()}/ -- "
+                              "Ansible can read it as an inventory source")
+            continue
+        for item in sorted(entry.iterdir()):
+            if item.name not in ALLOWED_INVENTORY_ENTRIES:
                 errors.append(
-                    f"{entry.relative_to(root).as_posix()}: unexpected inventory source; "
+                    f"{item.relative_to(root).as_posix()}: unexpected inventory source; "
                     "only hosts.yml, group_vars/ and host_vars/ are allowed"
                 )
-        for host_vars_file in sorted((env_dir / "host_vars").glob("*")):
-            if host_vars_file.name == ".gitkeep":
-                continue
-            if host_vars_file.stem not in known_hosts:
-                errors.append(
-                    f"{host_vars_file.relative_to(root).as_posix()}: host_vars for a host "
-                    "that is not one of the five production nodes"
-                )
-        if env_dir.resolve() == (root / PRODUCTION).resolve():
+        if entry.resolve() == (root / PRODUCTION).resolve():
             continue
-        env_hosts = env_dir / "hosts.yml"
-        if env_hosts.is_file():
-            other_inventories += 1
-            extra = hosts_in(load_yaml(env_hosts))
-            if extra:
-                errors.append(
-                    f"{rel_env}/hosts.yml declares {len(extra)} host(s) ({', '.join(sorted(extra))}); "
-                    "only the five production netcup nodes may be inventoried"
-                )
+        env_hosts = entry / "hosts.yml"
+        if not env_hosts.is_file():
+            continue
+        other_inventories += 1
+        try:
+            data = load_yaml(env_hosts)
+        except yaml.YAMLError:
+            errors.append(f"{rel_entry}/hosts.yml: does not parse as YAML")
+            continue
+        if data is not None and not isinstance(data, dict):
+            errors.append(
+                f"{rel_entry}/hosts.yml: does not parse as a YAML mapping; Ansible may read it "
+                "as an INI inventory instead"
+            )
+            continue
+        extra = hosts_in(data)
+        if extra:
+            errors.append(
+                f"{rel_entry}/hosts.yml declares {len(extra)} host(s) ({', '.join(sorted(extra))}); "
+                "only the five production netcup nodes may be inventoried"
+            )
 
     summary = (
         f"inventory valid: {sum(counts.values())} hosts "
         f"({counts['k3s_servers']} k3s_servers, {counts['k3s_agents']} k3s_agents) "
-        f"against {SCHEMA.as_posix()}; {other_inventories} other inventory file(s) declare no hosts"
+        f"against {SCHEMA.as_posix()}; bootstrap server {first_server}; "
+        f"{other_inventories} other inventory file(s) declare no hosts"
     )
     return report(errors, summary)
 

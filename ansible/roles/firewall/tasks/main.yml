@@ -1,2 +1,61 @@
 ---
 # firewall role tasks
+#
+# nftables, not ufw or raw iptables: it is the Ubuntu 24.04 default, it is
+# declarative as a single file, and k3s/Cilium manage their own iptables
+# chains which a ufw-managed ruleset tends to fight.
+
+- name: Install nftables
+  ansible.builtin.apt:
+    name: nftables
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Assert the trusted network list is not empty
+  ansible.builtin.assert:
+    that:
+      - firewall_trusted_networks | length > 0
+    fail_msg: >-
+      firewall_trusted_networks is empty. Applying this ruleset would drop all
+      intra-cluster traffic -- etcd, the API server and the VXLAN underlay --
+      leaving a cluster that cannot form.
+    quiet: true
+
+- name: Write the nftables ruleset
+  ansible.builtin.template:
+    src: nftables.conf.j2
+    dest: "{{ firewall_nft_conf }}"
+    owner: root
+    group: root
+    mode: "0600"
+    # Refuse to install a ruleset nft itself rejects. Without this a syntax
+    # error is only discovered when the service reloads, by which point the
+    # previous ruleset may already be flushed.
+    validate: "/usr/sbin/nft -c -f %s"
+  notify: reload nftables
+
+- name: Enable and start nftables
+  ansible.builtin.systemd:
+    name: nftables
+    state: started
+    enabled: true
+
+- name: Flush handlers so the ruleset is live before it is verified
+  ansible.builtin.meta: flush_handlers
+
+- name: Read back the active ruleset
+  ansible.builtin.command:
+    cmd: nft list ruleset
+  register: _nft
+  changed_when: false
+
+- name: Assert the vLAN is trusted and SSH survived
+  ansible.builtin.assert:
+    that:
+      - "'policy drop' in _nft.stdout"
+      - firewall_trusted_networks[0] in _nft.stdout
+      - "'dport ' ~ firewall_ssh_port in _nft.stdout"
+    fail_msg: "Active ruleset is missing the drop policy, the vLAN accept, or the SSH accept."
+    success_msg: "nftables active: default drop, {{ firewall_trusted_networks | join(', ') }} trusted, SSH {{ firewall_ssh_port }} open"
+    quiet: true

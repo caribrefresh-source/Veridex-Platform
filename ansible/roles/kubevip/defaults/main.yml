@@ -1,0 +1,27 @@
+---
+# kubevip role default variables
+#
+# Provides the stable Kubernetes API endpoint. netcup has no managed load
+# balancer, and its failover-IP API is rate limited to 10 requests per 5
+# minutes -- far too slow for API failover -- so an ARP VIP on the vLAN is the
+# only viable option. Gate 4 proved the netcup vLAN accepts an address it did
+# not assign, and that the binding moves between nodes.
+
+kubevip_version: "v1.2.3"
+kubevip_image: "ghcr.io/kube-vip/kube-vip:{{ kubevip_version }}"
+
+# Interface carrying the vLAN. eth1 on every node -- which happens to match
+# what the Hetzner role expects, so this value ports unchanged.
+kubevip_interface: "{{ vlan_interface | default('eth1') }}"
+
+# Leader election timings, in seconds. Left at upstream defaults: shortening
+# them trades faster failover for false positives under transient load, and
+# etcd is already the thing that suffers first when the vLAN is busy.
+kubevip_lease_duration: 5
+kubevip_renew_deadline: 3
+kubevip_retry_period: 1
+
+# k3s auto-applies anything dropped here. Written on the bootstrap server
+# only -- all three would produce the same object and race to apply it.
+kubevip_manifest_dir: /var/lib/rancher/k3s/server/manifests
+kubevip_manifest: "{{ kubevip_manifest_dir }}/kube-vip.yaml"

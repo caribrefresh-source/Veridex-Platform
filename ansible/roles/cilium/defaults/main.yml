@@ -1,0 +1,16 @@
+---
+# cilium role default variables
+#
+# Versions, CLI checksums and the k8sServiceHost/Port are set in
+# inventory group_vars; these are the install-mechanics defaults.
+
+cilium_namespace: kube-system
+cilium_cli_url_base: "https://github.com/cilium/cilium-cli/releases/download"
+cilium_cli_bin: /usr/local/bin/cilium
+cilium_install_timeout: 900
+
+# KUBECONFIG for the CLI. k3s writes here; this is NOT the kubeadm path.
+cilium_kubeconfig: /etc/rancher/k3s/k3s.yaml
+
+cilium_ready_retries: 60
+cilium_ready_delay: 10

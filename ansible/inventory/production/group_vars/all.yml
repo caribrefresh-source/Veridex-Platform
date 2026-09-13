@@ -1,0 +1,322 @@
+---
+# =============================================================================
+# Cluster identity
+# =============================================================================
+cluster_name: "veridex"
+env_name: "prod"
+
+# =============================================================================
+# SSH
+# =============================================================================
+ansible_user: root
+ansible_python_interpreter: /usr/bin/python3
+ansible_ssh_private_key_file: ~/.ssh/veridex_netcup_ed25519
+
+# Account-level SCP key (netcup stores keys per account, not per server), so
+# one key covers all five nodes. Pass this id in ServerImageSetup.sshKeyIds at
+# install time -- netcup applies SCP keys ONLY during an image install, never
+# to an already-running server.
+#
+# Deliberately NOT the Hetzner cluster's ~/.ssh/id_ed25519: during migration
+# both clusters run at once, and a single compromised key should not reach the
+# live production cluster and its replacement simultaneously.
+#
+# Passphrase-less, because Ansible and CI authenticate non-interactively.
+netcup_ssh_key_id: 51926
+netcup_ssh_key_name: "veridex-netcup-prod"
+
+# =============================================================================
+# OS image selection
+# =============================================================================
+# Selection is a POLICY, not a pinned id: take the newest point release of the
+# 24.04 series that netcup actually offers for each server's firmware.
+# scripts/netcup-discover.py resolves it per server from the live catalogue
+# (GET /servers/{id}/imageflavours), because flavour ids are machine-type
+# dependent and netcup carries its own subset of Ubuntu point releases, adding
+# newer ones over time. A hardcoded id goes stale silently.
+#
+# Observed 2026-09-12: all five servers resolve to imageFlavourId=100,
+# "Ubuntu 24.04.4 BIOS amd64". That is the flavour NAME only: the installed
+# system reports Ubuntu 24.04.5 LTS (docs/evidence/gate-1-server-1-install.md,
+# and on all five nodes in gate-5-iir-convergence.md). netcup's flavour names
+# lag the image content, so the newest flavour listed does deliver the newest
+# point release.
+#
+# BIOS, not UEFI: every server reports uefi=False. The cloudimg (cloud-init)
+# variants are UEFI-only here, so the plain image is the only bootable 24.04.
+# Nothing is lost -- Ansible's base role reproduces what cloud-init would do,
+# and the point release only sets the starting image; apt brings the node to
+# current patch level on first boot.
+netcup_image_series: "24.04"
+netcup_image_variant: "plain"
+netcup_image_flavour_id_observed: 100
+
+# =============================================================================
+# netcup Cloud vLAN — private network
+# =============================================================================
+# netcup provides NO DHCP on a Cloud vLAN: it is a plain layer-2 switch and
+# every address here is assigned by us. This is the opposite of the Hetzner
+# cluster, whose private network is DHCP-served.
+#
+# CIDR choice: Hetzner uses 10.1.0.0/16. This cluster deliberately uses a
+# DIFFERENT /16 so the two can coexist and be connected (VPN/SSH tunnel) during
+# a migration without overlapping address space. K3s-HA's own
+# ansible/inventory/generate.yml already documents 10.2.0.0/16 as the example.
+#
+# Address register — keep this current, it is the only record:
+#   10.2.1.10-12    k3s servers   (control plane)
+#   10.2.1.100-101  k3s agents
+#   10.2.0.100      kube-vip API VIP (ARP on the vLAN vNIC)
+#   10.2.0.200-254  reserved for future VIPs
+#   Do not allocate anything else in 10.2.1.0/24 without updating this list.
+# =============================================================================
+netcup_vlan_id: 1006740
+netcup_vlan_bandwidth_mbit: 1000
+netcup_site_id: 1
+private_network_cidr: "10.2.0.0/16"
+
+# CRITICAL: every vLAN interface is configured with a /16 mask, e.g.
+# 10.2.1.10/16 -- NOT /24. The node addresses are allocated from 10.2.1.0/24
+# purely as an organisational convention, but that range is an allocation
+# block, not a subnet mask. Configured as /24, the kube-vip VIP at 10.2.0.100
+# would fall outside every node's subnet, so ARP for it would never resolve
+# and the API endpoint would need static routes to work at all.
+# Hetzner confirms the shape: 10.1.0.0/16 with nodes in 10.1.1.0/24 and its
+# VIP at 10.1.0.100, which only functions because those interfaces are /16.
+private_prefix_length: 16
+private_node_allocation_block: "10.2.1.0/24"
+
+# =============================================================================
+# K3s API endpoint
+# =============================================================================
+# netcup has no managed load balancer, and its failover-IP API is rate limited
+# to 10 requests / 5 minutes -- far too slow for API failover. kube-vip in ARP
+# mode on the vLAN is therefore the only viable stable endpoint, and it runs as
+# a static pod before Cilium (which needs k8sServiceHost to already resolve).
+#
+# PROVEN 2026-09-12 (docs/evidence/gate-4-kubevip-arp-proof.md): the netcup
+# vLAN accepts gratuitous ARP for an address it did not assign, and the
+# binding moves between nodes in both directions. gate-5-kubevip.md then
+# reached the API through the VIP from a node that did not hold it.
+#
+# STILL UNPROVEN: kube-vip's own leader election under a real node failure,
+# and VIP behaviour when the holder is abruptly powered off.
+# =============================================================================
+kubevip_vip: "10.2.0.100"
+k3s_api_vip: "{{ kubevip_vip }}"
+api_port: 6443
+
+# =============================================================================
+# K3s
+# =============================================================================
+# Verified 2026-09-12 against the k3s-io/k3s releases API: v1.36.4+k3s1 is the
+# current 1.36.x GA (not an rc). Kubernetes 1.36 -- newer than the Hetzner
+# cluster's v1.35.4+k3s1, and within Cilium 1.20's e2e-tested support matrix.
+k3s_version: "v1.36.4+k3s1"
+k3s_token: "{{ lookup('env', 'K3S_TOKEN') | default('', true) }}"
+
+# TLS SANs for the API server certificate. The VIP must be present or every
+# client reaching the API through kube-vip fails certificate validation. Add
+# the public API DNS name here before bootstrap -- an API cert that only
+# covers private addresses cannot be used from outside the vLAN.
+k3s_tls_san:
+  - "{{ kubevip_vip }}"
+  - 127.0.0.1
+  - localhost
+  # - veridex-api.entrepeai.com   # set the real DNS name before Gate 5
+
+# Pod and Service CIDRs deliberately differ from the Hetzner cluster's
+# 10.42.0.0/16 / 10.43.0.0/16. Overlapping them would permanently rule out
+# Cilium ClusterMesh between the two clusters, and cluster-cidr cannot be
+# changed after bootstrap without rebuilding. Distinct ranges cost nothing now
+# and keep a live migration path open.
+k3s_cluster_cidr: "10.44.0.0/16"
+k3s_service_cidr: "10.45.0.0/16"
+
+# =============================================================================
+# Cilium
+# =============================================================================
+# Matches the Hetzner build: VXLAN tunnel with WireGuard for encryption only
+# (WireGuard does not tunnel). Tunnel mode is required here -- native routing
+# would need route injection that a plain layer-2 vLAN cannot provide.
+#
+# MTU — MEASURED 2026-09-12, do not change without re-measuring.
+#
+#   netcup vLAN path MTU = 1500 (exactly), proven between 10.2.1.10 and
+#   10.2.1.11 with `ping -M do`: 1472-byte payload passes, 1473 fails.
+#   9000 fails, so there are NO jumbo frames on this vLAN.
+#   eth0 (public) is also 1500, so the two never disagree.
+#
+# cilium_mtu MUST be set. An earlier revision left it unset on the reasoning
+# that Cilium auto-detects and subtracts its own overhead -- because on the
+# Hetzner cluster `--set mtu=1360` demonstrably never reaches cilium-config
+# and every Cilium device runs at the auto-detected host MTU. Those facts are
+# true; the conclusion drawn from them was not. Auto-detection is what
+# HAPPENS, not what is CORRECT.
+#
+# Measured on this cluster after installing Cilium with mtu unset:
+#   node-to-node underlay (eth1)        1500  PASS
+#   pod-to-pod cross-node, wire 1354    PASS
+#   pod-to-pod cross-node, wire 1356    FAIL
+#   pod interface MTU as configured     1500
+#
+# Pods were configured at 1500 but could only carry ~1354: a 146-byte gap
+# (VXLAN 50 + WireGuard ~60 + ~36) that Cilium was not subtracting. That is
+# silent packet loss. TCP largely survives it via MSS clamping, which is
+# exactly why it goes unnoticed -- large UDP and anything that fills the MTU
+# is simply dropped, with no error anywhere.
+#
+# Setting it explicitly was TRIED and reverted. What the experiment showed:
+#
+#   config      pod MTU   cilium_wg0   largest working payload
+#   auto (0)      1500       1405            ~1354
+#   MTU=1350      1350       1255            ~1200
+#
+# cilium_wg0 is always the configured MTU minus 95, and it is the binding
+# constraint. Pod MTU therefore exceeds the WireGuard device by 95 bytes at
+# ANY setting -- the gap is constant, not something a chosen number closes.
+# Setting 1350 simply shifted the whole scale down and cost 150 bytes of
+# usable payload. Auto-detect carries the identical relative gap with more
+# absolute capacity, so it is the better of two imperfect options.
+#
+# KNOWN GAP, accepted deliberately: pods advertise MTU 1500 but only ~1354
+# bytes survive the VXLAN + WireGuard path. TCP is unaffected (MSS clamping
+# negotiates below the limit), which is why this is invisible in normal
+# operation. Large single-datagram UDP can be dropped silently. Revisit if a
+# workload sends large UDP -- and note the Hetzner cluster has the same gap.
+#
+# One finding worth keeping regardless: the Helm key is MTU (uppercase).
+# `--set mtu=` is accepted by Helm without complaint and silently discarded,
+# which is exactly why the Hetzner role's cilium_mtu: 1360 has never applied.
+# The role now passes MTU= correctly, so this value is honoured if changed.
+netcup_vlan_path_mtu_measured: 1500
+cilium_pod_mtu_effective_measured: 1354
+cilium_mtu: 0
+# =============================================================================
+cni_plugin: "cilium"
+
+# Verified 2026-09-12: Cilium 1.20 is e2e tested against Kubernetes 1.33-1.36,
+# so 1.20.1 + k3s v1.36.4+k3s1 is a supported pairing. Nothing in the 1.20
+# upgrade notes touches the flags used here (routingMode, tunnelProtocol,
+# encryption.*, ipam.mode, bpf.masquerade, nodeinit, mtu). The 1.20 removals
+# -- encryption.ipsec.interface, --node-port-algorithm/-mode, --k8s-api-server,
+# CiliumNodeConfig v2alpha1 -- are all unused here.
+cilium_version: "1.20.1"
+
+# The CLI is pinned by checksum and must postdate the Cilium release it
+# installs. v0.20.0 (2026-08-28) postdates v1.20.1 (2026-08-18). Checksums
+# taken from the release's own .sha256sum assets, not computed locally.
+cilium_cli_version: "0.20.0"
+cilium_cli_sha256_amd64: "94adc5c3be44d8240df91cec520536686f8a1eb29e5bc70c4c1c80137f00d764"
+cilium_cli_sha256_arm64: "9a9281dc79bd10a61fa35078b8ab63eaf491ab2f47edc6b9a3541b2fe4ede3ff"
+
+cilium_kube_proxy_replacement: true
+cilium_k8s_service_host: "{{ kubevip_vip }}"
+cilium_k8s_service_port: 6443
+
+# NOT ported from Hetzner: socketLB.enabled=false.
+# The Hetzner role sets it with no recorded rationale -- unique among its
+# settings, which otherwise carry detailed incident notes -- and its CI job
+# patches cilium-config and restarts the Cilium DaemonSet whenever the value
+# drifts, which contravenes the repo contract's prohibition on routine Cilium
+# DaemonSet restarts without RCA and authorisation. Cilium 1.20 also changed
+# NodePort load-balancing behaviour for in-cluster connections under
+# kubeProxyReplacement + SocketLB. Build on the 1.20 default and disable it
+# only against a specific documented failure.
+
+# =============================================================================
+# Storage
+# =============================================================================
+# netcup has no CSI driver, and k3s runs with local-storage disabled, so there
+# is no default StorageClass. Longhorn replaces hcloud-csi; replicas are placed
+# across all five nodes (only two agents exist, so 3-way replication cannot be
+# satisfied inside the agent pool alone -- this is why the control-plane taint
+# stays PreferNoSchedule rather than NoSchedule).
+#
+# Relationship to K3s-HA ADR-0003 ("node-local storage, rebuild-on-loss"):
+# that ADR rejected a replicated block layer, but the option it rejected was
+# Rook-Ceph, on the grounds of a measured 10-15% resource tax. That figure
+# does not transfer to Longhorn. Ceph's MON/MGR/OSD control plane alone runs
+# 6-10 GB RAM on a comparable 3-node cluster; Longhorn's overhead scales with
+# volume count rather than cluster size, and its documented minimum is
+# 3 nodes / 4 vCPU / 4 GiB per node -- met by every node here. Measured live
+# data is 20.7 GiB across 28 PVCs, so the instance-manager footprint is small.
+#
+# More decisive: ADR-0003 could accept node-local because hcloud-volumes is
+# network-attached and SURVIVES node loss (the volume detaches and reattaches
+# elsewhere). netcup Local Block Storage is host-local -- the API exposes no
+# create/delete/attach/detach for disks, only list, format and driver change,
+# while it DOES model NICs as attachable. So under local-path here, node loss
+# means actual data loss, not a reattach. That is a materially different
+# trade-off from the one ADR-0003 weighed, and it is why this cluster takes
+# the replicated layer that ADR-0003 declined.
+#
+# Engine: V1 (iSCSI), not V2 (SPDK). V2 consumes a dedicated CPU core per node
+# at ~100% for spdk_tgt polling, plus 2 GiB of hugepages per node. On the
+# 4 vCPU / 8 GiB RS 1000 control-plane nodes that is a quarter of both CPU and
+# RAM before any workload runs, against measured memory already at 44-68%.
+#
+# Replica count 2, matching Longhorn's documented production default. An
+# earlier revision set 3 on the reasoning that "disk is nearly free" -- that
+# priced the wrong resource. The binding cost is per-replica process CPU and
+# memory, not disk: 28 volumes at 3 replicas is 84 replica processes across
+# five nodes (~17/node) versus 56 (~11/node) at 2. Two replicas also halves
+# write amplification over the vLAN, since Longhorn replication is synchronous
+# and a write acks only once every replica confirms.
+#
+# Two replicas survives single-node loss, and Longhorn is a SECOND redundancy
+# layer here, not the only one: CNPG runs 2 instances with PITR, MinIO
+# erasure-codes across nodes, NATS is R3, and Qdrant/Memgraph/Meilisearch
+# rebuild from snapshots.
+#
+# All 28 PVCs are ReadWriteOnce (verified live) -- no RWX, so the known
+# ganesha.nfsd memory leak on RWX volumes does not apply. Re-check if any
+# workload later needs shared-filesystem semantics.
+#
+# guaranteedInstanceManagerCPU stays at the 12% default initially; it is the
+# first lever to pull (8% is a documented lower setting) if instance-manager
+# reservation proves tight on the 4 vCPU nodes.
+# =============================================================================
+storage_provisioner: "longhorn"
+longhorn_version: "1.12.1"
+longhorn_data_engine: "v1"
+longhorn_replica_count: 2
+
+# Longhorn 1.12.1 documented production settings. Recorded explicitly rather
+# than left at chart defaults, because three of the four differ from default
+# and all four affect availability behaviour.
+#   soft anti-affinity false  -- replicas of one volume never share a node
+#   degraded availability false -- refuse to create a volume that cannot meet
+#                              its replica count, instead of silently
+#                              creating it degraded
+#   auto-balance least-effort -- rebalance replicas after a node returns
+#   data locality best-effort -- keep one replica on the node running the
+#                              workload; documented StorageClass default
+longhorn_replica_soft_anti_affinity: false
+longhorn_allow_degraded_availability: false
+longhorn_replica_auto_balance: "least-effort"
+longhorn_data_locality: "best-effort"
+
+# Only ONE data engine should be enabled per cluster: running both means two
+# sets of instance-manager pods and the CPU overhead of both. V1 only here.
+#
+# kubelet root dir needs NO override. Longhorn auto-detects /var/lib/kubelet,
+# which is correct for every k3s >= v0.10.0 (this cluster runs v1.36.4+k3s1).
+# The <data-dir>/agent/kubelet override applies only to k3s older than
+# v0.10.0. Recorded because getting this wrong produces "Cannot get kubelet
+# root dir, no related proc for root-dir detection" and a CrashLoopBackOff in
+# longhorn-driver-deployer, which reads like a Longhorn bug rather than a
+# path setting.
+#
+# Node prerequisites for the V1 engine, to be installed by the common role:
+#   open-iscsi  -- and the iscsid DAEMON must be RUNNING, not merely installed
+#   nfs-common  -- NFSv4 client, needed for the backup target
+#   cryptsetup, dmsetup -- only if volume encryption is enabled
+# The Hetzner base role already installs open-iscsi and nfs-common, so this
+# is parity rather than new ground.
+#
+# CoreDNS must run at least 2 replicas (Longhorn documented requirement);
+# the Hetzner value of 2 carries over unchanged.
+#
+# Preflight: `longhornctl check preflight` validates node prerequisites and
+# is the natural gate before installing the chart.

@@ -1,2 +1,66 @@
 ---
 # common role tasks
+#
+# Scope for now: the private vLAN interface. This replaces the hand-applied
+# netplan that was SSH'd onto server-1 and server-2 during the Gate 2 bring-up
+# -- that was an emergency mutation, not a permanent solution, and the repo
+# contract requires permanent changes to be declarative and reproducible.
+#
+# Running this against an already-hand-configured node MUST report ok, not
+# changed. That equivalence is the proof the two agree.
+
+- name: Assert the inventory carries the facts this role needs
+  ansible.builtin.assert:
+    that:
+      - private_ip is defined and private_ip | length > 0
+      - vlan_mac is defined and vlan_mac | length > 0
+      - private_prefix_length is defined
+    fail_msg: >-
+      {{ inventory_hostname }} is missing private_ip / vlan_mac /
+      private_prefix_length. These come from the inventory and are
+      per-node; without them the wrong address or NIC could be configured.
+    quiet: true
+
+- name: Assert the vLAN prefix is /16, not /24
+  ansible.builtin.assert:
+    that:
+      - private_prefix_length | int == 16
+    fail_msg: >-
+      private_prefix_length is {{ private_prefix_length }}, expected 16.
+      At /24 the kube-vip VIP ({{ kubevip_vip | default('10.2.0.100') }})
+      falls outside the node subnet, so ARP for it cannot resolve and the
+      API endpoint breaks. Verified live: a /16 installs the on-link route
+      10.2.0.0/16 dev {{ vlan_interface }}, which covers the VIP.
+    quiet: true
+
+- name: Configure the private vLAN interface
+  ansible.builtin.template:
+    src: 60-private-vlan.yaml.j2
+    dest: "{{ netplan_vlan_path }}"
+    owner: root
+    group: root
+    # netplan warns and ignores world-readable configs.
+    mode: "0600"
+  notify: apply netplan
+
+- name: Flush handlers so the address exists before anything depends on it
+  ansible.builtin.meta: flush_handlers
+
+- name: Read back the configured address
+  ansible.builtin.command:
+    cmd: "ip -o -4 addr show dev {{ vlan_interface }}"
+  register: _vlan_addr
+  changed_when: false
+  retries: 5
+  delay: 3
+  until: private_ip in _vlan_addr.stdout
+
+- name: Assert the interface actually carries the intended address
+  ansible.builtin.assert:
+    that:
+      - private_ip ~ '/' ~ private_prefix_length in _vlan_addr.stdout
+    fail_msg: >-
+      {{ vlan_interface }} does not carry {{ private_ip }}/{{ private_prefix_length }}.
+      Got: {{ _vlan_addr.stdout }}
+    success_msg: "{{ vlan_interface }} carries {{ private_ip }}/{{ private_prefix_length }}"
+    quiet: true

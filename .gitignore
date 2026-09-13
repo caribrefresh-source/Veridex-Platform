@@ -11,15 +11,22 @@ venv/
 !.env.example
 *.pem
 *.key
-kubeconfig
+# Anchored to the repo root. Unanchored, "kubeconfig" matches any path
+# component at any depth, which silently excluded the whole
+# ansible/roles/kubeconfig/ role from the repository -- it existed on disk
+# but was never committed, so a fresh clone could not resolve the role.
+/kubeconfig
 *.kubeconfig
 
 # Claude Code runtime state
 .claude/worktrees/
 .claude/scheduled_tasks.lock
 
-# Build / scratch
-dist/
-build/
+# Build / scratch. Anchored for the same reason as /kubeconfig above: bare
+# "dist/" and "build/" match at any depth and would swallow a legitimately
+# named directory anywhere in the tree (e.g. docs/build/, which previously
+# hid the evidence records).
+/dist/
+/build/
 .tmp/
 *.log

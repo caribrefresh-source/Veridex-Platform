@@ -3,5 +3,9 @@
   hosts: k3s_servers
   become: true
   roles:
+    # Order matters. kube-vip must be up before kubeconfig rewrites the
+    # server URL to the VIP, and before Cilium, whose k8sServiceHost points
+    # at the VIP and must resolve at install time.
     - k3s-server
+    - kubevip
     - kubeconfig

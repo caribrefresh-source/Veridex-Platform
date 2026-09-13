@@ -1,0 +1,52 @@
+# MANAGED BY ANSIBLE -- roles/k3s-server/templates/audit-policy.yaml.j2
+#
+# Read directly by kube-apiserver via --audit-policy-file. If this file is
+# absent or malformed the API server refuses to start, so it is written before
+# k3s is installed rather than reconciled afterwards by GitOps.
+#
+# Ordered most-specific first: the first matching rule wins.
+apiVersion: audit.k8s.io/v1
+kind: Policy
+omitStages:
+  - RequestReceived
+rules:
+  # Secrets and configmaps: record that access happened, never the contents.
+  # RequestResponse here would write secret material into the audit log.
+  - level: Metadata
+    resources:
+      - group: ""
+        resources: ["secrets", "configmaps"]
+      - group: "bitnami.com"
+        resources: ["sealedsecrets"]
+
+  # Authentication and authorisation changes, in full.
+  - level: RequestResponse
+    resources:
+      - group: "rbac.authorization.k8s.io"
+        resources: ["roles", "rolebindings", "clusterroles", "clusterrolebindings"]
+
+  # Exec, attach and port-forward into pods -- the routes to a shell.
+  - level: RequestResponse
+    resources:
+      - group: ""
+        resources: ["pods/exec", "pods/attach", "pods/portforward"]
+
+  # Read-only chatter from the control plane's own components. Dropped, or the
+  # log is almost entirely kubelet and controller polling.
+  - level: None
+    users: ["system:kube-controller-manager", "system:kube-scheduler", "system:apiserver"]
+    verbs: ["get", "list", "watch"]
+  - level: None
+    userGroups: ["system:nodes"]
+    verbs: ["get", "list", "watch"]
+
+  # Health and discovery endpoints.
+  - level: None
+    nonResourceURLs: ["/healthz*", "/readyz*", "/livez*", "/version", "/metrics", "/openapi/*"]
+
+  # Everything that changes state.
+  - level: RequestResponse
+    verbs: ["create", "update", "patch", "delete", "deletecollection"]
+
+  # Everything else, metadata only.
+  - level: Metadata

@@ -1,0 +1,10 @@
+# Pinned Ansible control-node dependencies.
+#
+# One pinned file consumed by BOTH the local control node and CI, so the two
+# cannot drift. Validated 2026-09-12 against the five netcup nodes: full run
+# of playbooks/prepare-hosts.yml, then a second run reporting changed=0.
+#
+# ansible-core 2.21.4 requires Python >= 3.12 (per its own Requires-Python).
+# CI pins 3.12; the local WSL control node runs 3.14. Both satisfy the floor
+# and run the identical ansible-core, which is what governs behaviour.
+ansible-core==2.21.4

@@ -1,0 +1,97 @@
+---
+# kubevip role tasks
+
+# Deliberately a prefix comparison rather than ansible.utils.ipaddr: that
+# filter needs the ansible.utils collection, and a role that fails on a
+# missing collection rather than on a real problem is worse than a crude check.
+- name: Assert the VIP is defined and inside the private network
+  ansible.builtin.assert:
+    that:
+      - kubevip_vip is defined and kubevip_vip | length > 0
+      - kubevip_vip.startswith(private_network_cidr.split('.')[0:2] | join('.') ~ '.')
+    fail_msg: >-
+      kubevip_vip ({{ kubevip_vip | default('unset') }}) is not inside
+      {{ private_network_cidr }}. Outside it, no node has an on-link route to
+      the VIP and ARP for it cannot resolve.
+    quiet: true
+
+# Checks for a STATIC assignment, not a live one. An earlier version asserted
+# the VIP was absent from `ip addr` entirely -- correct before kube-vip exists,
+# but wrong afterwards, because the elected leader is supposed to hold it. That
+# made the role fail on every re-run against whichever node held the VIP.
+#
+# What actually matters is that nothing assigns the VIP persistently behind
+# kube-vip's back: two owners means an ARP conflict that surfaces as
+# intermittent API failures.
+- name: Assert the VIP is not statically configured in netplan
+  ansible.builtin.command:
+    cmd: grep -rl {{ kubevip_vip }} /etc/netplan/
+  register: _static_vip
+  changed_when: false
+  failed_when: _static_vip.rc == 0
+
+- name: Identify the bootstrap server
+  ansible.builtin.set_fact:
+    is_first_server: "{{ inventory_hostname == (groups['k3s_servers'] | sort | first) }}"
+
+# NOTE: name resolution for `kubernetes` is handled by hostAliases in the
+# DaemonSet manifest, NOT by editing the node's /etc/hosts. That was tried
+# first and does nothing: the container runtime gives each pod its own hosts
+# file, so a node-level entry never reaches the container.
+
+# Written on one server only. k3s's auto-deploy turns each file into an AddOn
+# object named after it, so writing identical copies on all three would have
+# them racing to own the same object.
+- name: Deploy the kube-vip manifest
+  ansible.builtin.template:
+    src: kube-vip.yaml.j2
+    dest: "{{ kubevip_manifest }}"
+    owner: root
+    group: root
+    mode: "0600"
+  when: is_first_server | bool
+
+- name: Wait for the kube-vip DaemonSet to become available
+  ansible.builtin.command:
+    cmd: >-
+      k3s kubectl -n kube-system get daemonset kube-vip-ds
+      -o jsonpath={.status.numberReady}
+  register: _ds
+  until: _ds.rc == 0 and (_ds.stdout | int) >= (groups['k3s_servers'] | length)
+  retries: 40
+  delay: 10
+  changed_when: false
+  when: is_first_server | bool
+
+- name: Wait for the VIP to answer on the API port
+  ansible.builtin.wait_for:
+    host: "{{ kubevip_vip }}"
+    port: "{{ api_port }}"
+    timeout: 180
+  when: is_first_server | bool
+
+- name: Verify the API serves through the VIP
+  ansible.builtin.command:
+    cmd: >-
+      k3s kubectl --server=https://{{ kubevip_vip }}:{{ api_port }}
+      get --raw /healthz
+  register: _vip_healthz
+  until: _vip_healthz.rc == 0 and _vip_healthz.stdout == 'ok'
+  retries: 20
+  delay: 5
+  changed_when: false
+  when: is_first_server | bool
+
+- name: Report which node currently holds the VIP
+  ansible.builtin.command:
+    cmd: >-
+      k3s kubectl -n kube-system get lease
+      -o jsonpath={.items[*].spec.holderIdentity}
+  register: _lease
+  changed_when: false
+  when: is_first_server | bool
+
+- name: Show VIP ownership
+  ansible.builtin.debug:
+    msg: "VIP {{ kubevip_vip }}:{{ api_port }} serving /healthz; leases held by: {{ _lease.stdout }}"
+  when: is_first_server | bool

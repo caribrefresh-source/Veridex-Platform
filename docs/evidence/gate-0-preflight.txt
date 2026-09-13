@@ -1,0 +1,115 @@
+SCP API spec version 2026.0909.114758 matches pin.
+Using cached refresh token (C:\Users\Daniel\.config\veridex\netcup-refresh-token).
+Authenticated as SCP userId=253927 (login redacted)
+
+==============================================================================
+netcup SCP discovery -- READ-ONLY
+==============================================================================
+
+CLOUD vLANs
+------------------------------------------------------------------------------
+  vlanId=1006740  name=veridex-netcup-prod-k3s  site=id=1 Nuremberg
+        bandwidth: 1000Mbit (1000 Mbit/s)
+
+SERVERS
+------------------------------------------------------------------------------
+  [938801] veridex-server-1  (v2202609417155518911)
+        hostname : v2202609417155518911.megasrv.de
+        site     : id=1 Nuremberg   template=RS 1000 G12   state=RUNNING
+        capacity : 4 vCPU  8192 MiB RAM  arch=AMD64
+        disk     : vda 256 GiB driver=virtio
+        public    3a:e4:08:af:95:9c  mtu=1500  driver=virtio  2500 Mbit
+                    ipv4 152.53.177.26/22 gw=152.53.176.1
+        vLAN 1006740 3a:e4:08:af:95:9d  mtu=0  driver=virtio  1000 Mbit
+                    ipv4 (no IPv4)
+
+  [938802] veridex-server-2  (v2202609417155518912)
+        hostname : v2202609417155518912.quicksrv.de
+        site     : id=1 Nuremberg   template=RS 1000 G12   state=RUNNING
+        capacity : 4 vCPU  8192 MiB RAM  arch=AMD64
+        disk     : vda 256 GiB driver=virtio
+        public    ca:b5:7f:4b:2a:46  mtu=1500  driver=virtio  2500 Mbit
+                    ipv4 152.53.140.210/22 gw=152.53.140.1
+        vLAN 1006740 ca:b5:7f:4b:2a:47  mtu=0  driver=virtio  1000 Mbit
+                    ipv4 (no IPv4)
+
+  [938803] veridex-server-3  (v2202609417155518913)
+        hostname : v2202609417155518913.hotsrv.de
+        site     : id=1 Nuremberg   template=RS 1000 G12   state=RUNNING
+        capacity : 4 vCPU  8192 MiB RAM  arch=AMD64
+        disk     : vda 256 GiB driver=virtio
+        public    26:44:f8:59:8c:67  mtu=1500  driver=virtio  2500 Mbit
+                    ipv4 152.53.142.131/22 gw=152.53.140.1
+        vLAN 1006740 26:44:f8:59:8c:68  mtu=0  driver=virtio  1000 Mbit
+                    ipv4 (no IPv4)
+
+  [939122] veridex-agent-1  (v2202609417155519279)
+        hostname : v2202609417155519279.happysrv.de
+        site     : id=1 Nuremberg   template=RS 2000 G12   state=RUNNING
+        capacity : 8 vCPU  16384 MiB RAM  arch=AMD64
+        disk     : vda 512 GiB driver=virtio
+        public    c6:e3:81:a1:5a:73  mtu=1500  driver=virtio  2500 Mbit
+                    ipv4 159.195.197.136/22 gw=159.195.196.1
+        vLAN 1006740 c6:e3:81:a1:5a:74  mtu=0  driver=virtio  1000 Mbit
+                    ipv4 (no IPv4)
+
+  [939123] veridex-agent-2  (v2202609417155519280)
+        hostname : v2202609417155519280.ultrasrv.de
+        site     : id=1 Nuremberg   template=RS 2000 G12   state=RUNNING
+        capacity : 8 vCPU  16384 MiB RAM  arch=AMD64
+        disk     : vda 512 GiB driver=virtio
+        public    6a:01:47:82:8c:3c  mtu=1500  driver=virtio  2500 Mbit
+                    ipv4 159.195.197.40/22 gw=159.195.196.1
+        vLAN 1006740 6a:01:47:82:8c:3d  mtu=0  driver=virtio  1000 Mbit
+                    ipv4 (no IPv4)
+
+SITE (Cloud vLAN spans one location only)
+------------------------------------------------------------------------------
+  site id=1  Nuremberg
+  -> All servers share a site. A Cloud vLAN between them is possible.
+
+MTU (measured, not assumed)
+------------------------------------------------------------------------------
+  public interface MTU = 1500
+  5 vLAN vNIC(s) attached but NOT yet configured in the guest (mtu=0):
+      server 938801  3a:e4:08:af:95:9d
+      server 938802  ca:b5:7f:4b:2a:47
+      server 938803  26:44:f8:59:8c:68
+      server 939122  c6:e3:81:a1:5a:74
+      server 939123  6a:01:47:82:8c:3d
+  netcup reports mtu=0 until the OS brings the link up, so the real
+  private-network MTU cannot be read from the API alone -- it has to
+  be measured on the node once the interface is configured:
+      ip link show <iface>            # kernel's view
+      ping -M do -s <n> <peer-vlan-ip>  # largest unfragmented payload
+
+UBUNTU IMAGE FLAVOURS (parity target: ubuntu-24.04)
+------------------------------------------------------------------------------
+  server 938801 is configured for BIOS (uefi=False)
+    imageFlavourId=131   Ubuntu 22.04.5 BIOS amd64                [BOOTABLE]
+    imageFlavourId=11    Ubuntu 22.04.5 UEFI amd64                [wrong-firmware]
+    imageFlavourId=100   Ubuntu 24.04.4 BIOS amd64                [24.04, BOOTABLE]
+    imageFlavourId=116   Ubuntu 24.04.4 UEFI amd64                [24.04, wrong-firmware]
+    imageFlavourId=141   Ubuntu 26.04.1 BIOS amd64                [BOOTABLE]
+    imageFlavourId=142   Ubuntu 26.04.1 UEFI amd64                [wrong-firmware]
+    imageFlavourId=117   Ubuntu cloudimg 24.04.4 UEFI amd64       [24.04, cloud-init, wrong-firmware]
+    imageFlavourId=144   Ubuntu cloudimg 26.04.1 UEFI amd64       [cloud-init, wrong-firmware]
+    imageFlavourId=137   Ubuntu openclaw 24.04.4 UEFI amd64       [24.04, wrong-firmware]
+
+  Parity target is Ubuntu 24.04 (Hetzner pins ubuntu-24.04).
+  Pick the 24.04 flavour whose firmware matches the server. Note the
+  cloudimg (cloud-init) variants may only exist for one firmware --
+  if so, either switch the server via PATCH /servers/{id} (uefi), or
+  use the plain image: Ansible's base role reproduces everything
+  cloud-init would have done anyway.
+
+==============================================================================
+VERDICT
+==============================================================================
+  servers found   : 5
+  Cloud vLANs     : 1
+  vLAN interfaces : 5
+  -> vLAN topology present on 3+ servers. Hetzner design ports directly.
+==============================================================================
+
+machine-readable output written to docs/build/evidence/gate-0-fleet-state.json

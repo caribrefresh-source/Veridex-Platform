@@ -1,2 +1,30 @@
 ---
 # argocd-bootstrap role default variables
+#
+# Scope: the repository credential only. Installing Argo CD itself is not
+# implemented in this role yet -- see tasks/main.yml.
+
+argocd_namespace: argocd
+
+# KUBECONFIG for the CLI. k3s writes here; this is NOT the kubeadm path.
+argocd_kubeconfig: /etc/rancher/k3s/k3s.yaml
+
+# Must match gitops/bootstrap/root-application.yaml's repoURL byte for byte.
+# Argo CD pairs a credential to a repository by string-matching the URL, so a
+# trailing .git on one side only -- or a case difference, and this account
+# spells it Veridex-Platform while the old cluster spells its repo k3s-ha --
+# leaves the Application unauthenticated. The failure surfaces as a generic
+# "repository not accessible", naming neither the credential nor the mismatch.
+argocd_repo_url: https://github.com/caribrefresh-source/Veridex-Platform.git
+
+argocd_repo_secret_name: argocd-repo-veridex-platform
+
+# Injected from the environment, never committed. Argo CD only ever clones,
+# so this PAT needs read-only contents on this one repository and nothing
+# else. A token with org-admin or delete_repo scope grants the cluster far
+# more than it needs to do its job.
+argocd_repo_username: "{{ lookup('env', 'ARGOCD_REPO_USERNAME') | default('', true) }}"
+argocd_repo_pat: "{{ lookup('env', 'ARGOCD_REPO_PAT') | default('', true) }}"
+
+# Root-only scratch path for the rendered manifest; removed in an always block.
+argocd_repo_manifest_path: /root/.argocd-repo-credential.yaml

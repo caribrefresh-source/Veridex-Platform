@@ -1,2 +1,14 @@
 ---
 # common role default variables
+
+# Interface carrying the netcup Cloud vLAN. Verified as eth1 on all five
+# nodes after the Ubuntu 24.04 install, which happens to match the interface
+# the Hetzner kubevip role already expects.
+vlan_interface: "eth1"
+
+# Measured path MTU across the netcup vLAN (ping -M do between two nodes:
+# 1472-byte payload passes, 1473 fails, 9000 fails). Not inherited from
+# Hetzner, whose 1400 follows from its own cloud network.
+vlan_mtu: 1500
+
+netplan_vlan_path: "/etc/netplan/60-private-vlan.yaml"

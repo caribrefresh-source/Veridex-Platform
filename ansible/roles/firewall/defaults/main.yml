@@ -1,2 +1,34 @@
 ---
 # firewall role default variables
+#
+# Model: the private vLAN is trusted in full; the public interface allows only
+# SSH plus whatever is explicitly published. k3s binds its API to 0.0.0.0:6443
+# and kubelet to 10250, so without this they are reachable from the internet.
+
+firewall_ssh_port: 22
+
+# Trusted source networks -- the Cloud vLAN. Everything from here is accepted,
+# which covers the whole k3s + Cilium port surface without enumerating it:
+#   6443 API, 2379-2380 etcd, 10250 kubelet, 8472/udp VXLAN,
+#   51871/udp Cilium WireGuard, 4240 Cilium health.
+firewall_trusted_networks:
+  - "10.2.0.0/16"
+
+# Published on the PUBLIC interface. Deliberately empty until Traefik exists;
+# its NodePorts (31742/32537/30051) get added when that role lands.
+firewall_public_tcp_ports: []
+firewall_public_udp_ports: []
+
+# Rate-limit NEW SSH connections. Not a substitute for key-only auth (already
+# enforced: PasswordAuthentication no), but it blunts scanning noise.
+#
+# 30/minute, not the tighter 10 that reads as more secure. Password auth is
+# already off so this cannot stop credential stuffing -- it only caps
+# connection floods. Set too low it locks out legitimate automation instead:
+# Ansible with forks=20, plus verification loops, opens new connections in
+# bursts, and beyond the limit they are DROPPED, which is indistinguishable
+# from a lockout while you are debugging one.
+firewall_ssh_ratelimit: true
+firewall_ssh_rate: "30/minute"
+
+firewall_nft_conf: /etc/nftables.conf

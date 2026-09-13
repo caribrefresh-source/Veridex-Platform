@@ -1,0 +1,29 @@
+# MANAGED BY ANSIBLE -- roles/common/templates/60-private-vlan.yaml.j2
+# Manual edits are overwritten on the next run. Change the inventory instead.
+#
+# A separate 60- file rather than netcup's delivered 50-cloud-init.yaml:
+# cloud-init regenerates that file, and a higher-numbered file wins for the
+# same key, so this survives.
+#
+# Matched on MAC, not interface name. netcup's own delivered netplan matches
+# on MAC too, and interface names are not guaranteed stable across reinstalls
+# whereas the vNIC MAC is (it is the public NIC's MAC + 1 in the last octet).
+network:
+  version: 2
+  ethernets:
+    {{ vlan_interface }}:
+      match:
+        macaddress: "{{ vlan_mac }}"
+      set-name: {{ vlan_interface }}
+      addresses:
+        - "{{ private_ip }}/{{ private_prefix_length }}"
+      mtu: {{ vlan_mtu }}
+      # No DHCP: a netcup Cloud vLAN is a plain layer-2 switch and serves
+      # none. Every address here is allocated by us, in the register in
+      # group_vars/all.yml.
+      dhcp4: false
+      dhcp6: false
+      accept-ra: false
+      # Deliberately no gateway or routes: this is a private segment. The
+      # /{{ private_prefix_length }} mask puts the kube-vip VIP on-link, which
+      # is what makes its ARP resolution work at all.

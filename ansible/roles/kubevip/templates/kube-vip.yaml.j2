@@ -1,0 +1,155 @@
+# MANAGED BY ANSIBLE -- roles/kubevip/templates/kube-vip.yaml.j2
+# Dropped into k3s's auto-deploy manifests directory; k3s applies it.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kube-vip
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: system:kube-vip-role
+rules:
+  - apiGroups: [""]
+    resources: ["services", "services/status", "nodes", "endpoints"]
+    verbs: ["list", "get", "watch", "update"]
+  # Leader election. Without this the VIP cannot arbitrate an owner and two
+  # nodes could answer ARP for the same address.
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["list", "get", "watch", "create", "update"]
+  # EndpointSlices are the default from kube-vip v1.0 onwards.
+  - apiGroups: ["discovery.k8s.io"]
+    resources: ["endpointslices"]
+    verbs: ["list", "get", "watch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: system:kube-vip-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:kube-vip-role
+subjects:
+  - kind: ServiceAccount
+    name: kube-vip
+    namespace: kube-system
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kube-vip-ds
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/name: kube-vip-ds
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kube-vip-ds
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kube-vip-ds
+    spec:
+      serviceAccountName: kube-vip
+      # hostNetwork is what lets this run before a CNI exists -- which it must,
+      # because Cilium's k8sServiceHost points at the VIP this provides.
+      hostNetwork: true
+      # kube-vip reaches the API as the bare name `kubernetes`. CoreDNS would
+      # normally answer that, but CoreDNS is deployed after the CNI and the
+      # CNI needs this VIP -- so the lookup escapes to netcup's public
+      # resolver and returns NXDOMAIN. hostAliases writes the name straight
+      # into the pod's /etc/hosts, pointing it at the API server already
+      # listening on this node's loopback. Editing the NODE's /etc/hosts does
+      # not work: the container runtime gives each pod its own hosts file.
+      hostAliases:
+        - ip: "127.0.0.1"
+          hostnames:
+            - kubernetes
+            - kubernetes.default
+            - kubernetes.default.svc
+            - kubernetes.default.svc.cluster.local
+      # Control-plane nodes only: the VIP fronts the API server.
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: "true"
+      tolerations:
+        # This cluster taints control-plane PreferNoSchedule, but tolerate
+        # NoSchedule too so the DaemonSet survives the taint being tightened.
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+        # Nodes are NotReady until Cilium is installed. Without this
+        # toleration kube-vip never starts, Cilium never gets its
+        # k8sServiceHost, and the cluster deadlocks.
+        - key: node.kubernetes.io/not-ready
+          operator: Exists
+      containers:
+        - name: kube-vip
+          image: {{ kubevip_image }}
+          imagePullPolicy: IfNotPresent
+          args: ["manager"]
+          env:
+            - name: vip_arp
+              value: "true"
+            - name: vip_interface
+              value: "{{ kubevip_interface }}"
+            - name: address
+              value: "{{ kubevip_vip }}"
+            - name: port
+              value: "{{ api_port }}"
+            # v1.x name. This was `vip_cidr` up to v0.8.x -- carrying the old
+            # key forward onto v1.x leaves the prefix unset silently.
+            - name: vip_subnet
+              value: "32"
+            - name: cp_enable
+              value: "true"
+            - name: cp_namespace
+              value: kube-system
+            # Services are handled by Traefik behind this VIP, not by kube-vip.
+            - name: svc_enable
+              value: "false"
+            - name: vip_leaderelection
+              value: "true"
+            - name: vip_leaseduration
+              value: "{{ kubevip_lease_duration }}"
+            - name: vip_renewdeadline
+              value: "{{ kubevip_renew_deadline }}"
+            - name: vip_retryperiod
+              value: "{{ kubevip_retry_period }}"
+            # THE bootstrap-critical setting. Without it kube-vip falls back
+            # to in-cluster config, which reaches the API through the Service
+            # ClusterIP ({{ k3s_service_cidr | regex_replace('0.0/16$', '0.1') }}).
+            # ClusterIP routing needs kube-proxy or a CNI, and at this point
+            # there is neither: kube-proxy is disabled and Cilium is not
+            # installed, because Cilium's k8sServiceHost is this very VIP.
+            # Pointing at k3s's own kubeconfig (server: 127.0.0.1:6443) breaks
+            # that deadlock by talking to the local API server directly.
+            - name: KUBECONFIG
+              value: /etc/kubernetes/admin.conf
+          volumeMounts:
+            - name: kubeconfig
+              mountPath: /etc/kubernetes/admin.conf
+              readOnly: true
+          securityContext:
+            capabilities:
+              add:
+                - NET_ADMIN   # assign the VIP to the interface
+                - NET_RAW     # send gratuitous ARP
+                - SYS_TIME    # leader-election timing
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+      volumes:
+        # k3s writes its admin kubeconfig here, with server: 127.0.0.1:6443.
+        # Mounted at the conventional in-container path so the manifest reads
+        # the same as upstream examples while sourcing k3s's actual file.
+        - name: kubeconfig
+          hostPath:
+            path: {{ k3s_kubeconfig_path | default('/etc/rancher/k3s/k3s.yaml') }}
+            type: File
+      updateStrategy: {}

@@ -1,0 +1,76 @@
+# MANAGED BY ANSIBLE -- roles/k3s-server/templates/config.yaml.j2
+# Manual edits are overwritten on the next run. Change the inventory instead.
+
+cluster-init: {{ 'true' if is_first_server else 'false' }}
+{% if not is_first_server %}
+# Joining servers point at the bootstrap server's PRIVATE address, not the
+# kube-vip VIP: the VIP is not yet being announced when the second and third
+# servers first join, so joining through it would deadlock.
+server: https://{{ hostvars[groups['k3s_servers'] | sort | first].private_ip }}:{{ api_port }}
+{% endif %}
+
+node-name: {{ inventory_hostname }}
+# Bind cluster traffic to the vLAN, not the public interface. This is what
+# keeps etcd, the API server and the CNI underlay on the private network.
+node-ip: {{ private_ip }}
+advertise-address: {{ private_ip }}
+
+write-kubeconfig-mode: "0600"
+
+# Cilium supplies the CNI and replaces kube-proxy entirely.
+flannel-backend: "{{ k3s_flannel_backend }}"
+disable-network-policy: true
+disable-kube-proxy: true
+cluster-cidr: {{ k3s_cluster_cidr }}
+service-cidr: {{ k3s_service_cidr }}
+
+# No cloud controller manager exists for netcup, so k3s's built-in one is
+# disabled and `cloud-provider=external` is deliberately NOT set. Setting it
+# would taint every node node.cloudprovider.kubernetes.io/uninitialized with
+# nothing present to clear it, and nothing would ever schedule.
+disable-cloud-controller: true
+
+disable:
+  - traefik          # deployed separately, pinned, with TLS 1.3 policy
+  - servicelb        # no LoadBalancer implementation on netcup
+  - local-storage    # Longhorn provides the StorageClass
+  - metrics-server   # deployed separately
+  - coredns          # deployed separately, after the CNI is up
+
+tls-san:
+{% for san in k3s_tls_san %}
+  - {{ san }}
+{% endfor %}
+  - {{ private_ip }}
+  - {{ ansible_host }}
+
+secrets-encryption: true
+
+etcd-snapshot-schedule-cron: "{{ k3s_etcd_snapshot_cron }}"
+etcd-snapshot-retention: {{ k3s_etcd_snapshot_retention }}
+{% if etcd_s3_endpoint | length > 0 and etcd_s3_access_key | length > 0 and etcd_s3_secret_key | length > 0 %}
+etcd-s3: true
+etcd-s3-endpoint: {{ etcd_s3_endpoint }}
+etcd-s3-bucket: {{ etcd_s3_bucket }}
+etcd-s3-folder: {{ etcd_s3_folder }}
+etcd-s3-access-key: {{ etcd_s3_access_key }}
+etcd-s3-secret-key: {{ etcd_s3_secret_key }}
+{% endif %}
+
+kubelet-arg:
+  - "system-reserved={{ k3s_kubelet_system_reserved }}"
+  - "kube-reserved={{ k3s_kubelet_kube_reserved }}"
+  - "eviction-hard={{ k3s_kubelet_eviction_hard }}"
+
+kube-apiserver-arg:
+  - "enable-admission-plugins=NodeRestriction,PodSecurity"
+{% if k3s_audit_enabled %}
+  - "audit-policy-file={{ k3s_config_dir }}/audit-policy.yaml"
+  - "audit-log-path={{ k3s_audit_log_dir }}/audit.log"
+  - "audit-log-maxage={{ k3s_audit_log_maxage }}"
+  - "audit-log-maxbackup={{ k3s_audit_log_maxbackup }}"
+  - "audit-log-maxsize={{ k3s_audit_log_maxsize }}"
+{% endif %}
+
+node-taint:
+  - "{{ k3s_control_plane_taint }}"

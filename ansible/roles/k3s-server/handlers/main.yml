@@ -1,2 +1,11 @@
 ---
 # k3s-server role handlers
+
+# Deliberately `restarted`, not `reloaded`: k3s reads config.yaml only at
+# start. There is no reload path -- a config change that is not restarted is
+# a config change that has not taken effect.
+- name: restart k3s
+  ansible.builtin.systemd:
+    name: "{{ k3s_service_name }}"
+    state: restarted
+    enabled: true

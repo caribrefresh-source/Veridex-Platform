@@ -10,7 +10,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/gesseld/veridex-platform.git
+    repoURL: https://github.com/caribrefresh-source/Veridex-Platform.git
     targetRevision: main
     path: gitops
   destination:

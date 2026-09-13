@@ -15,6 +15,13 @@ install-cluster: ## Install k3s servers then agents
 	cd $(ANSIBLE_DIR) && ansible-playbook -i inventory/$(ENV)/hosts.yml playbooks/install-k3s-servers.yml
 	cd $(ANSIBLE_DIR) && ansible-playbook -i inventory/$(ENV)/hosts.yml playbooks/install-k3s-agents.yml
 
+# Must run between install-cluster and verify-cluster. The servers set
+# flannel-backend=none, so every node -- agents included -- stays NotReady
+# until this lands. Skipping it leaves a cluster where nothing schedules.
+.PHONY: install-cilium
+install-cilium: ## Install the Cilium CNI (cluster-wide, from the bootstrap server)
+	cd $(ANSIBLE_DIR) && ansible-playbook -i inventory/$(ENV)/hosts.yml playbooks/install-cilium.yml
+
 .PHONY: verify-cluster
 verify-cluster: ## Check cluster health
 	cd $(ANSIBLE_DIR) && ansible-playbook -i inventory/$(ENV)/hosts.yml playbooks/verify-cluster.yml
@@ -22,6 +29,10 @@ verify-cluster: ## Check cluster health
 .PHONY: bootstrap-argocd
 bootstrap-argocd: ## Install Argo CD and apply the root application
 	cd $(ANSIBLE_DIR) && ansible-playbook -i inventory/$(ENV)/hosts.yml playbooks/bootstrap-argocd.yml
+
+# The full bring-up in dependency order.
+.PHONY: bring-up
+bring-up: prepare-hosts install-cluster install-cilium verify-cluster bootstrap-argocd ## Run the whole bring-up in order
 
 .PHONY: build
 build: ## Render every environment kustomization

@@ -27,9 +27,23 @@ source for the Veridex platform.
 ## Getting started
 
 ```sh
-make help                      # list targets
-make prepare-hosts ENV=staging
-make install-cluster ENV=staging
-make verify-cluster ENV=staging
-make bootstrap-argocd ENV=staging
+make help                        # list targets
+make bring-up ENV=production     # the whole sequence, in order
 ```
+
+Or step by step. The order matters: the servers run with
+`flannel-backend=none`, so every node — agents included — stays `NotReady`
+until Cilium lands. Running `bootstrap-argocd` before `install-cilium`
+leaves Argo CD with nowhere to schedule.
+
+```sh
+make prepare-hosts ENV=production     # baseline + nftables, before k3s
+make install-cluster ENV=production   # k3s servers, then agents
+make install-cilium ENV=production    # CNI — nodes go Ready here
+make verify-cluster ENV=production
+make bootstrap-argocd ENV=production
+```
+
+`ENV` selects the inventory under `ansible/inventory/`. It defaults to
+`staging`, which currently declares no hosts — pass `ENV=production` to
+target the real fleet.

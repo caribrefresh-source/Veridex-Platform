@@ -53,15 +53,17 @@ CONSUMER_ROOTS = ("ansible/", "scripts/", ".github/", "kubernetes/", "gitops/")
 CONSUMER_FILES = ("Makefile",)
 
 NAME = r"([A-Za-z_][A-Za-z0-9_]*)"
-ENV_PATTERNS = (
-    # lookup / query / q, short or fully qualified plugin name, with quotes
-    # optionally backslash-escaped inside a double-quoted YAML string.
-    re.compile(
-        r"\b(?:lookup|query|q)\(\s*\\?['\"](?:ansible\.builtin\.)?env\\?['\"]\s*,\s*\\?['\"]"
-        + NAME + r"\\?['\"]"
-    ),
-    # os.environ or a bare `environ` (from os import environ), indexed or via
-    # .get / .pop / .setdefault; os.getenv or a bare getenv.
+# Ansible reads the controller environment through the env lookup, spelled
+# lookup / query / q, short or fully qualified, and one call may pass several
+# names. Quotes may be backslash-escaped inside a double-quoted YAML string.
+ANSIBLE_ENV_CALL = re.compile(
+    r"\b(?:lookup|query|q)\(\s*\\?['\"](?:ansible\.builtin\.)?env\\?['\"]"
+    r"((?:\s*,\s*\\?['\"][A-Za-z_][A-Za-z0-9_]*\\?['\"])+)"
+)
+QUOTED_NAME = re.compile(r"\\?['\"]([A-Za-z_][A-Za-z0-9_]*)\\?['\"]")
+# os.environ or a bare `environ` (from os import environ), indexed or via
+# .get / .pop / .setdefault; os.getenv or a bare getenv.
+PYTHON_ENV_PATTERNS = (
     re.compile(r"\benviron(?:\.(?:get|pop|setdefault))?\s*[\[(]\s*['\"]" + NAME + r"['\"]"),
     re.compile(r"\bgetenv\(\s*['\"]" + NAME + r"['\"]"),
 )
@@ -117,7 +119,10 @@ def discover(rel: str, text: str, found: dict[tuple[str, str], list[str]]) -> No
     yamlish = rel.endswith((".yml", ".yaml", ".j2"))
     for lineno, line in enumerate(text.splitlines(), 1):
         where = f"{rel}:{lineno}"
-        for pattern in ENV_PATTERNS:
+        for call in ANSIBLE_ENV_CALL.finditer(line):
+            for name in QUOTED_NAME.findall(call.group(1)):
+                found[("env", name)].append(where)
+        for pattern in PYTHON_ENV_PATTERNS:
             for name in pattern.findall(line):
                 found[("env", name)].append(where)
         for name in ACTIONS_PATTERN.findall(line):

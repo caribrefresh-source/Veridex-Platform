@@ -57,13 +57,13 @@ ENV_PATTERNS = (
     # lookup / query / q, short or fully qualified plugin name, with quotes
     # optionally backslash-escaped inside a double-quoted YAML string.
     re.compile(
-        r"(?:lookup|query|q)\(\s*\?['\"](?:ansible\.builtin\.)?env\?['\"]\s*,\s*\?['\"]"
-        + NAME + r"\?['\"]"
+        r"\b(?:lookup|query|q)\(\s*\\?['\"](?:ansible\.builtin\.)?env\\?['\"]\s*,\s*\\?['\"]"
+        + NAME + r"\\?['\"]"
     ),
     # os.environ or a bare `environ` (from os import environ), indexed or via
     # .get / .pop / .setdefault; os.getenv or a bare getenv.
-    re.compile(r"environ(?:\.(?:get|pop|setdefault))?\s*[\[(]\s*['\"]" + NAME + r"['\"]"),
-    re.compile(r"getenv\(\s*['\"]" + NAME + r"['\"]"),
+    re.compile(r"\benviron(?:\.(?:get|pop|setdefault))?\s*[\[(]\s*['\"]" + NAME + r"['\"]"),
+    re.compile(r"\bgetenv\(\s*['\"]" + NAME + r"['\"]"),
 )
 ACTIONS_PATTERN = re.compile(r"\$\{\{\s*secrets\.([A-Za-z_][A-Za-z0-9_]*)\s*\}\}")
 ACTIONS_BUILTIN = {"GITHUB_TOKEN"}

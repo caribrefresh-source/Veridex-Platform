@@ -37,9 +37,10 @@ netcup_ssh_key_name: "veridex-netcup-prod"
 #
 # Observed 2026-09-12: all five servers resolve to imageFlavourId=100,
 # "Ubuntu 24.04.4 BIOS amd64". That is the flavour NAME only: the installed
-# system reports Ubuntu 24.04.5 LTS (docs/evidence/gate-1-server-1-install.md,
-# and on all five nodes in gate-5-iir-convergence.md). netcup's flavour names
-# lag the image content, so the newest flavour listed does deliver the newest
+# system reports Ubuntu 24.04.5 LTS
+# (docs/evidence/legacy/gate-1-server-1-install.md, and on all five nodes in
+# docs/evidence/legacy/gate-5-iir-convergence.md). netcup's flavour names lag
+# the image content, so the newest flavour listed does deliver the newest
 # point release.
 #
 # BIOS, not UEFI: every server reports uefi=False. The cloudimg (cloud-init)
@@ -94,10 +95,11 @@ private_node_allocation_block: "10.2.1.0/24"
 # mode on the vLAN is therefore the only viable stable endpoint, and it runs as
 # a static pod before Cilium (which needs k8sServiceHost to already resolve).
 #
-# PROVEN 2026-09-12 (docs/evidence/gate-4-kubevip-arp-proof.md): the netcup
-# vLAN accepts gratuitous ARP for an address it did not assign, and the
-# binding moves between nodes in both directions. gate-5-kubevip.md then
-# reached the API through the VIP from a node that did not hold it.
+# PROVEN 2026-09-12 (docs/evidence/legacy/gate-4-kubevip-arp-proof.md): the
+# netcup vLAN accepts gratuitous ARP for an address it did not assign, and the
+# binding moves between nodes in both directions.
+# docs/evidence/legacy/gate-5-kubevip.md then reached the API through the VIP
+# from a node that did not hold it.
 #
 # STILL UNPROVEN: kube-vip's own leader election under a real node failure,
 # and VIP behaviour when the holder is abruptly powered off.

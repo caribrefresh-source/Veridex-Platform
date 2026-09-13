@@ -10,9 +10,10 @@ Pass: 3 server nodes Ready. Losing 1 node keeps quorum (2 of 3).
 
 ## 2. kube-vip VIP Health
 ```
-ping -c 3 10.1.0.100 2>/dev/null || curl -k https://10.1.0.100:6443/healthz
+VIP=$(awk -F'"' '/^kubevip_vip:/{print $2}' ansible/inventory/production/group_vars/all.yml)
+ping -c 3 "$VIP" 2>/dev/null || curl -k "https://$VIP:6443/healthz"
 ```
-Pass: VIP 10.1.0.100 reachable. Leader election active.
+Pass: VIP (`kubevip_vip` in ansible/inventory/production/group_vars/all.yml) reachable. Leader election active.
 Run /kubevip-health for full VIP audit.
 
 ## 3. etcd Quorum & Backup

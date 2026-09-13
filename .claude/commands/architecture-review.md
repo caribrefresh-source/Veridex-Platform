@@ -7,7 +7,7 @@ Review the overall K3s-HA + DIP platform architecture for soundness and gaps.
 kubectl get nodes -l node-role.kubernetes.io/control-plane -o wide
 kubectl get pods -n kube-system | grep -E 'kube-apiserver|kube-controller|kube-scheduler|etcd'
 ```
-Verify: 3 server nodes (HA). kube-vip VIP on eth1:10.1.0.100 for API HA.
+Verify: 3 server nodes (HA). kube-vip VIP on eth1 (`kubevip_vip` in ansible/inventory/production/group_vars/all.yml) for API HA.
 
 ## 2. CNI and Network Architecture
 ```

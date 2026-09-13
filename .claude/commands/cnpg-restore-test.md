@@ -49,7 +49,7 @@ spec:
             key: secret-key
   storage:
     size: 10Gi
-    storageClass: hcloud-volumes
+    storageClass: <not yet decided -- plan Gates 26 and 27>
 ```
 ```
 kubectl apply -f /tmp/cnpg-restore-test.yaml

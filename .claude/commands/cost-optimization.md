@@ -68,7 +68,7 @@ print(f'External flows sampled: {count}')
 ```
 
 ## 8. MinIO vs S3 Trade-off
-Current: Self-hosted MinIO on hcloud-volumes.
+Planned: self-hosted MinIO on direct local storage (`minio-local`, plan Gate 26), never Longhorn. Not yet deployed.
 Alternative: Hetzner Object Storage (S3-compatible, €0.0059/GB/month).
 Cost at 30GB: MinIO = €1.44/mo (volume) + node compute. Hetzner S3 = €0.18/mo.
 Recommendation: For WAL archive only, Hetzner Object Storage is cheaper. For documents, evaluate latency.

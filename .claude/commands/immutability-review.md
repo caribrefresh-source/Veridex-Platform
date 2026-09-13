@@ -50,7 +50,7 @@ kubectl get pvc -A -o json | \
   jq '.items[] | {ns: .metadata.namespace, pvc: .metadata.name, reclaim: .spec.storageClassName}'
 kubectl get storageclass -o json | jq '.items[] | {name: .metadata.name, reclaim: .reclaimPolicy}'
 ```
-Verify: hcloud-volumes reclaim policy is `Retain` (not `Delete`) for stateful data (CNPG, MinIO).
+Verify: the StorageClasses holding stateful data (Longhorn tiers and `minio-local`, plan Gate 26) have reclaim policy `Retain` (not `Delete`) for stateful data (CNPG, MinIO).
 
 ## Report
 Manual drift ConfigMaps, :latest images, apps without selfHeal, Retain vs Delete PVCs.

@@ -38,7 +38,7 @@ kubectl exec -n data-plane -l app=dip-minio -- \
   mc admin info local 2>/dev/null | grep -E 'used|total|available'
 kubectl get pvc -n data-plane | grep minio
 ```
-Pass: PVC (30Gi hcloud-volumes) < 75% full.
+Pass: every MinIO data volume (direct local storage, plan Gate 26) is below the warning threshold defined in plan Gate 24. That threshold is not set yet.
 
 ## 6. Prometheus Scraping
 ```

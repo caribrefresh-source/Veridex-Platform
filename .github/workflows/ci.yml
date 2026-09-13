@@ -111,3 +111,25 @@ jobs:
             ansible-playbook -i ansible/inventory/production/hosts.yml \
               "$p" --syntax-check
           done
+
+  inventory-schema:
+    name: Inventory schema (five netcup nodes)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install pinned lint dependencies
+        run: |
+          pip install --disable-pip-version-check \
+            -r scripts/requirements-lint.txt
+
+      # Parsing proves nothing about identity. This fails on a sixth host, a
+      # duplicated address or MAC, a second bootstrap server, a node outside
+      # the vLAN register, or hosts declared in any other inventory.
+      - name: Validate inventory against schemas/inventory.schema.json
+        run: python3 scripts/validate-inventory.py

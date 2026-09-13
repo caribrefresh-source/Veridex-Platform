@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/caribrefresh-source/Veridex-Platform/schemas/inventory.schema.json",
+  "title": "Veridex production Ansible inventory (ansible/inventory/production/hosts.yml)",
+  "description": "Gate 0: the inventory identifies only the five netcup nodes -- three k3s servers and two k3s agents. Cross-field rules (uniqueness, address ranges, one bootstrap server) are enforced by scripts/validate-inventory.py.",
+  "type": "object",
+  "required": ["all"],
+  "additionalProperties": false,
+  "properties": {
+    "all": {
+      "type": "object",
+      "required": ["children"],
+      "additionalProperties": false,
+      "properties": {
+        "children": {
+          "type": "object",
+          "required": ["k3s_servers", "k3s_agents"],
+          "additionalProperties": false,
+          "properties": {
+            "k3s_servers": {
+              "$ref": "#/$defs/group",
+              "properties": {
+                "hosts": {
+                  "minProperties": 3,
+                  "maxProperties": 3,
+                  "propertyNames": { "pattern": "^veridex-server-[1-9][0-9]*$" }
+                }
+              }
+            },
+            "k3s_agents": {
+              "$ref": "#/$defs/group",
+              "properties": {
+                "hosts": {
+                  "minProperties": 2,
+                  "maxProperties": 2,
+                  "propertyNames": { "pattern": "^veridex-agent-[1-9][0-9]*$" }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "group": {
+      "type": "object",
+      "required": ["hosts"],
+      "additionalProperties": false,
+      "properties": {
+        "hosts": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/host" }
+        }
+      }
+    },
+    "host": {
+      "type": "object",
+      "required": ["ansible_host", "private_ip", "vlan_mac", "netcup_server_id", "node_index"],
+      "additionalProperties": false,
+      "properties": {
+        "ansible_host": { "type": "string", "format": "ipv4" },
+        "private_ip": { "type": "string", "format": "ipv4" },
+        "vlan_mac": { "type": "string", "pattern": "^[0-9a-f]{2}(:[0-9a-f]{2}){5}$" },
+        "netcup_server_id": { "type": "integer", "minimum": 1 },
+        "node_index": { "type": "integer", "minimum": 1 },
+        "k3s_bootstrap": { "type": "boolean" }
+      }
+    }
+  }
+}

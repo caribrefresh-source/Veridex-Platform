@@ -67,7 +67,7 @@ ENV_PATTERNS = (
 )
 ACTIONS_PATTERN = re.compile(r"\$\{\{\s*secrets\.([A-Za-z_][A-Za-z0-9_]*)\s*\}\}")
 ACTIONS_BUILTIN = {"GITHUB_TOKEN"}
-K8S_SECRET_PATTERN = re.compile(r"^\s*kind:\s*['\"]?Secret['\"]?\s*$")
+K8S_SECRET_PATTERN = re.compile(r"^\s*kind:\s*['\"]?Secret['\"]?\s*(?:#.*)?$")
 FILE_PATTERNS = (
     re.compile(r"ansible_ssh_private_key_file:\s*['\"]?([^'\"\s#]+)"),
     re.compile(r"(~/\.config/veridex/[A-Za-z0-9._-]+)"),

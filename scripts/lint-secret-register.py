@@ -60,8 +60,10 @@ ENV_PATTERNS = (
         r"(?:lookup|query|q)\(\s*\?['\"](?:ansible\.builtin\.)?env\?['\"]\s*,\s*\?['\"]"
         + NAME + r"\?['\"]"
     ),
-    re.compile(r"os\.environ(?:\.get)?\s*[\[(]\s*['\"]" + NAME + r"['\"]"),
-    re.compile(r"os\.getenv\(\s*['\"]" + NAME + r"['\"]"),
+    # os.environ or a bare `environ` (from os import environ), indexed or via
+    # .get / .pop / .setdefault; os.getenv or a bare getenv.
+    re.compile(r"environ(?:\.(?:get|pop|setdefault))?\s*[\[(]\s*['\"]" + NAME + r"['\"]"),
+    re.compile(r"getenv\(\s*['\"]" + NAME + r"['\"]"),
 )
 ACTIONS_PATTERN = re.compile(r"\$\{\{\s*secrets\.([A-Za-z_][A-Za-z0-9_]*)\s*\}\}")
 ACTIONS_BUILTIN = {"GITHUB_TOKEN"}

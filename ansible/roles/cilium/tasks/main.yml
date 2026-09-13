@@ -114,13 +114,38 @@
     - is_first_server | bool
     - _cilium_ds.stdout | default('') != ''
 
-- name: Upgrade Cilium when the MTU has drifted from the intended value
+# The API endpoint drifts the same way the MTU does, and fails far more
+# quietly. k8sServiceHost lands in the DaemonSet as KUBERNETES_SERVICE_HOST,
+# not in cilium-config, so reading the ConfigMap says nothing about it.
+#
+# Set to 127.0.0.1 this works on every server -- the API server is local --
+# and cannot work on any agent, where nothing listens there. The install is
+# therefore healthy on a control-plane-only cluster and breaks the moment a
+# worker joins, which is exactly when nobody is looking at Cilium.
+#
+# shell, not command: the jsonpath filter needs nested double quotes, and the
+# command module's shlex split strips them.
+- name: Read the API endpoint currently in effect
+  ansible.builtin.shell:
+    cmd: >-
+      k3s kubectl -n {{ cilium_namespace }} get daemonset cilium
+      -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="KUBERNETES_SERVICE_HOST")].value}'
+    executable: /bin/bash
+  register: _live_api_host
+  changed_when: false
+  when:
+    - is_first_server | bool
+    - _cilium_ds.stdout | default('') != ''
+
+- name: Upgrade Cilium when the MTU or API endpoint has drifted
   ansible.builtin.command:
     cmd: >-
       {{ cilium_cli_bin }} upgrade
       --namespace {{ cilium_namespace }}
       --reuse-values
       --set MTU={{ cilium_mtu }}
+      --set k8sServiceHost={{ cilium_k8s_service_host }}
+      --set k8sServicePort={{ cilium_k8s_service_port }}
   environment:
     KUBECONFIG: "{{ cilium_kubeconfig }}"
   register: _cilium_upgrade
@@ -136,8 +161,10 @@
     - >-
       (_live_mtu.stdout | default('') | trim | replace('"', '') | default('0', true))
       != (cilium_mtu | string)
+      or (_live_api_host.stdout | default('') | trim)
+      != (cilium_k8s_service_host | string)
 
-- name: Restart the Cilium DaemonSet to apply the new MTU
+- name: Restart the Cilium DaemonSet to apply the converged values
   ansible.builtin.command:
     cmd: k3s kubectl -n {{ cilium_namespace }} rollout restart daemonset/cilium
   when: _cilium_upgrade is defined and _cilium_upgrade is changed

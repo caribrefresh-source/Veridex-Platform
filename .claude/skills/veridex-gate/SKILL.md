@@ -22,9 +22,11 @@ and the contract disagree, the contract wins — stop and report the conflict.
 | Evidence and closure records | `docs/evidence/gates/gate-NN/` (two-digit `NN`) | One directory per gate. |
 | Revision 2 build log | Not in this repo | Use only if the user supplies a path. Never reconstruct it. |
 
-Legacy files `docs/evidence/gate-*.md` predate Revision 3 numbering. They are not
-closure records. Cite them at most as `DOCUMENTED` history, and only under the
-Revision 3 gate their content actually matches, never by file-name number.
+Legacy records in `docs/evidence/legacy/` predate Revision 3 numbering and are
+not closure records. `docs/evidence/legacy/README.md` maps each to the
+Revision 3 gate(s) its content matches and lists what it does not prove. Cite
+them at most as `DOCUMENTED` history, under the mapped gate, never by the number
+in their file name.
 
 **Plan identity.** At the start of every run record:
 
@@ -425,8 +427,11 @@ Verifier independence: Tier <n> — <how achieved; any accepted exception>
 ## 10. Ledger format
 
 `docs/evidence/gate-ledger.md` holds three append-only tables — *Closed gates*,
-*Reopen log*, *Ordering decisions* — and nothing else that changes. Closed-gate
-columns:
+*Reopen log*, *Ordering decisions* — plus two maintained sections: *Position*
+(last D/EG numbers) and *Open ordering conflicts* (known forward references not
+yet decided; an entry is removed only when its decision row is appended). Before
+`build` or `close`, check *Open ordering conflicts*: if one involves this gate,
+stop with `ORDER_CONFLICT`. Closed-gate columns:
 
 | Gate | Title | D-range | EG-range | Closed (UTC date) | Plan commit | Tested repo commit | Target identity | Record |
 

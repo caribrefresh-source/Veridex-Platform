@@ -1,0 +1,620 @@
+Contents
+Execution and acceptance specification
+Veridex Platform cluster: production end‑state plan
+Revision 3 (consolidated) · 13 September 2026 · Gate‑based structure, backup destination moved from GCS to Wasabi
+
+Five netcup nodes, idempotent Ansible bootstrap, Argo CD GitOps after hand‑over. No Hetzner dependency anywhere in production or disaster recovery. Backup and recovery run on Wasabi, S3‑compatible object storage. Object storage is one distributed MinIO deployment of four server pods across four failure domains. Network policy promotes namespace by namespace. Recovery objectives are measured per subsystem, never as one combined figure.
+
+32
+gates, 0–31
+15
+new gates this revision
+14
+operational items still to schedule
+0
+Hetzner dependencies
+Document status
+Provenance and supersession
+Superseded
+The interim stage‑numbered end‑state list (37 items across 9 stages, published between this document's Gate‑based revisions) is:
+
+Superseded by Veridex Platform Cluster Production End State Plan Revision 2 — this document.
+Do not execute that stage list as written. Where the two disagree, this document governs. The disagreements were factual regressions introduced while restating the plan, not new decisions:
+
+Superseded statement	Confirmed decision
+Hetzner object storage is the backup destination.	No Hetzner dependency. Wasabi (S3‑compatible object storage) is the backup destination (Gates 17–19, 31).
+MinIO is described only as "spreads data across nodes."	One distributed MinIO deployment runs exactly four server pods, one per failure domain (Gate 13, Gate 23).
+Longhorn is the default two‑replica StorageClass.	Longhorn is tiered by workload (critical / standard / disposable); MinIO volumes never use Longhorn (Gate 26).
+Sealed Secrets remains unresolved.	Tracked explicitly under the KMS incident and secret‑mechanism gate (Gate 22) and the §6 conflict below — resolve before Gate 13 and Gate 24 close.
+Network policy is applied generically to every namespace.	Network policy is promoted namespace by namespace through the P0–P6 sequence (Defined network policy rollout), with explicit Wasabi egress handling (Gate 30).
+Recovery is summarized as one ≤30‑minute RTO and ≤1‑hour RPO.	Recovery objectives are measured separately per subsystem (Recovery objectives and proof); no combined figure is accepted (Gate 29).
+Changed this revision — backup destination
+The backup destination changes from Google Cloud Storage to Wasabi (S3‑compatible object storage). This resolves Gate 21 rather than complicating it: Wasabi has no Workload Identity concept and no GKE‑specific credential path to route around — every producer authenticates with a plain scoped access‑key/secret‑key pair, the same mechanism regardless of where it runs. Gates 17, 18, 19, 20, 21, 25, 26, 30 and 31 are rewritten below for Wasabi's terms (Object Lock instead of Bucket Lock, a Wasabi account instead of a Google Cloud project, S3 IAM policies instead of Cloud IAM). Gates 22–24 and 27–29 are backup‑destination‑agnostic and are unchanged.
+
+Highest‑priority unresolved issue
+Proving each producer's actual path to Wasabi against its exact pinned version. Wasabi is a first‑party S3‑compatible endpoint, not a cross‑cloud interoperability workaround, so the protocol risk that existed under GCS mostly disappears — CloudNativePG, Longhorn and k3s etcd all have native, documented S3‑compatible backup‑target support. What is not yet proven is Wasabi‑specific behavior under this exact stack: multipart limits, request‑rate throttling during a full restore, and the minimum‑storage‑duration billing policy against buckets that churn hourly (etcd snapshots, WAL). See Gate 17.
+
+Part A — Foundation
+Decision summary
+Decision	Required end state
+Provider boundary	No compute, object storage, DNS, backup, credential, monitoring, or recovery dependency on Hetzner.
+Backup destination	Wasabi (S3‑compatible object storage), in a dedicated backup account, provisioned as its own infrastructure‑as‑code stack (Gates 17–20, 31).
+MinIO topology	One distributed MinIO deployment of four server pods on four distinct nodes and four distinct directly attached storage paths; one pod per failure domain.
+MinIO protection	MinIO erasure coding owns object‑level protection. MinIO data must not use replicated Longhorn PVCs.
+GitOps boundary	Ansible creates the viable cluster and bootstraps Argo CD. Argo CD owns cluster services, data services, policies, and applications after explicit handover. Wasabi infrastructure is provisioned outside both (Gate 31).
+Policy rollout	Inventory flows, observe, create explicit allows, enforce one namespace at a time, run positive and negative tests, then promote.
+Recovery claim	No RTO or RPO is accepted until a dated restore drill proves it. Infrastructure, database, object storage, and volume recovery are measured separately — never as one combined number.
+Status vocabulary and evidence rules
+Status	Meaning	Permitted evidence
+Verified live	Observed on the target netcup cluster during the current gate.	Captured command output, timestamp, commit SHA, cluster identity and result.
+Documented	A dated evidence record exists but was not rechecked during this revision.	Evidence file linked to immutable commit.
+Configured	Desired configuration exists, but successful operation is not proven.	Repository inspection only.
+Code only	Implementation exists but has no deployment or acceptance record.	Repository inspection only.
+Unknown	Evidence is absent or inconclusive.	Must block dependent promotion.
+Not started	No implementation or proof exists.	Work item remains open.
+A gate may be marked PASS only when every mandatory check passes on the identified netcup cluster. Configuration, pod readiness, and a checksum are not substitutes for behavioral tests. Every evidence record must contain the tested commit, UTC time, cluster API identity, commands, unedited results, verdict, and known limitations.
+
+Non‑negotiable architecture policies
+No Hetzner endpoint, account, bucket, load balancer, DNS zone, secret, Terraform state, backup, recovery artifact, or CI variable may be required by production or disaster recovery.
+The backup and recovery destination is Wasabi (S3‑compatible object storage), provisioned as a separate infrastructure‑as‑code stack outside the netcup cluster, with deletion protection on every locked bucket (Gate 31).
+All versions and deployment artifacts are pinned. OCI Helm charts should be pinned by digest where supported.
+A healthy rerun must report changed equals zero for host and bootstrap automation and must not restart k3s, Cilium, CoreDNS, kube‑vip, or storage services.
+No workflow may hand‑patch a GitOps‑owned object. Emergency changes require an incident record and immediate reconciliation into Git.
+MinIO is one distributed deployment of exactly four server pods, never described as "four replicas" or four independent instances. Each pod requires a distinct node, storage device or dedicated filesystem path, and topology label (Gate 23).
+Longhorn may protect ordinary PVC workloads, but MinIO data volumes use direct local storage so MinIO erasure coding remains the sole replication layer.
+Default deny is never applied to an application namespace until observed dependencies are expressed as reviewed policies and both allowed and denied paths are tested.
+Backup credentials are separate from runtime credentials. Production workloads cannot delete immutable backup generations. No backup writer identity can delete a bucket or modify its retention policy (Gate 20).
+Target topology
+Node class	Count	Primary roles	Storage role
+RS 1000 control plane	3	k3s server, etcd voter, kube‑vip, Cilium; schedulability governed by explicit taints/tolerations.	At least two control‑plane nodes provide MinIO failure domains unless a fourth independent storage node is added.
+RS 2000 worker	2	Application and data‑plane workloads.	Each provides one MinIO failure domain; both may also be Longhorn storage nodes.
+MinIO server pod	4	One distributed MinIO server set.	Exactly one per selected node, each backed by its own direct local path/device.
+Longhorn	Cluster service	General replicated block storage for suitable PVC workloads.	At least three storage‑eligible nodes; excludes MinIO data paths. Node count feasibility is open — see Gate 26.
+Capacity condition
+With only two worker nodes, four independent MinIO node failure domains require two MinIO server pods to run on selected control‑plane nodes. If control‑plane nodes must remain storage‑free, the five‑node fleet cannot satisfy four node‑level MinIO failure domains; add two storage‑capable workers or change the requirement before deployment. The same two‑worker constraint means the two large RS 2000 disks alone cannot provide three Longhorn node‑level replicas — Gate 26 must resolve this before longhorn-critical is used.
+
+Part B — Foundation gates
+Ordered production gates, 0–16
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17→31
+GATE 0
+Repository and provider boundary
+End state
+Inventory identifies only the five netcup nodes. Automated scanning finds no active Hetzner endpoints, variables, backend configuration, buckets, DNS, credentials, documentation instructions, or workflow dependencies. Historical references are explicitly labelled historical.
+
+Acceptance evidence
+Provider drift lint; secret‑name scan without revealing values; inventory/schema validation; pipeline dry run.
+
+Stop condition
+Any active Hetzner dependency, unresolved secret destination, or ambiguous cluster identity.
+
+GATE 1
+Operating systems and access
+End state
+All five nodes run the approved Ubuntu 24.04 point release. SSH is key‑only, root policy is explicit, host keys match recorded fingerprints, time synchronization is healthy, and administrative access is recoverable.
+
+Acceptance evidence
+os‑release; sshd effective configuration; chrony status; host‑key fingerprint comparison; access test from approved runner.
+
+Stop condition
+Password authentication, mismatched fingerprint, unsupported OS, clock drift, or unavailable emergency access.
+
+GATE 2
+Private network
+End state
+Static private addresses, /16 mask and MTU 1500 are applied idempotently. All nodes reach every other node over the intended private interface. Public and private routes are unambiguous.
+
+Acceptance evidence
+Full ping matrix; 1472‑byte do‑not‑fragment success and 1473‑byte failure; route and interface capture; second Ansible run changed=0.
+
+Stop condition
+Asymmetric route, MTU mismatch, public fallback between nodes, duplicate address or non‑idempotent network change.
+
+GATE 3
+Host prerequisites and firewall
+End state
+Kernel, sysctl, modules, packages and firewall satisfy k3s, Cilium and Longhorn. open‑iscsi is installed and iscsid is active. nfs‑common is installed where RWX is supported. Public access is restricted to approved ingress and rate‑limited SSH.
+
+Acceptance evidence
+Longhorn preflight; Cilium preflight; systemd checks; external port scan; private‑port tests; changed=0 rerun.
+
+Stop condition
+Failed preflight, exposed 6443/10250, disabled firewall, broad public source rule, or host restart on rerun.
+
+GATE 4
+k3s control plane
+End state
+Three pinned k3s servers form one embedded‑etcd cluster. Secrets encryption and audit logging operate. API VIP and required public DNS SAN are present.
+
+Acceptance evidence
+Node identity; etcd member list; certificate SAN inspection; encrypted‑at‑rest proof; audit event proof.
+
+Stop condition
+Fewer than three voters, wrong cluster, certificate mismatch, plaintext Secret in raw etcd, or missing audit event.
+
+GATE 5
+kube‑vip failure behavior
+End state
+The API remains reachable through the private VIP when the current VIP holder is hard powered off, and returns to full redundancy after recovery.
+
+Acceptance evidence
+Identify holder; sustained API probe; hard power‑off; record interruption; verify new holder; restore old node; verify etcd and node health.
+
+Stop condition
+Loss exceeds approved threshold, split‑brain VIP, manual repair, or etcd membership degradation.
+
+GATE 6
+Cilium and cluster DNS
+End state
+Pinned Cilium runs with intended VXLAN, WireGuard and kube‑proxy replacement settings. CoreDNS has at least two replicas, a stable service IP, topology spread, and resolves internal and external names.
+
+Acceptance evidence
+cilium status; configuration capture; cross‑node dataplane checks; kubernetes.default and approved external lookups; full Cilium connectivity test after DNS.
+
+Stop condition
+Unmanaged pod, wrong API endpoint, DNS failure, unexpected fragmentation, failed connectivity scenario, or service path depending on kube‑proxy.
+
+GATE 7
+Verification automation
+End state
+verify‑cluster.yml implements gates 3 through 6 as read‑only assertions, identifies the cluster, fails closed, and has a deliberate negative test for each critical category.
+
+Acceptance evidence
+Healthy pass; break one disposable assertion at a time; confirm non‑zero exit and useful diagnostic; healthy rerun.
+
+Stop condition
+Empty task list, ignored failure, mutation during verification, or success against the wrong cluster.
+
+GATE 8
+Backup foundation
+End state
+Wasabi — not Hetzner — is the configured backup destination, with versioning, encryption and provider‑enforced immutability via S3 Object Lock. Separate write and restore identities exist. Exact bucket architecture, credential mechanism and Object Lock activation are specified in Gates 18–21.
+
+Acceptance evidence
+Create protected test object; deny early deletion and retention reduction; list with restore identity; download and verify; record Wasabi account/bucket/region.
+
+Stop condition
+Cluster‑local‑only backup, administrator can silently remove retention, shared runtime credential, or any Hetzner dependency.
+
+GATE 9
+etcd recovery
+End state
+Hourly local and off‑cluster snapshots are explicit, retention is explicit, and a snapshot restores successfully in isolation with protected server token and encryption material. The off‑cluster path uses k3s's native S3‑compatible snapshot target pointed at Wasabi — proof is still required against the exact pinned k3s version, not assumed from protocol compatibility alone — see Gate 17, veridex-etcd-backup in Gate 18.
+
+Acceptance evidence
+Observe two scheduled cycles; verify local and remote retention; download; isolated restore; API query of restored objects.
+
+Stop condition
+Only filename/checksum proof, missing token, untested restore, ambiguous RPO, or unproven Wasabi behavior for the pinned k3s version.
+
+GATE 10
+Argo CD handover
+End state
+Pinned Argo CD is healthy. Repository access is read‑only. Bootstrap, verification, Argo controller and emergency identities are separate. Cilium and CoreDNS ownership is singular and documented.
+
+Acceptance evidence
+Denied‑action RBAC matrix; root app from main; Sync/Healthy; no duplicate Helm owner; drift test reverted by correct owner.
+
+Stop condition
+Admin kubeconfig in workflow, writable repo key, duplicate ownership, unrestricted destinations, or manual live manifest.
+
+GATE 11
+Baseline observability
+End state
+Metrics, events, logs and alerts cover all nodes and bootstrap services before stateful data services begin. Hubble flow visibility supports policy discovery.
+
+Acceptance evidence
+Trigger and receive node, etcd snapshot, disk, Cilium, DNS and Argo reconciliation alerts.
+
+Stop condition
+No actionable alert path, missing storage metrics, or policy rollout without flow evidence.
+
+GATE 12
+Longhorn
+End state
+Pinned Longhorn uses declared disks and at least three eligible nodes. Replica anti‑affinity works. MinIO paths are excluded. Default StorageClass selection is deliberate. Final tiering and node feasibility are specified in Gate 26; interaction with CloudNativePG replication in Gate 27.
+
+Acceptance evidence
+Preflight; create PVC; write data; detach/reschedule; fail one storage node; verify data; rebuild and capacity alerts.
+
+Stop condition
+MinIO backed by Longhorn, replicas share a node/path, fewer than three eligible domains without accepted risk, or failed recovery.
+
+GATE 13
+Four‑domain MinIO
+End state
+One distributed MinIO deployment of four pinned server pods forms a single server set across four labelled node/storage domains. TLS, erasure coding, healing, quotas, lifecycle and audit logging are configured. Scheduling rules are enforced per Gate 23, capacity thresholds per Gate 24, and the disclosed MINIO_KMS_SECRET_KEY incident (Gate 22) is closed before this gate can pass.
+
+Acceptance evidence
+Topology assertion; write/read/delete; multipart test; hard‑stop one instance during I/O; read/write continues; restore; heal completes; checksum and object count match.
+
+Stop condition
+Four pods on fewer than four nodes, shared storage path, Longhorn‑backed data, unavailable service after one failure, incomplete heal, capacity below safety threshold, or the KMS key incident still open.
+
+GATE 14
+Data services
+End state
+CloudNativePG, NATS JetStream, Redis cache and Temporal deploy in dependency order with anti‑affinity, resource budgets, backups and recovery tests.
+
+Acceptance evidence
+WAL reaches external backup; database restore; NATS redelivery; Redis loss causes no durable loss; Temporal workflow completes after component restart.
+
+Stop condition
+Two‑instance database accepted as fully HA without risk record, durable dependency on Redis, missing WAL restore, or quorum members co‑located.
+
+GATE 15
+Applications
+End state
+All named services are Synced and Healthy and complete meaningful requests through the production ingress and authentication path.
+
+Acceptance evidence
+Smoke test auth, file manager, ingestion, frontend and workers; trace through NATS/Temporal/storage; audit events captured.
+
+Stop condition
+Readiness‑only evidence, bypassed ingress/auth, missing audit record, or unbounded resource regression.
+
+GATE 16
+Recovery drill
+End state
+Clean‑node reconstruction and each independent data restore are timed, dated and reviewed. RTO and RPO are measured per subsystem — never combined into one figure. Superseded in detail by the thirteen‑step application‑consistency drill in Gate 29.
+
+Acceptance evidence
+Destroy only approved drill environment; rebuild from Git; restore etcd, keys, PostgreSQL, Longhorn and MinIO; validate application consistency.
+
+Stop condition
+Untested runbook, combined unverifiable 30‑minute claim, missing business‑level integrity checks, or reliance on original nodes.
+
+Part C — new this revision
+Wasabi backup architecture, gates 17–31
+These close the gaps found while implementing Gate 8 and Gate 13. Wasabi is a first‑party S3‑compatible endpoint — most of the protocol risk that existed under GCS is gone — but "back up to Wasabi" is still not one implementation, and Wasabi's own operational quirks (minimum storage duration, request‑rate behavior) are still unproven for this stack.
+
+GATE 17
+Per‑producer Wasabi (S3) compatibility matrix
+Wasabi implements the S3 API directly — it is not a cross‑cloud interoperability workaround like GCS's XML interop layer — so every producer below already has an officially documented S3‑compatible path. That lowers risk; it does not remove the requirement to test each exact pinned version before trusting it.
+
+Producer	Preferred Wasabi path	Required proof
+CloudNativePG	Barman Cloud plugin, generic S3‑compatible object store (endpointURL + access/secret key)	Base backup, WAL archive and point‑in‑time restore
+Velero	AWS provider plugin, configured with the Wasabi endpoint and region	Namespace and volume restore
+MinIO backup	MinIO's native server‑side bucket replication to an S3‑compatible remote, or a tested mirror tool	Versions, metadata, retention and checksums restored
+Longhorn	Native S3‑compatible backupstore — Longhorn's standard, documented backup‑target type	Incremental backup, list, delete under lifecycle rules and complete restore
+k3s etcd	Native S3‑compatible snapshot target (--etcd-s3-endpoint, access/secret key)	Scheduled upload, listing, pruning and isolated restore
+Audit exporter	S3‑compatible client against the Wasabi endpoint	Immutable object retrieved and verified
+Stop condition
+Any row declared compatible without a version‑pinned test. Community reports of friction between Longhorn and non‑AWS S3‑compatible backends exist (path‑style vs virtual‑hosted addressing, UI display bugs) — verify against the exact pinned Longhorn release rather than assuming "S3‑compatible" is uniform across vendors. Do not quietly fall back to MinIO as the only backup if any producer's path fails.
+
+References: Wasabi S3 API reference · Longhorn — setting an S3‑compatible backup target · k3s etcd‑snapshot CLI (S3 options) · CloudNativePG Barman Cloud plugin — object store providers
+
+GATE 18
+Wasabi bucket architecture
+Exact buckets, not a shared bucket with prefixes — prefix separation does not provide the same administrative boundary. Separate buckets where retention, IAM policy, lifecycle, legal hold or blast radius differs. Bucket names are global within Wasabi, same constraint as S3.
+
+Bucket	Data	Retention type
+veridex-etcd-backup	k3s etcd snapshots	Operational DR retention
+veridex-cnpg-backup	PostgreSQL base backups and WAL	PITR retention
+veridex-minio-backup	Document/object generations	Business and regulatory retention
+veridex-longhorn-backup	Selected PVC backups	Workload‑specific retention
+veridex-recovery-keys	SOPS age and other recovery material	Restricted dual‑control retention
+veridex-audit-worm	Audit and compliance evidence	Locked compliance retention
+For each bucket, define
+Wasabi account (dedicated backup account, not shared with any application account) · Wasabi region
+Versioning policy (required for Object Lock) · Retention duration · Whether Object Lock Compliance mode is required
+Lifecycle transitions and deletion · Encryption model (SSE)
+Logging and alerts · Writer, verifier and restore identities · Monthly cost ceiling
+Wasabi has no storage‑class tiering — it is flat‑rate hot storage, which simplifies the "storage class" decision GCS required but does not remove one Wasabi‑specific cost rule: objects deleted before 90 days still incur the minimum‑storage‑duration charge. veridex-etcd-backup (hourly snapshots, 48 kept) and veridex-cnpg-backup (WAL) both churn well inside that window — factor the minimum‑duration charge into the monthly cost ceiling for those two buckets rather than treating per‑GB rate as the whole estimate, and confirm whether pruning old snapshots on schedule is cheaper than a longer on‑Wasabi retention window.
+
+GATE 19
+Object Lock (Compliance mode) activation
+Wasabi implements S3 Object Lock: a Compliance‑mode default retention period cannot be removed or shortened by anyone, including the account root user — this is irreversible. Object Lock is activated in two phases, never in one step, and it must be enabled at bucket creation — unlike ordinary settings, it cannot be added to an existing bucket retroactively. If any of the six Gate 18 buckets were already created without Object Lock while the plan still named GCS, they must be recreated, not converted.
+
+Create the bucket with Object Lock enabled (versioning turns on automatically) and either no default retention or a
+Governance‑mode
+default retention only.
+Run upload, restore, denial and lifecycle tests.
+Obtain documented approval of the retention period.
+Set the default retention mode to
+Compliance
+with the approved period.
+Verify the policy cannot be reduced, removed, or bypassed — even by the account root user.
+Store the lock evidence.
+Decide separately between bucket‑level default retention, per‑object retention overrides, Legal Hold flags (indefinite, no expiry, independent of the retention period), and object versioning — they solve different problems and are not interchangeable.
+
+Stop condition
+A bucket locked before step 2 or 3 is complete; Object Lock enabled after bucket creation instead of at creation; or a retention mechanism chosen without recording which problem it solves.
+
+Reference: Wasabi — Immutability: Compliance and Object Locking
+
+GATE 20
+Wasabi account and access isolation
+A different provider than Hetzner is not sufficient protection if one compromised administrator can delete the cluster and its backups — and Wasabi's account/root‑key model is close enough to AWS's that the same root‑key risk applies directly. Required:
+
+A dedicated Wasabi account (or sub‑account) separate from any account used for other workloads, with separate billing and recovery contacts.
+MFA on console login for privileged human identities; no routine use of root account keys by any automation; enable MFA Delete on versioned/locked buckets where supported.
+Wasabi IAM policies (AWS‑IAM‑compatible policy JSON) scoping every identity to explicit bucket actions — no policy grants s3:DeleteBucket or retention/Object‑Lock modification to a backup writer.
+Backup writers without bucket deletion or retention‑policy modification.
+Restore identities disabled or unused except during drills.
+Bucket access logging exported to an independently protected destination outside the Wasabi account.
+Recovery access proven without the production cluster.
+Alerts for IAM, lifecycle, retention and bucket configuration changes.
+Stop condition
+Any human or workload identity holding both write and delete/retention‑modification rights on a locked bucket, or any automation using the account's root access key.
+
+Reference: Wasabi — IAM and STS support
+
+GATE 21
+Wasabi access‑key scoping and lifecycle
+The credential question this gate existed to answer under GCS — how does a non‑GKE k3s cluster authenticate without Workload Identity Federation — is moot under Wasabi: there is no federation concept, GKE or otherwise. Every producer authenticates with a plain HMAC access‑key/secret‑key pair, the same mechanism regardless of where the workload runs. What remains is disciplined key handling, not protocol selection:
+
+Every producer authenticates with a scoped access‑key/secret‑key pair tied to a dedicated Wasabi sub‑user or policy‑restricted key — never the account root keys.
+One key pair per producer/bucket pairing wherever Wasabi's IAM policy model allows it, so a compromised key exposes only its own bucket.
+Keys are encrypted through SOPS in Git and never committed in plaintext — the same class of failure as the MINIO_KMS_SECRET_KEY incident in Gate 22, and this gate exists so it does not recur for Wasabi keys.
+Keys are rotated on a defined schedule and immediately on suspected exposure.
+CloudNativePG is configured with plain s3Credentials and an explicit endpointURL pointed at Wasabi — never a googleCredentials block, which does not apply to a non‑Google endpoint.
+Stop condition
+Any automated workload using a Wasabi root account key, or any access key committed in plaintext anywhere in the tree.
+
+Reference: Wasabi — generating an S3 API key
+
+GATE 22
+KMS key incident and rotation
+The earlier discovery of a plaintext MINIO_KMS_SECRET_KEY is carried forward as an open incident, not a closed one. This gate must complete before MinIO is approved for production, and before Gate 13 or Gate 24 can pass.
+
+Treat the disclosed key as compromised.
+Identify encrypted data dependent on it.
+Protect the old key for read recovery.
+Introduce the approved encrypted‑secret mechanism.
+Generate and activate a replacement key.
+Verify old objects remain readable.
+Verify new objects use the replacement key.
+Remove plaintext from the current tree.
+Decide whether and how to purge Git history.
+Rotate adjacent credentials.
+Record a security incident.
+Stop condition
+MinIO approved for production, or Gate 13/24 marked PASS, while any step above is incomplete.
+
+GATE 23
+MinIO scheduling rules
+A preferred topology rule is insufficient. Enforceable requirements:
+
+StatefulSet replicas exactly four.
+Required pod anti‑affinity using kubernetes.io/hostname.
+Exactly four eligible labelled nodes; one MinIO server pod per node.
+PersistentVolume node affinity; four unique local devices or paths.
+Explicit control‑plane tolerations for the selected server nodes.
+PodDisruptionBudget and a MinIO‑aware maintenance guard.
+CI/admission rule preventing topology weakening.
+Alert if fewer than four pods or four distinct nodes exist.
+GATE 24
+MinIO capacity policy
+Actual thresholds, not a general safety margin. For four 30 GiB drives: raw capacity 120 GiB; approximate erasure‑coded usable capacity 60 GiB; operationally safe usable capacity is less than 60 GiB, because healing requires headroom. Define:
+
+Warning threshold · Critical threshold · Write‑stop/escalation threshold.
+Minimum free capacity during one‑node loss · Maximum supported object count.
+Healing‑time objective · Expansion procedure.
+What happens when differently sized disks are used.
+Monitoring for offline drives, healing backlog and write quorum.
+GATE 25
+MinIO backup semantics
+"Mirror to Wasabi" needs a precise policy — a plain mc mirror --remove would be dangerous for an immutable backup, since it can propagate malicious or accidental deletion. Because Wasabi is fully S3‑compatible, MinIO's native server‑side bucket replication can target it directly; prefer that over a client‑side mirror script where available, since it handles versioning and delete markers more faithfully. Answer explicitly:
+
+Are all object versions preserved? Are delete markers copied?
+Are legal holds and retention metadata preserved or reconstructed?
+Are bucket policies, users, groups and service accounts backed up? Are lifecycle rules backed up?
+Is server‑side encryption metadata recoverable?
+Does deleting from MinIO propagate deletion to Wasabi?
+Is replication continuous or scheduled? What is the maximum replication lag?
+How are failed objects retried? How is completeness reconciled?
+Stop condition
+Any replication tool run with delete propagation enabled against a bucket meant to be immutable.
+
+GATE 26
+Longhorn's exact storage scope
+Gate 12 improves Longhorn's role but still needs a final workload assignment:
+
+StorageClass	Replicas	Intended workloads	Wasabi backup
+longhorn-critical	3	Selected critical PVCs where three storage nodes exist	Required
+longhorn-standard	2	Ordinary persistent services	Required according to data classification
+longhorn-disposable	1	Reproducible cache or scratch data	None
+minio-local	1 (local)	MinIO only; not provisioned by Longhorn	MinIO‑specific Wasabi protection
+Stop condition
+The plan must resolve whether three nodes actually have suitable Longhorn capacity before longhorn-critical is used — the two large RS 2000 agent disks alone cannot provide three node‑level replicas.
+
+GATE 27
+Longhorn and database double protection
+CloudNativePG replication, Longhorn replication and WAL archiving are three separate protection mechanisms. The plan must decide whether PostgreSQL uses local/single‑replica storage plus CNPG replication, or Longhorn‑replicated volumes plus CNPG replication. Using both can increase write latency and rebuild traffic — it may still be acceptable, but only with measured latency, failure and recovery evidence.
+
+Reference: CloudNativePG Barman Cloud plugin — object store providers — Wasabi and other S3‑compatible object stores for WAL archiving.
+
+GATE 28
+Backup consistency coordination
+Independent backups can capture incompatible points in time — PostgreSQL metadata referencing MinIO objects, MinIO objects uploaded before or after database commits, Temporal workflow state, NATS messages and outbox events, rebuildable search indexes, and audit events that must never be lost, all need reconciled recovery rules. Define:
+
+Authoritative systems of record · Rebuildable derivatives.
+Recovery ordering · Reconciliation after restoring different timestamps.
+Orphaned‑object detection · Missing‑object detection.
+Outbox replay rules · Tenant‑level integrity checks.
+GATE 29
+Restore drill with application consistency
+Restoring individual systems is insufficient. This end‑to‑end drill supersedes Gate 16's evidence requirement in detail:
+
+Restore etcd and GitOps.
+Restore secret‑decryption capability.
+Restore CloudNativePG to a selected timestamp.
+Restore MinIO objects to the corresponding recovery window.
+Restore required Longhorn PVCs.
+Reconcile outbox and message state.
+Rebuild search/vector/graph indexes where appropriate.
+Authenticate.
+Upload a document.
+Process it.
+Retrieve the original and derived data.
+Verify audit history and tenant isolation.
+Measure actual RTO and RPO.
+GATE 30
+Network policy for Wasabi egress
+The Defined network policy rollout (P0–P6, below) needs explicit Wasabi handling, folded into the same namespace‑by‑namespace promotion — not a bulk exception:
+
+Egress DNS to CoreDNS · HTTPS egress to the Wasabi regional S3 endpoint(s) each producer uses.
+Cilium FQDN policy behavior and DNS TTL handling · certificate validation · proxy behavior, if used.
+Denial of arbitrary external storage destinations.
+Backup testing while policy enforcement is active · alerting on repeated denied backup flows.
+Tests during IP changes behind Wasabi's endpoints — do not hard‑code current Wasabi IP addresses; policy by FQDN, not by address.
+GATE 31
+Recovery of Wasabi configuration itself
+GitOps should declare or reference bucket names, regions, retention duration, lifecycle rules, Wasabi IAM policies, sub‑user and access‑key configuration, and monitoring/budget alerts — but GitOps must not be able to destroy locked backup buckets casually. Wasabi provisioning is a separate infrastructure‑as‑code stack with:
+
+Deletion protection · Explicit destructive‑change approval.
+State stored outside the netcup cluster · State backup · Provider version pinning.
+Plan review · Import and recovery instructions.
+Stop condition
+Any locked bucket reachable by a destructive apply from the same GitOps root app that manages cluster workloads.
+
+Terraform's AWS provider, pointed at Wasabi's S3 endpoint, is the typical way to express this stack — it does not require a Wasabi‑specific provider.
+
+Four‑instance MinIO policy
+Placement fundamentals below; enforceable scheduling rules are Gate 23, capacity thresholds are Gate 24, and backup semantics are Gate 25.
+
+Placement and storage
+Label the four selected nodes with stable failure‑domain labels and use required pod anti‑affinity or topology spread so the scheduler cannot co‑locate instances.
+Bind each instance to a unique direct local device, partition, or dedicated filesystem path. Never share a host path between instances.
+Protect local‑path identity with node affinity so a volume cannot attach to the wrong node and appear empty.
+Reserve capacity for healing and failure operation. Define warning, critical, and write‑stop thresholds before production (Gate 24).
+Do not describe four pods as "four replicas." Record the actual MinIO erasure‑set configuration, usable capacity, parity overhead, and tolerated simultaneous failures produced by the deployed release and layout.
+Use a PodDisruptionBudget, but recognize that it cannot protect against hard node loss. Maintenance automation must check current MinIO health before evicting an instance.
+Required MinIO tests
+Test	Method	Pass criterion
+Topology	Inspect pods, nodes, PV bindings, device identifiers and labels.	Four instances, four nodes, four unique storage paths.
+Steady‑state I/O	Upload small, large and multipart objects; read and checksum them.	All checksums match; no incomplete multipart residue.
+Single failure	Continuously read and write while hard‑stopping one selected node.	Service remains available within the approved interruption threshold; committed objects remain readable.
+Healing	Return or replace the failed domain and observe healing.	Healing completes without silent loss; object count and checksums match inventory.
+Near‑capacity	Test in a controlled environment at defined threshold.	Alerts fire before safe operating margin is breached; operational response is documented.
+Backup restore	Restore protected objects into an isolated MinIO target.	Selected generations and metadata are recoverable without the production cluster.
+Defined network policy rollout
+Policy enforcement is a promotion process, not a bulk manifest deployment. Every namespace moves independently through the following states, namespace by namespace. A namespace cannot advance while its prior state lacks evidence.
+
+State	Action	Promotion gate	Rollback
+P0 Inventory	Record workloads, ports, service accounts, DNS, API, ingress, metrics, storage, backup and external dependencies.	Owner approves dependency map; no unknown critical flow.	No enforcement exists.
+P1 Observe	Use Hubble and application traces across normal operation, batch jobs, backups, failover and maintenance.	Observation covers an agreed representative window and exceptional workflows.	Extend observation.
+P2 Declare	Commit default‑deny plus explicit ingress and egress allows, but do not enable enforcement for the namespace yet.	Peer review confirms selectors, ports, protocols and namespaces; manifests pass policy lint.	Revert Git change.
+P3 Canary	Enforce on a canary workload or non‑production namespace with equivalent service accounts and dependencies.	Positive tests pass and prohibited paths fail. No unexplained drops.	Revert policy commit; Argo sync; capture dropped flows.
+P4 Enforce	Enable policy for one production namespace during a controlled window.	Readiness, transactions, metrics, logs, backups and cross‑service flows remain healthy for the soak period.	Revert the exact policy commit through GitOps; do not hand‑delete except break‑glass.
+P5 Prove	Run automated allow and deny tests and retain evidence.	All expected allows succeed; all forbidden flows fail; alerts are clean.	Return to P3 or P2.
+P6 Maintain	Detect service, label, port and policy drift in CI and scheduled tests.	Every workload change includes policy impact; periodic negative tests pass.	Block release or roll back the workload change.
+Baseline policy requirements
+Default deny ingress and egress for application namespaces. kube‑system and other control namespaces require component‑specific policy and must not receive a generic blanket policy.
+Permit DNS only to the declared CoreDNS Service or endpoints over required UDP and TCP ports. Do not allow arbitrary port 53 destinations.
+Permit Kubernetes API access only for service accounts that demonstrably require it and only to the API destination and port.
+Express ingress‑controller to backend flows explicitly by namespace and workload selectors.
+Express Prometheus scraping and log shipping explicitly. Monitoring must not become a broad namespace‑to‑namespace allow.
+Declare CNPG replication, operator, backup and object‑store egress; NATS routes and clients; Temporal frontend, matching, history, worker and database paths; MinIO client and administrative paths.
+External egress uses approved destinations where technically stable. DNS‑based policy requires an explicit Cilium FQDN policy design and failure testing.
+Wasabi egress — DNS, HTTPS to the Wasabi regional S3 endpoint, FQDN policy and TTL handling, certificate validation, and denial of arbitrary external storage destinations — is declared per namespace under the same promotion sequence, never as a bulk exception (Gate 30).
+Every policy bundle includes tests for intended access and at least one denied same‑namespace, cross‑namespace and external destination.
+Emergency rollback is a Git revert with Argo reconciliation. Break‑glass deletion is audited and followed immediately by a Git correction.
+Namespace rollout order
+Wave	Namespaces or services	Reason
+1	Dedicated test namespace	Proves harness, flow capture, rollback and negative tests without production impact.
+2	Stateless frontend and viewer surfaces	Limited dependencies and easy user‑visible validation.
+3	Auth and API services	Introduces identity, database, audit and API dependencies.
+4	File manager and ingestion	Adds MinIO, malware scanning, queues, OCR and long‑running transfers, and first exercises Wasabi egress rules.
+5	Temporal workers and NATS clients	Adds asynchronous and redelivery paths.
+6	Data‑plane namespaces	CNPG, NATS, Temporal, MinIO and Longhorn only after component‑specific failure testing.
+7	Cluster services	Argo CD, monitoring, ingress, cert‑manager and kube‑system last, using narrowly reviewed component policies.
+Identity and credential policy
+Identity	Minimum privilege	Forbidden
+Bootstrap automation	Host preparation, k3s bootstrap, Cilium/CoreDNS bootstrap and Argo installation.	Routine application mutation and application data access.
+Verification automation	Read cluster state and create only approved ephemeral test resources.	RBAC, CRD, webhook or production workload mutation.
+Argo repository	Read only approved repository and revision.	Push, merge, tag creation and access to unrelated repositories.
+Argo controller	Only declared destinations and required resource kinds.	Unbounded cluster administration unless separately justified and monitored.
+Runtime workload	Only its API, queue, database schema, bucket/prefix and metrics needs.	Backup deletion, policy mutation and cross‑tenant access.
+Wasabi backup writer	Create backup objects and required multipart operations, per bucket.	Bucket deletion, retention‑policy modification and protected‑generation deletion (Gate 20).
+Wasabi restore operator	Read protected backup generations during approved recovery.	Routine application use; stays disabled outside drills (Gate 20).
+k3s / Longhorn Wasabi client	Only a scoped Wasabi access‑key/secret‑key pair issued for that component (Gate 21).	Wasabi root account keys; unrotated or shared static keys.
+Break glass	Time‑bound emergency administration with MFA and audit.	Unattended workflows and normal daily use.
+Recovery objectives and proof
+There is no single combined RTO/RPO figure for this platform. The former single target of a complete rebuild within 30 minutes and no more than one hour of loss is replaced by subsystem objectives, each proven independently. Initial values remain proposed until a drill measures them; measured results govern the accepted service objective.
+
+Subsystem	Provisional RPO	RTO measured from	Mandatory proof
+k3s and etcd	≤ 1 hour	Recovery authorization to healthy API and etcd quorum.	Restore external snapshot from veridex-etcd-backup via k3s's native S3 target (Gate 17) and validate representative Kubernetes resources.
+GitOps services	Near zero for Git state	Healthy Argo reconciliation from clean cluster.	Recreate pinned services from main without hand patches.
+SOPS or sealing keys	Zero	Recovery authorization to successful secret reconciliation.	Restore independently escrowed key from veridex-recovery-keys and decrypt approved test secret.
+CloudNativePG	Defined by WAL archive objective	Recovery authorization to consistent promoted database.	Base backup plus WAL recovery from veridex-cnpg-backup and application consistency queries.
+MinIO	Defined by immutable backup schedule	Recovery authorization to validated object namespace.	Restore sampled and bulk objects, versions, metadata and checksums from veridex-minio-backup per Gate 25 semantics.
+Longhorn PVCs	Defined by backup class	Recovery authorization to mounted, validated filesystem.	Restore representative volume from veridex-longhorn-backup and application‑level data.
+Application service	Derived from dependencies	Recovery authorization to successful end‑to‑end transaction.	The full thirteen‑step drill in Gate 29: authenticated upload, process, retrieve, audit and tenant‑isolation check.
+Workflow ownership
+Owner	Owns	Does not own
+Human approved destructive runbook	OS reinstall, hard‑power failover drills, clean rebuild and restoration drills.	Routine convergence.
+Ansible	Host state, firewall, k3s, kube‑vip, Cilium/CoreDNS bootstrap, Argo bootstrap and read‑only verification.	GitOps application manifests after handover; Wasabi infrastructure.
+Argo CD	Cluster services, policy, storage controllers, data services and applications declared in Git.	Host OS, firewall, k3s formation, destructive drills, and any destructive action against locked Wasabi buckets (Gate 31).
+Wasabi infrastructure‑as‑code stack	Bucket creation, retention, lifecycle, IAM policy, monitoring — reviewed and plan‑gated (Gate 31).	Cluster workloads; cannot be triggered by the cluster's own GitOps root app.
+CI	Schema, policy, provider‑drift, namespace ownership, pinning and security lint.	Direct production mutation.
+Operators	Review decisions, authorize promotions, manage break glass and approve recovery evidence.	Undocumented manual drift.
+Part D — hardening backlog
+Operational hardening backlog
+Not yet specified as full gates. Each needs an explicit owner and deadline before it can be scheduled — that requirement is itself item 14.
+
+#	Item	Owner	Deadline
+1	Upgrade and rollback tests for k3s, Cilium, Longhorn, MinIO, CNPG and Argo CD.	TBD	TBD
+2	Image registry availability and image digest pinning.	TBD	TBD
+3	SBOM, image scanning and signature verification.	TBD	TBD
+4	Pod Security Admission or equivalent workload hardening.	TBD	TBD
+5	Resource requests, limits, PriorityClasses and eviction behavior.	TBD	TBD
+6	Node maintenance and safe‑drain procedures.	TBD	TBD
+7	Certificate, Wasabi access‑key and encryption‑key rotation.	TBD	TBD
+8	Time synchronization alerts.	TBD	TBD
+9	DNS failure testing.	TBD	TBD
+10	Wasabi outage and request‑throttling behavior; regional/availability assumptions.	TBD	TBD
+11	Backup‑cost alerts, including Wasabi's minimum‑storage‑duration policy on frequently rotated objects (etcd snapshots, WAL).	TBD	TBD
+12	Quarterly recovery‑test schedule.	TBD	TBD
+13	Evidence retention and independent review.	TBD	TBD
+14	Explicit owner and deadline assigned for every unresolved item in this backlog.	TBD	TBD
+Immediate implementation backlog
+Prove each producer's actual path to Wasabi against its exact pinned version (Gate 17) — every path is a native S3‑compatible integration, so the remaining risk is Wasabi‑specific behavior under this stack (multipart limits, request‑rate throttling during a full restore, minimum‑storage‑duration billing), not protocol incompatibility.
+Close the MINIO_KMS_SECRET_KEY incident end to end (Gate 22) before MinIO is approved for production.
+Resolve the §6 conflict below (SOPS + age vs. SealedSecrets and Longhorn) before Gate 13 or Gate 24 close.
+Commit outstanding documentation and group‑variable corrections in a focused commit.
+Add a dated Gate 0 correction and preserve the historical record.
+Implement Longhorn host prerequisites and prove idempotence; resolve node‑count feasibility for longhorn-critical (Gate 26).
+Implement verify‑cluster.yml with cluster identity and negative‑test coverage.
+Bootstrap CoreDNS after Cilium and complete the full connectivity test.
+Run the controlled kube‑vip hard‑failure test.
+Stand up the dedicated Wasabi account and the six buckets in Gate 18, each created with Object Lock enabled from the start (Governance‑mode or no default retention), before running Gate 19's Compliance‑mode activation sequence. If any bucket was already provisioned under the earlier GCS plan, recreate it — Object Lock cannot be added retroactively.
+Choose the four MinIO nodes and storage paths; document why two control‑plane nodes are or are not storage eligible.
+Create the policy inventory schema, Hubble evidence procedure, positive/negative test harness, GitOps rollback procedure and namespace promotion record.
+Deploy baseline observability before Longhorn, MinIO or application policy enforcement.
+Assign an owner and deadline to every item in the operational hardening backlog (Part D).
+Execute each gate in order and stop on the first unmet dependency.
+Final acceptance rule
+The Veridex platform is production ready only when Gates 0 through 31 have dated PASS evidence for the same pinned release and target cluster. A later change to node topology, storage layout, CNI, DNS, policy model, secret mechanism, backup provider, Wasabi bucket architecture or data‑service quorum invalidates the affected gate and every dependent gate until they are rerun.
+
+Reference basis
+K3s documentation: Networking Services; Server Configuration; etcd Snapshot and Restore.
+Cilium 1.20.1 documentation: kube‑proxy replacement; Helm installation; connectivity testing and Hubble observability.
+Longhorn 1.12.1 documentation: installation requirements, node and disk configuration, replicas, backups and recovery.
+MinIO documentation for the exact selected release: distributed deployment, erasure coding, healing, site replication or batch replication, lifecycle, versioning and object locking.
+Argo CD documentation for the pinned release: AppProjects, repository credentials, controller permissions, sync waves and health checks.
+Wasabi S3 API reference.
+Wasabi — Immutability: Compliance and Object Locking.
+Wasabi — IAM and STS support.
+Wasabi — generating an S3 API key.
+Longhorn — setting an S3‑compatible backup target.
+k3s etcd‑snapshot CLI reference — S3‑compatible snapshot target options.
+CloudNativePG Barman Cloud plugin — object store providers — generic S3‑compatible endpoint support.
+Veridex AI — cluster production end‑state plan · Revision 3 (consolidated) · Gates 0–31 · backup destination: Wasabi · supersedes the 37‑item stage list

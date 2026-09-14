@@ -1,0 +1,17 @@
+gate: 0
+check: G00-C3
+captured_utc: 2026-09-14T00:57:34Z
+repo_commit: 82a1dd4bb406aadd6091e6ec756c41ac7426add4
+plan_commit: 4ebc8def34df78a0bc6b29e42656986ef987f4c9
+plan_sha256: 42eaac5e61d177430ce8e331767d2137b3f9b2bd197e13945b84f7c5e8cd79c7
+target_identity: repository https://github.com/caribrefresh-source/Veridex-Platform.git at commit 82a1dd4bb406aadd6091e6ec756c41ac7426add4
+captured_by: agent
+command: python3 scripts/validate-inventory.py
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: Validates the repository inventory only; does not cross-check addresses against the netcup API (Gate 1).
+interpreter: Python 3.11.9
+--- unedited output ---
+
+inventory valid: 5 hosts (3 k3s_servers, 2 k3s_agents) against schemas/inventory.schema.json; bootstrap server veridex-server-1; ansible.cfg inventory inventory/production/hosts.yml; 1 other inventory file(s) declare no hosts

@@ -1,0 +1,9 @@
+---
+- name: Install CoreDNS
+  hosts: k3s_servers
+  become: true
+  roles:
+    # Deployed after Cilium (roles/k3s-server/templates/config.yaml.j2:
+    # "deployed separately, after the CNI is up") -- CoreDNS pods need the
+    # CNI to schedule and get an address before they can serve anything.
+    - coredns

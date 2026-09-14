@@ -7,12 +7,24 @@
 
 firewall_ssh_port: 22
 
-# Trusted source networks -- the Cloud vLAN. Everything from here is accepted,
-# which covers the whole k3s + Cilium port surface without enumerating it:
-#   6443 API, 2379-2380 etcd, 10250 kubelet, 8472/udp VXLAN,
-#   51871/udp Cilium WireGuard, 4240 Cilium health.
+# Trusted source networks. The Cloud vLAN covers the whole k3s + Cilium
+# NODE-to-node port surface without enumerating it: 6443 API, 2379-2380 etcd,
+# 10250 kubelet, 8472/udp VXLAN, 51871/udp Cilium WireGuard, 4240 Cilium
+# health -- because that traffic's source is always a real node vLAN address.
+#
+# The pod CIDR is also required, found live at Gate 6: a pod's own traffic to
+# a host-network service on a DIFFERENT node (e.g. the k3s API server via the
+# `kubernetes` ClusterIP, which Cilium DNATs to a real node:6443) arrives with
+# the POD's real address as source, not the node's -- outside 10.2.0.0/16, so
+# the default-drop INPUT policy silently ate it. Node-to-node and pod-to-pod
+# traffic were never affected (neither ever presents a pod-CIDR source to a
+# HOST's own INPUT chain -- decapsulated pod-to-pod traffic is delivered to
+# the destination pod's veth, not a host-local socket), which is why this
+# went unnoticed through Gates 0-5: nothing before Gate 6 made a pod call a
+# host-network service on another node.
 firewall_trusted_networks:
   - "10.2.0.0/16"
+  - "10.44.0.0/16"
 
 # Published on the PUBLIC interface. Deliberately empty until Traefik exists;
 # its NodePorts (31742/32537/30051) get added when that role lands.

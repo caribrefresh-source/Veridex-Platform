@@ -1,0 +1,50 @@
+---
+# coredns role default variables
+#
+# Gate 6 (Cilium and cluster DNS): CoreDNS is disabled in k3s's own config
+# (roles/k3s-server/templates/config.yaml.j2: `disable: [coredns]`, "deployed
+# separately, after the CNI is up" -- this role is that separate deployment).
+# Verified live 2026-09-14: no CoreDNS pods, Deployment or Service existed
+# anywhere in kube-system before this role.
+
+# Verified against ghcr.io/coredns/coredns's own release feed 2026-09-14:
+# v1.14.7 is the current stable release. Pinned by the multi-arch manifest
+# digest, not just the tag, matching how the Cilium CLI is pinned elsewhere
+# in this repo (checksum, not a floating tag).
+coredns_version: "1.14.7"
+coredns_image_digest: "sha256:7efd3c635b03efd68c4e8398fc45f0d993d0e9ab016f72c1cefb0fd6d01aa286"
+coredns_image: "coredns/coredns:{{ coredns_version }}@{{ coredns_image_digest }}"
+
+# Plan: "CoreDNS has at least two replicas". Longhorn's own documented
+# requirement (group_vars/all.yml) already assumed 2; this is the gate that
+# actually delivers it.
+coredns_replicas: 2
+
+# Kubelet's clusterDNS is already 10.45.0.10 (k3s's own generated
+# /var/lib/rancher/k3s/agent/etc/kubelet.conf.d/00-k3s-defaults.conf,
+# verified live 2026-09-14) regardless of whether an addon provides it --
+# this is not a free choice, it is the address kubelet already expects.
+coredns_cluster_ip: "10.45.0.10"
+coredns_cluster_domain: "cluster.local"
+
+coredns_namespace: kube-system
+
+# k3s auto-applies anything dropped here, same mechanism roles/kubevip uses.
+# Written on the bootstrap server only -- all three would produce the same
+# object and race to apply it.
+#
+# NOT named coredns.yaml. k3s's AddOn deploy controller derives the AddOn
+# object's name from the manifest's filename, and roles/k3s-server's
+# `disable: [coredns]` (config.yaml.j2) tells that same controller to refuse
+# -- and actively delete -- any AddOn literally named "coredns", regardless
+# of what's inside the file. Verified live 2026-09-14: a manifest at
+# coredns.yaml was applied, then removed itself within seconds
+# (`k3s[...]: ... reason=DeletingManifest object=kube-system/coredns`), with
+# the Deployment never even reaching the API. The Kubernetes objects inside
+# the file (Deployment "coredns", Service "kube-dns") keep their normal
+# names -- only the manifest's own filename has to avoid the disabled name.
+coredns_manifest_dir: /var/lib/rancher/k3s/server/manifests
+coredns_manifest: "{{ coredns_manifest_dir }}/veridex-coredns.yaml"
+
+coredns_ready_retries: 40
+coredns_ready_delay: 10

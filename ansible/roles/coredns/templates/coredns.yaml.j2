@@ -1,0 +1,227 @@
+# Managed by Ansible (roles/coredns). Do not edit by hand -- k3s re-applies
+# this file's content as an AddOn object on every restart of the bootstrap
+# server's k3s service; a manual edit would be silently overwritten.
+#
+# Gate 6: CoreDNS is disabled in k3s's own config (`disable: [coredns]`) and
+# deployed here separately, matching the plan's "at least two replicas, a
+# stable service IP, topology spread, and resolves internal and external
+# names."
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: coredns
+  namespace: {{ coredns_namespace }}
+  labels:
+    k8s-app: kube-dns
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    k8s-app: kube-dns
+  name: system:coredns
+rules:
+  - apiGroups: [""]
+    resources: ["endpoints", "services", "pods", "namespaces"]
+    verbs: ["list", "watch"]
+  - apiGroups: ["discovery.k8s.io"]
+    resources: ["endpointslices"]
+    verbs: ["list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  annotations:
+    rbac.authorization.kubernetes.io/autoupdate: "true"
+  labels:
+    k8s-app: kube-dns
+  name: system:coredns
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:coredns
+subjects:
+  - kind: ServiceAccount
+    name: coredns
+    namespace: {{ coredns_namespace }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns
+  namespace: {{ coredns_namespace }}
+  labels:
+    k8s-app: kube-dns
+data:
+  Corefile: |
+    .:53 {
+        errors
+        health {
+           lameduck 5s
+        }
+        ready
+        kubernetes {{ coredns_cluster_domain }} in-addr.arpa ip6.arpa {
+           pods insecure
+           fallthrough in-addr.arpa ip6.arpa
+           ttl 30
+        }
+        prometheus :9153
+        forward . /etc/resolv.conf {
+           max_concurrent 1000
+        }
+        cache 30
+        loop
+        reload
+        loadbalance
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coredns
+  namespace: {{ coredns_namespace }}
+  labels:
+    k8s-app: kube-dns
+    kubernetes.io/name: CoreDNS
+spec:
+  replicas: {{ coredns_replicas }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      k8s-app: kube-dns
+  template:
+    metadata:
+      labels:
+        k8s-app: kube-dns
+    spec:
+      serviceAccountName: coredns
+      # kube-system control-plane nodes carry only PreferNoSchedule (a soft
+      # preference, roles/k3s-server), so a toleration is not required for
+      # scheduling here -- added anyway so CoreDNS can still land on a
+      # control-plane node if both workers are ever unschedulable, matching
+      # upstream's own default manifest.
+      tolerations:
+        - key: "node-role.kubernetes.io/control-plane"
+          effect: "PreferNoSchedule"
+      # Plan: "topology spread". maxSkew 1 across distinct nodes so the two
+      # replicas cannot land on the same node -- a single node's failure
+      # (Gate 5 proved that happens) never takes down every CoreDNS replica
+      # at once.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      # Default, not ClusterFirst: ClusterFirst would point CoreDNS's own
+      # /etc/resolv.conf at the cluster DNS service it itself provides,
+      # which is circular before it is ready and pointless afterward. Default
+      # uses the node's own resolv.conf -- what the Corefile's forward plugin
+      # actually reads.
+      dnsPolicy: Default
+      containers:
+        - name: coredns
+          image: "{{ coredns_image }}"
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              memory: 170Mi
+            requests:
+              cpu: 100m
+              memory: 70Mi
+          args: ["-conf", "/etc/coredns/Corefile"]
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/coredns
+              readOnly: true
+          ports:
+            - containerPort: 53
+              name: dns
+              protocol: UDP
+            - containerPort: 53
+              name: dns-tcp
+              protocol: TCP
+            - containerPort: 9153
+              name: metrics
+              protocol: TCP
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              add: ["NET_BIND_SERVICE"]
+              drop: ["all"]
+            readOnlyRootFilesystem: true
+            # Verified live 2026-09-14: the image's own default is UID 65532
+            # (distroless "nonroot" convention) -- enforced explicitly rather
+            # than left implicit, so a future image change that defaulted to
+            # root would fail to start instead of silently running as root.
+            runAsNonRoot: true
+            runAsUser: 65532
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 60
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8181
+              scheme: HTTP
+      volumes:
+        - name: config-volume
+          configMap:
+            name: coredns
+            items:
+              - key: Corefile
+                path: Corefile
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kube-dns
+  namespace: {{ coredns_namespace }}
+  annotations:
+    prometheus.io/port: "9153"
+    prometheus.io/scrape: "true"
+  labels:
+    k8s-app: kube-dns
+    kubernetes.io/name: CoreDNS
+spec:
+  selector:
+    k8s-app: kube-dns
+  clusterIP: {{ coredns_cluster_ip }}
+  ports:
+    - name: dns
+      port: 53
+      protocol: UDP
+    - name: dns-tcp
+      port: 53
+      protocol: TCP
+    - name: metrics
+      port: 9153
+      protocol: TCP
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: coredns
+  namespace: {{ coredns_namespace }}
+  labels:
+    k8s-app: kube-dns
+spec:
+  # Found by independent review: with 2 replicas and no PDB, a routine node
+  # drain (this repo's own Ansible-driven host maintenance) could evict a
+  # CoreDNS pod with no protection, and if the other replica were
+  # concurrently restarting, cluster DNS would briefly have zero ready pods
+  # with nothing preventing it.
+  minAvailable: 1
+  selector:
+    matchLabels:
+      k8s-app: kube-dns

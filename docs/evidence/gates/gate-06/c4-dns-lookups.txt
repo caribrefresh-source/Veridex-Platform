@@ -1,0 +1,42 @@
+gate: 6
+check: G06-C4
+captured_utc: 2026-09-14T11:55:01Z
+repo_commit: 8bf4f56a3fc23958611f1e8e741d1a1ef462e770
+plan_commit: 4ebc8def34df78a0bc6b29e42656986ef987f4c9
+plan_sha256: 42eaac5e61d177430ce8e331767d2137b3f9b2bd197e13945b84f7c5e8cd79c7
+target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API server https://10.2.0.100:6443 (private VIP); hosts veridex-server-1/2/3, veridex-agent-1/2
+captured_by: agent
+command: disposable busybox pod, nslookup kubernetes.default.svc.cluster.local; nslookup time.cloudflare.com
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: time.cloudflare.com chosen because it is already an approved external dependency in this repo (roles/chrony's pinned NTP pool), not an arbitrary new name. The short form "kubernetes.default" was tested separately during the build and found to fail only due to a BusyBox resolver quirk (treats any dotted name as absolute, skipping the search domain) -- not a DNS defect; disclosed in the closure record.
+--- unedited output ---
+pod/dns-evidence-test created
+pod/dns-evidence-test condition met
+--- internal name (kubernetes.default.svc.cluster.local) ---
+Server:		10.45.0.10
+Address:	10.45.0.10:53
+
+
+Name:	kubernetes.default.svc.cluster.local
+Address: 10.45.0.1
+
+--- approved external name (time.cloudflare.com) ---
+Server:		10.45.0.10
+Address:	10.45.0.10:53
+
+Non-authoritative answer:
+Name:	time.cloudflare.com
+Address: 2606:4700:f1::123
+Name:	time.cloudflare.com
+Address: 2606:4700:f1::1
+
+Non-authoritative answer:
+Name:	time.cloudflare.com
+Address: 162.159.200.123
+Name:	time.cloudflare.com
+Address: 162.159.200.1
+
+pod "dns-evidence-test" deleted from default namespace
+error: timed out waiting for the condition on pods/dns-evidence-test

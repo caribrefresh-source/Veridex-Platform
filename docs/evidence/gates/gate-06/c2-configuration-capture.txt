@@ -1,0 +1,23 @@
+gate: 6
+check: G06-C2
+captured_utc: 2026-09-14T11:55:01Z
+repo_commit: 8bf4f56a3fc23958611f1e8e741d1a1ef462e770
+plan_commit: 4ebc8def34df78a0bc6b29e42656986ef987f4c9
+plan_sha256: 42eaac5e61d177430ce8e331767d2137b3f9b2bd197e13945b84f7c5e8cd79c7
+target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API server https://10.2.0.100:6443 (private VIP); hosts veridex-server-1/2/3, veridex-agent-1/2
+captured_by: agent
+command: ssh root@server-1 -- kubectl get configmap cilium-config -o yaml (grep routing-mode/tunnel-protocol/enable-wireguard/kube-proxy-replacement); kubectl get daemonset cilium (KUBERNETES_SERVICE_HOST env)
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: Confirms the live values match the intended settings recorded in group_vars/all.yml; does not re-derive the MTU measurements themselves (already recorded, dated 2026-09-12).
+--- unedited output ---
+=== effective cilium-config (VXLAN/WireGuard/kube-proxy-replacement) ===
+  enable-ipv4-masquerade: "true"
+  enable-wireguard: "true"
+  kube-proxy-replacement: "true"
+  routing-mode: tunnel
+  tunnel-protocol: vxlan
+
+=== live API endpoint in effect (DaemonSet env) ===
+10.2.0.100

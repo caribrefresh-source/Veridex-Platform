@@ -1,0 +1,158 @@
+---
+# coredns role tasks
+#
+# Runs on the bootstrap server only, same reasoning as roles/kubevip: this is
+# a cluster-wide install (a k3s AddOn), not a per-node one, and writing the
+# same manifest from all three servers would have them racing to apply it.
+
+- name: Identify the bootstrap server
+  ansible.builtin.set_fact:
+    is_first_server: "{{ inventory_hostname == (groups['k3s_servers'] | sort | first) }}"
+
+- name: Deploy the CoreDNS manifest
+  ansible.builtin.template:
+    src: coredns.yaml.j2
+    dest: "{{ coredns_manifest }}"
+    owner: root
+    group: root
+    mode: "0600"
+  register: _coredns_manifest
+  when: is_first_server | bool
+
+- name: Wait for the CoreDNS Deployment to reach the intended replica count
+  ansible.builtin.command:
+    cmd: >-
+      k3s kubectl -n {{ coredns_namespace }} get deployment coredns
+      -o jsonpath={.status.readyReplicas}
+  register: _coredns_ready
+  until: >-
+    _coredns_ready.rc == 0 and
+    (_coredns_ready.stdout | default('0') | int) >= coredns_replicas
+  retries: "{{ coredns_ready_retries }}"
+  delay: "{{ coredns_ready_delay }}"
+  changed_when: false
+  when: is_first_server | bool
+
+- name: Confirm the Service holds the address kubelet already expects
+  ansible.builtin.command:
+    cmd: >-
+      k3s kubectl -n {{ coredns_namespace }} get service kube-dns
+      -o jsonpath={.spec.clusterIP}
+  register: _coredns_svc_ip
+  changed_when: false
+  failed_when: _coredns_svc_ip.stdout != coredns_cluster_ip
+  when: is_first_server | bool
+
+- name: Confirm the two replicas landed on different nodes (topology spread)
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail;
+      k3s kubectl -n {{ coredns_namespace }} get pods -l k8s-app=kube-dns
+      -o jsonpath='{.items[*].spec.nodeName}' | tr ' ' '\n' | sort -u | wc -l
+    executable: /bin/bash
+  register: _coredns_node_spread
+  changed_when: false
+  failed_when: (_coredns_node_spread.stdout | trim | int) < ([coredns_replicas, 2] | min)
+  when: is_first_server | bool
+
+# CoreDNS pods use dnsPolicy: Default (coredns.yaml.j2), which inherits the
+# NODE's own resolv.conf -- what the Corefile's `forward . /etc/resolv.conf`
+# actually reads. Found by independent review: if that file pointed at a
+# systemd-resolved loopback stub (127.0.0.53, common on Ubuntu) instead of
+# real upstream servers, forwarding would break inside the pod's own netns
+# (127.0.0.53 in a pod's netns is the pod's own loopback, not the host's
+# resolver) -- and the disposable test pod below, which WOULD catch that, is
+# deleted right after this role runs, so nothing stands guard afterward
+# without this explicit, standing assertion.
+- name: Assert kubelet's resolvConf target is not a loopback stub
+  ansible.builtin.command:
+    cmd: grep -m1 '^nameserver' /run/systemd/resolve/resolv.conf
+  register: _host_resolv
+  changed_when: false
+  failed_when: >-
+    _host_resolv.rc != 0 or
+    '127.0.0.1' in _host_resolv.stdout or
+    '127.0.0.53' in _host_resolv.stdout
+  when: is_first_server | bool
+
+# A throwaway Pod, not kubectl run's ephemeral exec, so DNS resolution goes
+# through the normal pod network path (dnsPolicy ClusterFirst by default),
+# not the node's own resolver -- proving what a real workload would actually
+# see.
+#
+# block/rescue/always, found by independent review: a bare sequence of tasks
+# left the pod running forever if a later assertion in this same sequence
+# failed (no delete task would ever run), and a re-run would then fail
+# outright at creation because the name already exists -- blocking recovery
+# until someone deleted it by hand. always guarantees cleanup regardless of
+# which check failed; the pre-emptive delete handles a pod left over from a
+# previous failed run.
+- name: Verify DNS resolution using a disposable test pod
+  # Only when the manifest actually changed. roles/k3s-server (etcd voter
+  # check) and roles/kubevip (VIP healthz) both run their own live checks on
+  # every converge because those checks are read-only and free; this one
+  # creates and deletes a real Pod every time it runs, which would make a
+  # steady-state rerun of this role report changed>0 forever -- exactly the
+  # "healthy rerun" the veridex-gate skill checks CoreDNS against (S7.close
+  # step 2: "must not restart k3s, Cilium, CoreDNS, kube-vip or storage
+  # services" on a clean rerun). A config that didn't change doesn't need
+  # re-proving; one that did still gets the full check below.
+  when: is_first_server | bool and _coredns_manifest.changed | default(false)
+  block:
+    - name: Remove any DNS test pod left over from a previous failed run
+      ansible.builtin.command:
+        cmd: k3s kubectl delete pod coredns-verify --wait=true --timeout=30s
+      changed_when: true
+      failed_when: false
+
+    - name: Create a disposable DNS test pod
+      ansible.builtin.command:
+        cmd: >-
+          k3s kubectl run coredns-verify --image=busybox:1.37 --restart=Never
+          --command -- sleep 300
+      changed_when: true
+
+    - name: Wait for the DNS test pod to be running
+      ansible.builtin.command:
+        cmd: k3s kubectl get pod coredns-verify -o jsonpath={.status.phase}
+      register: _dns_pod_phase
+      until: _dns_pod_phase.rc == 0 and _dns_pod_phase.stdout == 'Running'
+      retries: 30
+      delay: 5
+      changed_when: false
+
+    # Fully qualified, not the short "kubernetes.default" form. Found live
+    # 2026-09-14: BusyBox's resolver treats any name containing a dot as
+    # already absolute and skips /etc/resolv.conf's search list entirely, so
+    # "kubernetes.default" (one dot) is looked up as a bare top-level name
+    # and NXDOMAINs -- a test-tool quirk, not a cluster defect (confirmed
+    # live: the fully qualified form below resolves correctly, and so does
+    # the short form from a normal glibc-based client, which honors
+    # ndots/search properly).
+    - name: Resolve kubernetes.default from inside the test pod (internal name)
+      ansible.builtin.command:
+        cmd: k3s kubectl exec coredns-verify -- nslookup kubernetes.default.svc.cluster.local
+      register: _dns_internal
+      changed_when: false
+      failed_when: >-
+        _dns_internal.rc != 0 or
+        'Address' not in _dns_internal.stdout
+
+    # time.cloudflare.com, not an arbitrary new external name: it is already
+    # an approved external dependency in this repo (roles/chrony's pinned
+    # NTP pool), so this reuses a name the platform already depends on
+    # rather than introducing a new one just to test with.
+    - name: Resolve an approved external name from inside the test pod
+      ansible.builtin.command:
+        cmd: k3s kubectl exec coredns-verify -- nslookup time.cloudflare.com
+      register: _dns_external
+      changed_when: false
+      failed_when: >-
+        _dns_external.rc != 0 or
+        'Address' not in _dns_external.stdout
+  always:
+    - name: Remove the disposable DNS test pod
+      ansible.builtin.command:
+        cmd: k3s kubectl delete pod coredns-verify --wait=true --timeout=60s
+      changed_when: true
+      failed_when: false

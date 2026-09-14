@@ -1,0 +1,24 @@
+gate: 4
+check: G04-C4
+captured_utc: 2026-09-14T06:21:38Z
+repo_commit: ccf4041ffb3f53282ec4f89c095135716f28e5da
+plan_commit: 4ebc8def34df78a0bc6b29e42656986ef987f4c9
+plan_sha256: 42eaac5e61d177430ce8e331767d2137b3f9b2bd197e13945b84f7c5e8cd79c7
+target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API server https://10.2.0.100:6443 (private VIP); hosts veridex-server-1/2/3 (control-plane,etcd), SSH host-key fingerprints match ansible/files/known_hosts
+captured_by: agent
+command: Create a Secret with a random single-use marker value; grep the raw etcd bbolt db file on disk for that marker in plaintext (expect: not found) and for the k8s:enc: encryption-provider prefix (expect: found); delete the test Secret and namespace
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: Direct proof against the raw storage layer, not the API (which always decrypts server-side and would show plaintext regardless of at-rest encryption). Reads the live etcd data file directly while etcd is running; not a guaranteed-consistent snapshot, but sufficient to prove the marker was not written in plaintext at the byte level.
+--- unedited output ---
+=== Encrypted-at-rest proof ===
+marker used: veridex-gate4-close-5757c148dcac8168a37451bd1c0b8de0 (random, single-use, deleted immediately after)
+namespace/gate4-close-enc-test created
+secret/close-test-secret created
+--- grep raw etcd db for the plaintext marker (expect: 0 matches) ---
+0
+0 (not found in plaintext, as expected)
+--- confirm the AES-CBC encryption-provider prefix is present in raw etcd data ---
+k8s:enc:aescbc:v1:
+namespace "gate4-close-enc-test" deleted

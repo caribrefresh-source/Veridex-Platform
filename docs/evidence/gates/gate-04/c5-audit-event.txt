@@ -1,0 +1,28 @@
+gate: 4
+check: G04-C5
+captured_utc: 2026-09-14T06:21:38Z
+repo_commit: ccf4041ffb3f53282ec4f89c095135716f28e5da
+plan_commit: 4ebc8def34df78a0bc6b29e42656986ef987f4c9
+plan_sha256: 42eaac5e61d177430ce8e331767d2137b3f9b2bd197e13945b84f7c5e8cd79c7
+target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API server https://10.2.0.100:6443 (private VIP); hosts veridex-server-1/2/3 (control-plane,etcd), SSH host-key fingerprints match ansible/files/known_hosts
+captured_by: agent
+command: ssh root@<server-1> 'k3s kubectl get namespace kube-system -o jsonpath=...'; then tail the live audit.log for the matching event
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: Confirms a specific, identifiable API request produces a corresponding audit event within seconds, with the configured rotation/retention (maxsize 100MB, maxbackup 10, maxage 30) already producing multiple rotated files.
+--- unedited output ---
+=== Audit event proof ===
+--- triggering a distinct, identifiable action ---
+d7d8a462-c503-49ed-a1e0-899f372f9465
+--- matching audit event captured moments later ---
+{"kind":"Event","apiVersion":"audit.k8s.io/v1","level":"Metadata","auditID":"b540c1dc-a081-4697-a415-bb403b0424bf","stage":"ResponseStarted","requestURI":"/api/v1/namespaces?allowWatchBookmarks=true\u0026fieldSelector=metadata.name%3Dgate4-close-enc-test\u0026resourceVersionMatch=NotOlderThan\u0026sendInitialEvents=true\u0026timeoutSeconds=324\u0026watch=true","verb":"watch","user":{"username":"system:admin","groups":["system:masters","system:authenticated"],"extra":{"authentication.kubernetes.io/credential-id":["X509SHA256=6d10b10cb8052a7344b40337034a48e60646682a65c47d4251a04203aa647e4b"]}},"sourceIPs":["127.0.0.1"],"userAgent":"kubectl/v1.36.4+k3s1 (linux/amd64) kubernetes/4dedb15","objectRef":{"resource":"namespaces","name":"gate4-close-enc-test","apiVersion":"v1"},"responseStatus":{"metadata":{},"code":200},"requestReceivedTimestamp":"2026-09-14T06:21:12.448708Z","stageTimestamp":"2026-09-14T06:21:12.453088Z","annotations":{"authorization.k8s.io/decision":"allow","authorization.k8s.io/reason":""}}
+{"kind":"Event","apiVersion":"audit.k8s.io/v1","level":"Metadata","auditID":"b540c1dc-a081-4697-a415-bb403b0424bf","stage":"ResponseComplete","requestURI":"/api/v1/namespaces?allowWatchBookmarks=true\u0026fieldSelector=metadata.name%3Dgate4-close-enc-test\u0026resourceVersionMatch=NotOlderThan\u0026sendInitialEvents=true\u0026timeoutSeconds=324\u0026watch=true","verb":"watch","user":{"username":"system:admin","groups":["system:masters","system:authenticated"],"extra":{"authentication.kubernetes.io/credential-id":["X509SHA256=6d10b10cb8052a7344b40337034a48e60646682a65c47d4251a04203aa647e4b"]}},"sourceIPs":["127.0.0.1"],"userAgent":"kubectl/v1.36.4+k3s1 (linux/amd64) kubernetes/4dedb15","objectRef":{"resource":"namespaces","name":"gate4-close-enc-test","apiVersion":"v1"},"responseStatus":{"metadata":{},"code":200},"requestReceivedTimestamp":"2026-09-14T06:21:12.448708Z","stageTimestamp":"2026-09-14T06:21:17.627876Z","annotations":{"authorization.k8s.io/decision":"allow","authorization.k8s.io/reason":""}}
+{"kind":"Event","apiVersion":"audit.k8s.io/v1","level":"Metadata","auditID":"6a55e3cb-6430-4770-af55-9c4e0535da4c","stage":"ResponseComplete","requestURI":"/api/v1/namespaces/kube-system","verb":"get","user":{"username":"system:admin","groups":["system:masters","system:authenticated"],"extra":{"authentication.kubernetes.io/credential-id":["X509SHA256=6d10b10cb8052a7344b40337034a48e60646682a65c47d4251a04203aa647e4b"]}},"sourceIPs":["127.0.0.1"],"userAgent":"kubectl/v1.36.4+k3s1 (linux/amd64) kubernetes/4dedb15","objectRef":{"resource":"namespaces","namespace":"kube-system","name":"kube-system","apiVersion":"v1"},"responseStatus":{"metadata":{},"code":200},"requestReceivedTimestamp":"2026-09-14T06:21:30.567202Z","stageTimestamp":"2026-09-14T06:21:30.571120Z","annotations":{"authorization.k8s.io/decision":"allow","authorization.k8s.io/reason":""}}
+--- audit log rotation and retention config in effect ---
+-rw------- 1 root root 104855220 Sep 13 04:08 audit-2026-09-13T02-08-25.576.log
+-rw------- 1 root root 104855160 Sep 13 09:17 audit-2026-09-13T07-17-46.443.log
+-rw------- 1 root root 104856694 Sep 13 16:14 audit-2026-09-13T14-14-40.778.log
+-rw------- 1 root root 104856100 Sep 13 23:11 audit-2026-09-13T21-11-15.254.log
+-rw------- 1 root root 104855965 Sep 14 06:08 audit-2026-09-14T04-08-06.871.log
+-rw------- 1 root root  35240293 Sep 14 08:21 audit.log

@@ -28,15 +28,19 @@ Cross-field (not expressible in JSON Schema):
     block, and is not any node's address
 
 Identity is defined in one place:
+  - ansible/ansible.cfg points at exactly the production hosts.yml
   - no group_vars or host_vars file anywhere under ansible/ (inventories or
-    playbooks) sets ansible_host, ansible_ssh_host, private_ip, vlan_mac,
-    netcup_server_id, node_index or k3s_bootstrap
+    playbooks, flat files or per-host directories) sets ansible_host,
+    ansible_ssh_host, private_ip, vlan_mac, netcup_server_id, node_index or
+    k3s_bootstrap, and host_vars exist only for the five production nodes
   - no file sits directly under ansible/inventory/, and each environment holds
     only hosts.yml, group_vars/ and host_vars/
   - every other environment's hosts.yml parses as a YAML mapping and declares
-    no hosts; host_vars exist only for the five production nodes
+    no hosts
 
-Addresses are read from the inventory, never hardcoded here.
+Unreadable files (bad encoding, invalid or self-referencing YAML) are reported
+as errors, never skipped. Addresses are read from the inventory, never
+hardcoded here.
 
 Usage
 -----
@@ -46,6 +50,7 @@ Usage
 from __future__ import annotations
 
 import argparse
+import configparser
 import ipaddress
 import json
 import re
@@ -56,8 +61,10 @@ import yaml
 from jsonschema import Draft202012Validator
 
 ANSIBLE_ROOT = Path("ansible")
+ANSIBLE_CFG = ANSIBLE_ROOT / "ansible.cfg"
 INVENTORY_ROOT = ANSIBLE_ROOT / "inventory"
 PRODUCTION = INVENTORY_ROOT / "production"
+EXPECTED_CFG_INVENTORY = "inventory/production/hosts.yml"
 SCHEMA = Path("schemas/inventory.schema.json")
 GROUPS = ("k3s_servers", "k3s_agents")
 NAME_RE = re.compile(r"^veridex-(?:server|agent)-(\d+)$")
@@ -69,6 +76,7 @@ IDENTITY_KEYS = frozenset({
 ALLOWED_INVENTORY_ENTRIES = {"hosts.yml", "group_vars", "host_vars"}
 VARS_DIRS = {"group_vars", "host_vars"}
 VARS_SUFFIXES = ("", ".yml", ".yaml", ".json")
+UNREADABLE = (yaml.YAMLError, UnicodeDecodeError, RecursionError, OSError)
 
 
 def load_yaml(path: Path):
@@ -77,20 +85,22 @@ def load_yaml(path: Path):
 
 
 def hosts_in(inventory) -> dict[str, dict]:
-    """Every host under any group, however deeply nested."""
+    """Every host under any group, however deeply nested, visiting each group once."""
     found: dict[str, dict] = {}
-
-    def walk(node) -> None:
-        if not isinstance(node, dict):
-            return
-        for name, host_vars in (node.get("hosts") or {}).items():
-            found[name] = host_vars or {}
-        for child in (node.get("children") or {}).values():
-            walk(child)
-
-    if isinstance(inventory, dict):
-        for top in inventory.values():
-            walk(top)
+    seen: set[int] = set()
+    stack = list(inventory.values()) if isinstance(inventory, dict) else []
+    while stack:
+        node = stack.pop()
+        if not isinstance(node, dict) or id(node) in seen:
+            continue
+        seen.add(id(node))
+        hosts = node.get("hosts")
+        if isinstance(hosts, dict):
+            for name, host_vars in hosts.items():
+                found[str(name)] = host_vars if isinstance(host_vars, dict) else {}
+        children = node.get("children")
+        if isinstance(children, dict):
+            stack.extend(children.values())
     return found
 
 
@@ -105,6 +115,16 @@ def report(errors: list[str], summary: str) -> int:
     return 0
 
 
+def host_vars_owner(path: Path, ansible_root: Path) -> str | None:
+    """The host a host_vars file belongs to: host_vars/<host>.yml or host_vars/<host>/<any>."""
+    parts = path.relative_to(ansible_root).parts
+    if "host_vars" not in parts[:-1]:
+        return None
+    index = len(parts) - 1 - parts[::-1].index("host_vars")
+    below = parts[index + 1:]
+    return below[0] if len(below) > 1 else Path(below[0]).stem
+
+
 def check_identity_overrides(root: Path, known_hosts: set[str], errors: list[str]) -> None:
     ansible_root = root / ANSIBLE_ROOT
     for path in sorted(ansible_root.rglob("*")):
@@ -114,12 +134,13 @@ def check_identity_overrides(root: Path, known_hosts: set[str], errors: list[str
         if not parents & VARS_DIRS or path.suffix not in VARS_SUFFIXES:
             continue
         rel = path.relative_to(root).as_posix()
-        if "host_vars" in parents and path.stem not in known_hosts:
+        owner = host_vars_owner(path, ansible_root)
+        if owner is not None and owner not in known_hosts:
             errors.append(f"{rel}: host_vars for a host that is not one of the five production nodes")
         try:
             data = load_yaml(path)
-        except yaml.YAMLError:
-            errors.append(f"{rel}: does not parse as YAML")
+        except UNREADABLE as exc:
+            errors.append(f"{rel}: cannot be read as YAML ({exc.__class__.__name__})")
             continue
         if isinstance(data, dict):
             overridden = sorted(IDENTITY_KEYS & {str(key) for key in data})
@@ -128,6 +149,25 @@ def check_identity_overrides(root: Path, known_hosts: set[str], errors: list[str
                     f"{rel}: sets {', '.join(overridden)}; node identity is defined only in "
                     f"{PRODUCTION.as_posix()}/hosts.yml"
                 )
+
+
+def check_ansible_cfg(root: Path, errors: list[str]) -> None:
+    cfg_path = root / ANSIBLE_CFG
+    if not cfg_path.is_file():
+        errors.append(f"missing {ANSIBLE_CFG.as_posix()} -- Ansible would fall back to another inventory")
+        return
+    parser = configparser.ConfigParser(interpolation=None)
+    try:
+        parser.read(cfg_path, encoding="utf-8")
+    except (configparser.Error, UnicodeDecodeError) as exc:
+        errors.append(f"{ANSIBLE_CFG.as_posix()}: cannot be parsed ({exc.__class__.__name__})")
+        return
+    configured = [item.strip() for item in parser.get("defaults", "inventory", fallback="").split(",") if item.strip()]
+    if configured != [EXPECTED_CFG_INVENTORY]:
+        errors.append(
+            f"{ANSIBLE_CFG.as_posix()}: inventory is {configured or 'unset'}; it must be exactly "
+            f"['{EXPECTED_CFG_INVENTORY}'] so no other host list is loaded"
+        )
 
 
 def main() -> int:
@@ -150,7 +190,12 @@ def main() -> int:
     validator = Draft202012Validator(
         schema, format_checker=Draft202012Validator.FORMAT_CHECKER
     )
-    inventory = load_yaml(hosts_file)
+    try:
+        inventory = load_yaml(hosts_file)
+        group_vars = load_yaml(vars_file) or {}
+    except UNREADABLE as exc:
+        return report([f"production inventory cannot be read ({exc.__class__.__name__})"], "")
+
     for err in sorted(validator.iter_errors(inventory), key=lambda e: list(map(str, e.absolute_path))):
         where = "/".join(str(p) for p in err.absolute_path) or "(root)"
         errors.append(f"schema: {where}: {err.message}")
@@ -158,7 +203,6 @@ def main() -> int:
         # Cross-field checks assume the shape the schema guarantees.
         return report(errors, "")
 
-    group_vars = load_yaml(vars_file) or {}
     try:
         network = ipaddress.ip_network(group_vars["private_network_cidr"])
         node_block = ipaddress.ip_network(group_vars["private_node_allocation_block"])
@@ -218,6 +262,7 @@ def main() -> int:
             f"groups['k3s_servers'] | sort | first and never read the flag; found {bootstraps or 'none'}"
         )
 
+    check_ansible_cfg(root, errors)
     known_hosts = set(hosts_in(inventory))
     check_identity_overrides(root, known_hosts, errors)
 
@@ -244,8 +289,8 @@ def main() -> int:
         other_inventories += 1
         try:
             data = load_yaml(env_hosts)
-        except yaml.YAMLError:
-            errors.append(f"{rel_entry}/hosts.yml: does not parse as YAML")
+        except UNREADABLE as exc:
+            errors.append(f"{rel_entry}/hosts.yml: cannot be read as YAML ({exc.__class__.__name__})")
             continue
         if data is not None and not isinstance(data, dict):
             errors.append(
@@ -264,6 +309,7 @@ def main() -> int:
         f"inventory valid: {sum(counts.values())} hosts "
         f"({counts['k3s_servers']} k3s_servers, {counts['k3s_agents']} k3s_agents) "
         f"against {SCHEMA.as_posix()}; bootstrap server {first_server}; "
+        f"ansible.cfg inventory {EXPECTED_CFG_INVENTORY}; "
         f"{other_inventories} other inventory file(s) declare no hosts"
     )
     return report(errors, summary)

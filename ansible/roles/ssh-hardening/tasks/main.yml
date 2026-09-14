@@ -28,8 +28,11 @@
   when: _sshd_dropin.changed
 
 - name: Force a brand-new SSH connection (drop any multiplexed socket)
+  # meta: reset_connection does not support `when` (Ansible ignores it and
+  # warns) -- this always resets, whether or not the drop-in changed. Harmless
+  # (a fresh connection is a valid connection either way) but written without
+  # a `when:` so the code says what it actually does.
   ansible.builtin.meta: reset_connection
-  when: _sshd_dropin.changed
 
 - name: Confirm key-only access still works over a fresh connection
   ansible.builtin.command:

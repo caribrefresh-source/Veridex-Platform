@@ -1,13 +1,27 @@
 ---
 # common role tasks
 #
-# Scope for now: the private vLAN interface. This replaces the hand-applied
-# netplan that was SSH'd onto server-1 and server-2 during the Gate 2 bring-up
-# -- that was an emergency mutation, not a permanent solution, and the repo
-# contract requires permanent changes to be declarative and reproducible.
+# Scope: the private vLAN interface, plus the one fleet-wide OS check Gate 1
+# needs (its stop condition is "unsupported OS", and until now nothing
+# codified which OS/version is actually approved -- it was checked once by
+# hand and never asserted again). This replaces the hand-applied netplan that
+# was SSH'd onto server-1 and server-2 during the Gate 2 bring-up -- that was
+# an emergency mutation, not a permanent solution, and the repo contract
+# requires permanent changes to be declarative and reproducible.
 #
 # Running this against an already-hand-configured node MUST report ok, not
 # changed. That equivalence is the proof the two agree.
+
+- name: Assert the node runs the approved Ubuntu release (Gate 1 stop condition)
+  ansible.builtin.assert:
+    that:
+      - ansible_distribution == "Ubuntu"
+      - ansible_distribution_version == "24.04"
+    fail_msg: >-
+      {{ inventory_hostname }} runs {{ ansible_distribution }}
+      {{ ansible_distribution_version }}, not the approved Ubuntu 24.04 --
+      Gate 1 stop condition: unsupported OS.
+    quiet: true
 
 - name: Assert the inventory carries the facts this role needs
   ansible.builtin.assert:

@@ -43,8 +43,16 @@ ssh -i ~/.ssh/veridex_breakglass_ed25519 root@<node public IP>
    rotated) — this file does not track individual usages; that belongs in
    the gate ledger or an incident record if one exists.
 
-## Known limitation
+## Known limitations
 
-This closes "a single point of failure in *keys*." It does not provide a
-recovery path if netcup itself is unreachable, or if a node's OS is
-destroyed — that is out-of-band platform recovery, not covered by Gate 1.
+- This closes "a single point of failure in *keys*." It does not provide a
+  recovery path if netcup itself is unreachable, or if a node's OS is
+  destroyed — that is out-of-band platform recovery, not covered by Gate 1.
+- **Both keys currently live on the same operator workstation.** This closes
+  the scenario Gate 1 asks about — one key file lost, corrupted, or
+  mistyped — but not the workstation itself being lost or compromised,
+  which would take out both at once (and every other workstation-held
+  credential in `docs/security/secret-register.yml`, not just these two).
+  Closing that fully means storing the break-glass private half somewhere
+  genuinely independent (an offline vault, a hardware token, a sealed
+  physical backup) — flagged here as a real gap, not fixed by this gate.

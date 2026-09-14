@@ -20,6 +20,20 @@
       state this role exists to close (Gate 1 G01-C5).
     quiet: true
 
+- name: Validate each managed key is a well-formed public key
+  # The write-then-read-back check below only proves the file contains
+  # whatever string admin_ssh_public_keys holds -- it can't catch a typo'd or
+  # truncated key, which would look "present verbatim" right up until the day
+  # it's actually needed. ssh-keygen -lf refuses anything that doesn't parse
+  # as a real public key.
+  ansible.builtin.command:
+    cmd: ssh-keygen -lf /dev/stdin
+    stdin: "{{ item }}"
+  loop: "{{ admin_ssh_public_keys }}"
+  loop_control:
+    label: "{{ item.split()[2] | default('(unnamed key)') }}"
+  changed_when: false
+
 - name: Ensure /root/.ssh exists with correct permissions
   ansible.builtin.file:
     path: /root/.ssh

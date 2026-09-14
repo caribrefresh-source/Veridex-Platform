@@ -34,7 +34,10 @@ held. The check runs both ways: consumed-but-unregistered fails, and a
 registered name nothing consumes fails as stale -- unless the entry sets
 `manual_only: true`, for a secret that by design no automation ever reads
 (e.g. a break-glass credential a human uses directly), so it can never match
-a consumption pattern without defeating its own purpose.
+a consumption pattern without defeating its own purpose. manual_only entries
+also require `manual_only_reviewed: YYYY-MM-DD`, a human-confirmed date this
+still exists and is still real -- the escape hatch has no other decay
+mechanism, so this is what keeps it from hiding a secret nobody checks on.
 
 It also fails when
 ------------------
@@ -75,6 +78,7 @@ import argparse
 import base64
 import binascii
 import bisect
+import datetime
 import re
 import subprocess
 import sys
@@ -501,10 +505,27 @@ def load_register(path: Path, errors: list[str]) -> dict[tuple[str, str], dict]:
         elif gate is not None:
             errors.append(f"{label}: deferred_until_gate is only valid when status is deferred")
         manual_only = entry.get("manual_only", False)
+        reviewed = entry.get("manual_only_reviewed")
         if not isinstance(manual_only, bool):
             errors.append(f"{label}: manual_only must be true or false")
         elif manual_only and entry["status"] != "active":
             errors.append(f"{label}: manual_only is only valid when status is active")
+        if manual_only is True:
+            if not isinstance(reviewed, str):
+                errors.append(
+                    f"{label}: manual_only entries need manual_only_reviewed: YYYY-MM-DD "
+                    f"-- a date a human confirmed this is still a real, live secret, not stale"
+                )
+            else:
+                try:
+                    reviewed_date = datetime.date.fromisoformat(reviewed)
+                except ValueError:
+                    errors.append(f"{label}: manual_only_reviewed must be an ISO date (YYYY-MM-DD)")
+                else:
+                    if reviewed_date > datetime.date.today():
+                        errors.append(f"{label}: manual_only_reviewed is in the future")
+        elif reviewed is not None:
+            errors.append(f"{label}: manual_only_reviewed is only valid when manual_only is true")
         if (kind, name) in register:
             errors.append(f"{label}: registered more than once")
         register[(kind, name)] = entry

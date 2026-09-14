@@ -1,0 +1,129 @@
+gate: 3
+check: G03-C3
+captured_utc: 2026-09-14T04:47:46Z
+repo_commit: a194cf64777d30ffaa4cc71a6122a27d03e29fc1
+plan_commit: 4ebc8def34df78a0bc6b29e42656986ef987f4c9
+plan_sha256: 42eaac5e61d177430ce8e331767d2137b3f9b2bd197e13945b84f7c5e8cd79c7
+target_identity: hosts veridex-server-1 (152.53.177.26), veridex-server-2 (152.53.140.210), veridex-server-3 (152.53.142.131), veridex-agent-1 (159.195.197.136), veridex-agent-2 (159.195.197.40); host-key fingerprints match ansible/files/known_hosts
+captured_by: agent
+command: for ip in <5 nodes>: ssh root@$ip 'systemctl is-active/is-enabled iscsid, nftables, chrony'
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: Confirms the services this and earlier gates depend on are both active now and enabled for the next boot.
+--- unedited output ---
+=== veridex-server-1 (152.53.177.26) ===
+--iscsid--
+active
+enabled
+--nfs-common--
+install ok installed
+--kernel modules--
+overlay: loaded
+br_netfilter: loaded
+vxlan: loaded
+iscsi_tcp: loaded
+--sysctls--
+net.ipv4.ip_forward = 1
+net.bridge.bridge-nf-call-iptables = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+--nftables--
+active
+enabled
+--chrony--
+active
+enabled
+--kernel version--
+6.8.0-139-generic
+=== veridex-server-2 (152.53.140.210) ===
+--iscsid--
+active
+enabled
+--nfs-common--
+install ok installed
+--kernel modules--
+overlay: loaded
+br_netfilter: loaded
+vxlan: loaded
+iscsi_tcp: loaded
+--sysctls--
+net.ipv4.ip_forward = 1
+net.bridge.bridge-nf-call-iptables = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+--nftables--
+active
+enabled
+--chrony--
+active
+enabled
+--kernel version--
+6.8.0-139-generic
+=== veridex-server-3 (152.53.142.131) ===
+--iscsid--
+active
+enabled
+--nfs-common--
+install ok installed
+--kernel modules--
+overlay: loaded
+br_netfilter: loaded
+vxlan: loaded
+iscsi_tcp: loaded
+--sysctls--
+net.ipv4.ip_forward = 1
+net.bridge.bridge-nf-call-iptables = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+--nftables--
+active
+enabled
+--chrony--
+active
+enabled
+--kernel version--
+6.8.0-139-generic
+=== veridex-agent-1 (159.195.197.136) ===
+--iscsid--
+active
+enabled
+--nfs-common--
+install ok installed
+--kernel modules--
+overlay: loaded
+br_netfilter: loaded
+vxlan: loaded
+iscsi_tcp: loaded
+--sysctls--
+net.ipv4.ip_forward = 1
+net.bridge.bridge-nf-call-iptables = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+--nftables--
+active
+enabled
+--chrony--
+active
+enabled
+--kernel version--
+6.8.0-139-generic
+=== veridex-agent-2 (159.195.197.40) ===
+--iscsid--
+active
+enabled
+--nfs-common--
+install ok installed
+--kernel modules--
+overlay: loaded
+br_netfilter: loaded
+vxlan: loaded
+iscsi_tcp: loaded
+--sysctls--
+net.ipv4.ip_forward = 1
+net.bridge.bridge-nf-call-iptables = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+--nftables--
+active
+enabled
+--chrony--
+active
+enabled
+--kernel version--
+6.8.0-139-generic

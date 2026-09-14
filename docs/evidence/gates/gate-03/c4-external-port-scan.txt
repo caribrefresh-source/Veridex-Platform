@@ -1,0 +1,41 @@
+gate: 3
+check: G03-C4
+captured_utc: 2026-09-14T04:47:46Z
+repo_commit: a194cf64777d30ffaa4cc71a6122a27d03e29fc1
+plan_commit: 4ebc8def34df78a0bc6b29e42656986ef987f4c9
+plan_sha256: 42eaac5e61d177430ce8e331767d2137b3f9b2bd197e13945b84f7c5e8cd79c7
+target_identity: hosts veridex-server-1 (152.53.177.26), veridex-server-2 (152.53.140.210), veridex-server-3 (152.53.142.131), veridex-agent-1 (159.195.197.136), veridex-agent-2 (159.195.197.40); host-key fingerprints match ansible/files/known_hosts
+captured_by: agent
+command: Test-NetConnection <public IP> -Port <22,6443,10250,2379,2380> for all five nodes, from outside the vLAN
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: Confirms the specific ports the plan names (6443, 10250, plus etcd 2379-2380) are not publicly reachable; does not scan every possible port (firewall_public_tcp_ports is empty by design, so no other port is expected open either).
+--- unedited output ---
+152.53.177.26:22 open=True
+152.53.177.26:6443 open=False
+152.53.177.26:10250 open=False
+152.53.177.26:2379 open=False
+152.53.177.26:2380 open=False
+152.53.140.210:22 open=True
+152.53.140.210:6443 open=False
+152.53.140.210:10250 open=False
+152.53.140.210:2379 open=False
+152.53.140.210:2380 open=False
+152.53.142.131:22 open=True
+152.53.142.131:6443 open=False
+152.53.142.131:10250 open=False
+152.53.142.131:2379 open=False
+152.53.142.131:2380 open=False
+159.195.197.136:22 open=True
+159.195.197.136:6443 open=False
+159.195.197.136:10250 open=False
+159.195.197.136:2379 open=False
+159.195.197.136:2380 open=False
+159.195.197.40:22 open=True
+159.195.197.40:6443 open=False
+159.195.197.40:10250 open=False
+159.195.197.40:2379 open=False
+159.195.197.40:2380 open=False
+
+[exited with code 0]

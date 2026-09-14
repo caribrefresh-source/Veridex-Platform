@@ -1,21 +1,21 @@
 gate: 7
 check: G07-C3
-captured_utc: 2026-09-14T20:36:48Z to 2026-09-14T20:40:22Z
-repo_commit: a4d5223e1856efe45ce7f59144ae73597624f4c1
-plan_commit: uncommitted (working copy differs from HEAD 4ebc8def34df78a0bc6b29e42656986ef987f4c9 -- see closure.md Known Limitations)
+captured_utc: 2026-09-14T21:02:31Z to 2026-09-14T21:06:06Z
+repo_commit: 64d80e624252a71345d1c6bdc179297b085e73e9
+plan_commit: 64d80e624252a71345d1c6bdc179297b085e73e9
 plan_sha256: a32ea3fbfc2c69aeb06346ad7d251e9df14e54c5302259b739be5df871665a0c
 target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API server https://10.2.0.100:6443 (private VIP); hosts veridex-server-1/2/3, veridex-agent-1/2
 captured_by: agent
-command: Nine sub-tests, one per critical category across Gates 3-6, each a targeted -e variable override or (for the two hardcoded-value checks, gate3-systemd and gate5-lease) a temporary edit to roles/verify-cluster/tasks/main.yml reverted immediately after (see revert.txt) -- never committed. Full commands in each sub-test section below.
+command: Nine sub-tests, one per critical category across Gates 3-6: each a targeted -e variable override or, for the two checks with no variable to override (gate3 systemd unit list, gate5 kube-vip lease name), a temporary edit to roles/verify-cluster/tasks/main.yml reverted immediately afterwards and confirmed identical. Exact command in each sub-test section below.
 exit_status: 2 (every sub-test)
 proof_class: live
 result: PASS
-limitations: Covers one representative check from each of Gate 3 (modules, sysctls, firewall, systemd), Gate 4 (cert SAN, audit freshness), Gate 5 (kube-vip lease) and Gate 6 (Cilium config, CoreDNS replicas) -- 9 of this role's ~17 individual assertions. Not exhaustive of every single assertion in the role; disclosed as a representative cross-gate sample in closure.md, chosen because every check uses the same ansible.builtin.assert primitive and the same failure semantics, so a representative sample generalizes to the ones not individually broken here.
+limitations: Covers one representative check from each critical category of Gate 3 (kernel modules, sysctls, firewall ruleset, systemd units), Gate 4 (certificate SAN, audit-log freshness), Gate 5 (kube-vip lease) and Gate 6 (Cilium config, CoreDNS replicas) -- 9 of this role's ~17 individual assertions. Not exhaustive of every assertion; disclosed as a representative cross-gate sample, valid because every check uses the same ansible.builtin.assert primitive and the same fail-closed semantics.
 --- unedited output ---
 
-=== sub-test: c2-neg-gate3-modules ===
-=== c2-neg-gate3-modules === 2026-09-14T20:36:48Z
-repo_commit: a4d5223e1856efe45ce7f59144ae73597624f4c1
+=== sub-test: c2-neg-gate3-modules (exit 2) ===
+=== c2-neg-gate3-modules === 2026-09-14T21:02:31Z
+repo_commit: 64d80e624252a71345d1c6bdc179297b085e73e9
 [WARNING]: Ansible is being run in a world writable directory (/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible), ignoring it as an ansible.cfg source. For more information see https://docs.ansible.com/ansible/devel/reference_appendices/config.html#cfg-in-world-writable-dir
 
 PLAY [Verify cluster health] ***************************************************
@@ -62,9 +62,9 @@ veridex-server-1           : ok=6    changed=0    unreachable=0    failed=1    s
 
 EXIT_STATUS=2
 
-=== sub-test: c2-neg-gate3-sysctl ===
-=== c2-neg-gate3-sysctl === 2026-09-14T20:37:03Z
-repo_commit: a4d5223e1856efe45ce7f59144ae73597624f4c1
+=== sub-test: c2-neg-gate3-sysctl (exit 2) ===
+=== c2-neg-gate3-sysctl === 2026-09-14T21:02:45Z
+repo_commit: 64d80e624252a71345d1c6bdc179297b085e73e9
 [WARNING]: Ansible is being run in a world writable directory (/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible), ignoring it as an ansible.cfg source. For more information see https://docs.ansible.com/ansible/devel/reference_appendices/config.html#cfg-in-world-writable-dir
 
 PLAY [Verify cluster health] ***************************************************
@@ -113,16 +113,16 @@ Origin: /mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-clus
 100 - name: "Gate 3 -- assert every required sysctl has the intended value (Cilium preflight)"
       ^ column 3
 
-failed: [veridex-server-1] (item=net.bridge.bridge-nf-call-ip6tables) => {"ansible_loop_var": "result", "assertion": "result.stdout | trim == (result.item.value | string)", "changed": false, "evaluated_to": false, "msg": "net.bridge.bridge-nf-call-ip6tables is 1 on veridex-server-1, expected 0", "result": {"ansible_loop_var": "item", "changed": false, "changed_when_result": false, "cmd": ["sysctl", "-n", "net.bridge.bridge-nf-call-ip6tables"], "delta": "0:00:00.003712", "end": "2026-09-14 22:37:29.883077", "failed": false, "item": {"key": "net.bridge.bridge-nf-call-ip6tables", "value": 0}, "msg": "", "rc": 0, "start": "2026-09-14 22:37:29.879365", "stderr": "", "stderr_lines": [], "stdout": "1", "stdout_lines": ["1"]}}
+failed: [veridex-server-1] (item=net.bridge.bridge-nf-call-ip6tables) => {"ansible_loop_var": "result", "assertion": "result.stdout | trim == (result.item.value | string)", "changed": false, "evaluated_to": false, "msg": "net.bridge.bridge-nf-call-ip6tables is 1 on veridex-server-1, expected 0", "result": {"ansible_loop_var": "item", "changed": false, "changed_when_result": false, "cmd": ["sysctl", "-n", "net.bridge.bridge-nf-call-ip6tables"], "delta": "0:00:00.003805", "end": "2026-09-14 23:03:13.028011", "failed": false, "item": {"key": "net.bridge.bridge-nf-call-ip6tables", "value": 0}, "msg": "", "rc": 0, "start": "2026-09-14 23:03:13.024206", "stderr": "", "stderr_lines": [], "stdout": "1", "stdout_lines": ["1"]}}
 
 PLAY RECAP *********************************************************************
 veridex-server-1           : ok=8    changed=0    unreachable=0    failed=1    skipped=0    rescued=0    ignored=0   
 
 EXIT_STATUS=2
 
-=== sub-test: c2-neg-gate3-firewall ===
-=== c2-neg-gate3-firewall === 2026-09-14T20:37:28Z
-repo_commit: a4d5223e1856efe45ce7f59144ae73597624f4c1
+=== sub-test: c2-neg-gate3-firewall (exit 2) ===
+=== c2-neg-gate3-firewall === 2026-09-14T21:03:12Z
+repo_commit: 64d80e624252a71345d1c6bdc179297b085e73e9
 [WARNING]: Ansible is being run in a world writable directory (/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible), ignoring it as an ansible.cfg source. For more information see https://docs.ansible.com/ansible/devel/reference_appendices/config.html#cfg-in-world-writable-dir
 
 PLAY [Verify cluster health] ***************************************************
@@ -199,9 +199,9 @@ veridex-server-1           : ok=13   changed=0    unreachable=0    failed=1    s
 
 EXIT_STATUS=2
 
-=== sub-test: c2-neg-gate3-systemd ===
-=== c2-neg-gate3-systemd === 2026-09-14T20:39:41Z
-repo_commit: a4d5223e1856efe45ce7f59144ae73597624f4c1
+=== sub-test: c2-neg-gate3-systemd (exit 2) ===
+=== c2-neg-gate3-systemd === 2026-09-14T21:05:25Z
+repo_commit: 64d80e624252a71345d1c6bdc179297b085e73e9
 [WARNING]: Ansible is being run in a world writable directory (/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible), ignoring it as an ansible.cfg source. For more information see https://docs.ansible.com/ansible/devel/reference_appendices/config.html#cfg-in-world-writable-dir
 
 PLAY [Verify cluster health] ***************************************************
@@ -262,16 +262,16 @@ Origin: /mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-clus
 127 - name: "Gate 3 -- assert every required systemd unit is active"
       ^ column 3
 
-failed: [veridex-server-1] (item=veridex-gate7-negative-test-bogus-unit) => {"ansible_loop_var": "result", "assertion": "result.stdout | trim == 'active'", "changed": false, "evaluated_to": false, "msg": "veridex-gate7-negative-test-bogus-unit is inactive on veridex-server-1, expected active", "result": {"ansible_loop_var": "item", "changed": false, "changed_when_result": false, "cmd": ["systemctl", "is-active", "veridex-gate7-negative-test-bogus-unit"], "delta": "0:00:00.007883", "end": "2026-09-14 22:40:23.021636", "failed": false, "failed_when_result": false, "failed_when_suppressed_exception": "(traceback unavailable)", "item": "veridex-gate7-negative-test-bogus-unit", "msg": "The command exited with a non-zero return code.", "rc": 4, "start": "2026-09-14 22:40:23.013753", "stderr": "", "stderr_lines": [], "stdout": "inactive", "stdout_lines": ["inactive"]}}
+failed: [veridex-server-1] (item=veridex-gate7-negative-test-bogus-unit) => {"ansible_loop_var": "result", "assertion": "result.stdout | trim == 'active'", "changed": false, "evaluated_to": false, "msg": "veridex-gate7-negative-test-bogus-unit is inactive on veridex-server-1, expected active", "result": {"ansible_loop_var": "item", "changed": false, "changed_when_result": false, "cmd": ["systemctl", "is-active", "veridex-gate7-negative-test-bogus-unit"], "delta": "0:00:00.007799", "end": "2026-09-14 23:06:07.264479", "failed": false, "failed_when_result": false, "failed_when_suppressed_exception": "(traceback unavailable)", "item": "veridex-gate7-negative-test-bogus-unit", "msg": "The command exited with a non-zero return code.", "rc": 4, "start": "2026-09-14 23:06:07.256680", "stderr": "", "stderr_lines": [], "stdout": "inactive", "stdout_lines": ["inactive"]}}
 
 PLAY RECAP *********************************************************************
 veridex-server-1           : ok=10   changed=0    unreachable=0    failed=1    skipped=0    rescued=0    ignored=0   
 
 EXIT_STATUS=2
 
-=== sub-test: c2-neg-gate4-certsan ===
-=== c2-neg-gate4-certsan === 2026-09-14T20:38:13Z
-repo_commit: a4d5223e1856efe45ce7f59144ae73597624f4c1
+=== sub-test: c2-neg-gate4-certsan (exit 2) ===
+=== c2-neg-gate4-certsan === 2026-09-14T21:03:57Z
+repo_commit: 64d80e624252a71345d1c6bdc179297b085e73e9
 [WARNING]: Ansible is being run in a world writable directory (/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible), ignoring it as an ansible.cfg source. For more information see https://docs.ansible.com/ansible/devel/reference_appendices/config.html#cfg-in-world-writable-dir
 
 PLAY [Verify cluster health] ***************************************************
@@ -318,9 +318,9 @@ veridex-server-1           : ok=6    changed=0    unreachable=0    failed=1    s
 
 EXIT_STATUS=2
 
-=== sub-test: c2-neg-gate4-audit ===
-=== c2-neg-gate4-audit === 2026-09-14T20:38:27Z
-repo_commit: a4d5223e1856efe45ce7f59144ae73597624f4c1
+=== sub-test: c2-neg-gate4-audit (exit 2) ===
+=== c2-neg-gate4-audit === 2026-09-14T21:04:11Z
+repo_commit: 64d80e624252a71345d1c6bdc179297b085e73e9
 [WARNING]: Ansible is being run in a world writable directory (/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible), ignoring it as an ansible.cfg source. For more information see https://docs.ansible.com/ansible/devel/reference_appendices/config.html#cfg-in-world-writable-dir
 
 PLAY [Verify cluster health] ***************************************************
@@ -397,9 +397,9 @@ veridex-server-1           : ok=15   changed=0    unreachable=0    failed=1    s
 
 EXIT_STATUS=2
 
-=== sub-test: c2-neg-gate5-lease ===
-=== c2-neg-gate5-lease === 2026-09-14T20:40:22Z
-repo_commit: a4d5223e1856efe45ce7f59144ae73597624f4c1
+=== sub-test: c2-neg-gate5-lease (exit 2) ===
+=== c2-neg-gate5-lease === 2026-09-14T21:06:06Z
+repo_commit: 64d80e624252a71345d1c6bdc179297b085e73e9
 [WARNING]: Ansible is being run in a world writable directory (/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible), ignoring it as an ansible.cfg source. For more information see https://docs.ansible.com/ansible/devel/reference_appendices/config.html#cfg-in-world-writable-dir
 
 PLAY [Verify cluster health] ***************************************************
@@ -432,16 +432,16 @@ Origin: /mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-clus
 328 - name: "Gate 5 -- read the kube-vip control-plane lease holder"
       ^ column 3
 
-fatal: [veridex-server-1]: FAILED! => {"changed": false, "changed_when_result": false, "cmd": ["k3s", "kubectl", "-n", "kube-system", "get", "lease", "plndr-cp-lock-NEGATIVE-TEST-BOGUS", "-o", "jsonpath={.spec.holderIdentity}"], "delta": "0:00:00.127352", "end": "2026-09-14 22:40:36.830041", "msg": "The command exited with a non-zero return code.", "rc": 1, "start": "2026-09-14 22:40:36.702689", "stderr": "Error from server (NotFound): leases.coordination.k8s.io \"plndr-cp-lock-NEGATIVE-TEST-BOGUS\" not found", "stderr_lines": ["Error from server (NotFound): leases.coordination.k8s.io \"plndr-cp-lock-NEGATIVE-TEST-BOGUS\" not found"], "stdout": "", "stdout_lines": []}
+fatal: [veridex-server-1]: FAILED! => {"changed": false, "changed_when_result": false, "cmd": ["k3s", "kubectl", "-n", "kube-system", "get", "lease", "plndr-cp-lock-NEGATIVE-TEST-BOGUS", "-o", "jsonpath={.spec.holderIdentity}"], "delta": "0:00:00.126573", "end": "2026-09-14 23:06:21.400794", "msg": "The command exited with a non-zero return code.", "rc": 1, "start": "2026-09-14 23:06:21.274221", "stderr": "Error from server (NotFound): leases.coordination.k8s.io \"plndr-cp-lock-NEGATIVE-TEST-BOGUS\" not found", "stderr_lines": ["Error from server (NotFound): leases.coordination.k8s.io \"plndr-cp-lock-NEGATIVE-TEST-BOGUS\" not found"], "stdout": "", "stdout_lines": []}
 
 PLAY RECAP *********************************************************************
 veridex-server-1           : ok=5    changed=0    unreachable=0    failed=1    skipped=0    rescued=0    ignored=0   
 
 EXIT_STATUS=2
 
-=== sub-test: c2-neg-gate6-ciliumconfig ===
-=== c2-neg-gate6-ciliumconfig === 2026-09-14T20:39:01Z
-repo_commit: a4d5223e1856efe45ce7f59144ae73597624f4c1
+=== sub-test: c2-neg-gate6-ciliumconfig (exit 2) ===
+=== c2-neg-gate6-ciliumconfig === 2026-09-14T21:04:44Z
+repo_commit: 64d80e624252a71345d1c6bdc179297b085e73e9
 [WARNING]: Ansible is being run in a world writable directory (/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible), ignoring it as an ansible.cfg source. For more information see https://docs.ansible.com/ansible/devel/reference_appendices/config.html#cfg-in-world-writable-dir
 
 PLAY [Verify cluster health] ***************************************************
@@ -490,9 +490,9 @@ veridex-server-1           : ok=8    changed=0    unreachable=0    failed=1    s
 
 EXIT_STATUS=2
 
-=== sub-test: c2-neg-gate6-corednsreplicas ===
-=== c2-neg-gate6-corednsreplicas === 2026-09-14T20:39:19Z
-repo_commit: a4d5223e1856efe45ce7f59144ae73597624f4c1
+=== sub-test: c2-neg-gate6-corednsreplicas (exit 2) ===
+=== c2-neg-gate6-corednsreplicas === 2026-09-14T21:05:03Z
+repo_commit: 64d80e624252a71345d1c6bdc179297b085e73e9
 [WARNING]: Ansible is being run in a world writable directory (/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible), ignoring it as an ansible.cfg source. For more information see https://docs.ansible.com/ansible/devel/reference_appendices/config.html#cfg-in-world-writable-dir
 
 PLAY [Verify cluster health] ***************************************************
@@ -547,6 +547,6 @@ veridex-server-1           : ok=10   changed=0    unreachable=0    failed=1    s
 
 EXIT_STATUS=2
 
-=== revert confirmation (roles/verify-cluster/tasks/main.yml, gate3-systemd and gate5-lease sub-tests only) ===
+=== revert confirmation for the two temporary edits (roles/verify-cluster/tasks/main.yml) ===
 reverted main.yml
 revert confirmed identical

@@ -1,21 +1,21 @@
 gate: 7
 check: G07-C2
-captured_utc: 2026-09-14T20:36:28Z
-repo_commit: a4d5223e1856efe45ce7f59144ae73597624f4c1
-plan_commit: uncommitted (working copy differs from HEAD 4ebc8def34df78a0bc6b29e42656986ef987f4c9 -- see closure.md Known Limitations)
+captured_utc: 2026-09-14T21:02:10Z
+repo_commit: 64d80e624252a71345d1c6bdc179297b085e73e9
+plan_commit: 64d80e624252a71345d1c6bdc179297b085e73e9
 plan_sha256: a32ea3fbfc2c69aeb06346ad7d251e9df14e54c5302259b739be5df871665a0c
 target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API server https://10.2.0.100:6443 (private VIP); hosts veridex-server-1/2/3, veridex-agent-1/2
 captured_by: agent
-command: ansible-playbook ... verify-cluster.yml -e verify_cluster_expected_kube_system_uid=deadbeef-... --limit veridex-server-1 ; and the same override with --tags gate4 --limit veridex-server-1 (isolated-tag regression check)
+command: ansible-playbook ... verify-cluster.yml -e verify_cluster_expected_kube_system_uid=deadbeef-0000-0000-0000-000000000000 --limit veridex-server-1 ; then the same override with --tags gate4 --limit veridex-server-1 (isolated-tag regression check)
 exit_status: 2
 proof_class: live
 result: PASS
-limitations: Two sub-tests: (1) a full run with a deliberately wrong expected cluster UID; (2) the same wrong UID with --tags gate4, to prove the identity check cannot be bypassed by the gate-isolation tag mode (this was a real gap found and fixed during this gate's hardening loop -- see closure.md 7.2). Both fail closed at the identity assert, before any other check runs.
+limitations: Two sub-tests: (1) a full run with a deliberately wrong expected cluster UID; (2) the same wrong UID with --tags gate4, proving the identity check cannot be bypassed by the gate-isolation tag mode -- a real gap found and fixed during this gate's hardening loop (closure.md 7.2). Both fail closed at the identity assert before any other check runs. Proves the check rejects a wrong identity; it does not prove the recorded UID is the right one to expect (that value was captured live at Gate 4's closure and is pinned in group_vars/all.yml).
 --- unedited output ---
 
-=== sub-test 1: full run, wrong UID ===
-=== c2-neg-identity === 2026-09-14T20:36:28Z
-repo_commit: a4d5223e1856efe45ce7f59144ae73597624f4c1
+=== sub-test 1: full run, wrong expected UID ===
+=== c2-neg-identity === 2026-09-14T21:02:10Z
+repo_commit: 64d80e624252a71345d1c6bdc179297b085e73e9
 [WARNING]: Ansible is being run in a world writable directory (/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible), ignoring it as an ansible.cfg source. For more information see https://docs.ansible.com/ansible/devel/reference_appendices/config.html#cfg-in-world-writable-dir
 
 PLAY [Verify cluster health] ***************************************************
@@ -52,9 +52,9 @@ veridex-server-1           : ok=4    changed=0    unreachable=0    failed=1    s
 
 EXIT_STATUS=2
 
-=== sub-test 2: --tags gate4, wrong UID (isolated-tag regression check) ===
-=== c2-neg-identity-isolated-gate4 === 2026-09-14T20:36:38Z
-repo_commit: a4d5223e1856efe45ce7f59144ae73597624f4c1
+=== sub-test 2: --tags gate4, wrong expected UID (isolated-tag regression check) ===
+=== c2-neg-identity-isolated-gate4 === 2026-09-14T21:02:20Z
+repo_commit: 64d80e624252a71345d1c6bdc179297b085e73e9
 [WARNING]: Ansible is being run in a world writable directory (/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible), ignoring it as an ansible.cfg source. For more information see https://docs.ansible.com/ansible/devel/reference_appendices/config.html#cfg-in-world-writable-dir
 
 PLAY [Verify cluster health] ***************************************************

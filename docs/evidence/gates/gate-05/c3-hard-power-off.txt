@@ -1,0 +1,23 @@
+gate: 5
+check: G05-C3
+captured_utc: 2026-09-14T10:24:14Z
+repo_commit: 9f50972a8ce6cda6fc53bb2439ce8669d1a98282
+plan_commit: 4ebc8def34df78a0bc6b29e42656986ef987f4c9
+plan_sha256: 42eaac5e61d177430ce8e331767d2137b3f9b2bd197e13945b84f7c5e8cd79c7
+target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API server https://10.2.0.100:6443 (private VIP); hosts veridex-server-1/2/3 (control-plane,etcd)
+captured_by: operator-captured
+command: Hard power-off of veridex-server-3 (152.53.142.131, netcup id 938803) via the netcup SCP control panel -- NOT a graceful shutdown, and not something this repo's tooling can perform (scripts/netcup-discover.py explicitly cannot power-cycle anything; the plan's Workflow ownership table assigns hard-power drills to a human-approved destructive runbook)
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: The action itself was performed by the repository owner outside this session (netcup's web control panel), per plan policy that the agent prepares and observes such drills but does not decide to run them. Corroborated, not directly witnessed: the probe (C2), ping-unreachability and etcd endpoint failure (both below) all began within the same ~1-second window the operator reported.
+--- unedited output ---
+Operator confirmation (this session's transcript): "server powered off", following an
+explicit go-ahead exchange naming the target node, its public IP and netcup server id.
+
+Corroborating evidence captured moments later from a surviving node (veridex-server-1):
+  ping -c2 -W2 10.2.1.12   -> 100% loss, "Destination Host Unreachable"
+  ping -c2 -W2 152.53.142.131 -> 100% loss (no response at all -- consistent with power off,
+    not merely a firewalled/dropped-ICMP host, which would still show as reachable at L2)
+  etcdctl endpoint health https://10.2.1.12:2379 -> health=false, "context deadline exceeded"
+    (5s timeout), error: "connect: no route to host"

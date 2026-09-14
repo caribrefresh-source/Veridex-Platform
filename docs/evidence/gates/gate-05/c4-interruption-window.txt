@@ -1,0 +1,21 @@
+gate: 5
+check: G05-C4
+captured_utc: 2026-09-14T10:24:14Z
+repo_commit: 9f50972a8ce6cda6fc53bb2439ce8669d1a98282
+plan_commit: 4ebc8def34df78a0bc6b29e42656986ef987f4c9
+plan_sha256: 42eaac5e61d177430ce8e331767d2137b3f9b2bd197e13945b84f7c5e8cd79c7
+target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API server https://10.2.0.100:6443 (private VIP); hosts veridex-server-1/2/3 (control-plane,etcd)
+captured_by: agent
+command: Derived from the C2 probe log: state-transition lines only (awk on consecutive-state changes)
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: Sampling interval ~0.3-0.7s (timeout 1s per probe plus sleep), so the true interruption could differ from the measured window by up to roughly one sampling interval at each edge; no approved-loss threshold is defined elsewhere in this plan to compare against, so this is reported as a measurement, not itself a pass/fail threshold check.
+--- unedited output ---
+2026-09-14T10:15:21.184Z OK     (probe start, baseline)
+2026-09-14T10:20:19.308Z FAIL   (first failed probe after power-off)
+2026-09-14T10:20:26.759Z OK     (first successful probe after failover)
+
+Measured interruption: 7.451 seconds.
+No FAIL observed at any point after 10:20:26.759Z through probe end (10:25:21Z) or after
+manual verification resumed post-recovery (10:23:33Z onward, see c2-sustained-probe.txt).

@@ -1,0 +1,18 @@
+gate: 5
+check: G05-C5
+captured_utc: 2026-09-14T10:24:14Z
+repo_commit: 9f50972a8ce6cda6fc53bb2439ce8669d1a98282
+plan_commit: 4ebc8def34df78a0bc6b29e42656986ef987f4c9
+plan_sha256: 42eaac5e61d177430ce8e331767d2137b3f9b2bd197e13945b84f7c5e8cd79c7
+target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API server https://10.2.0.100:6443 (private VIP); hosts veridex-server-1/2/3 (control-plane,etcd)
+captured_by: agent
+command: ssh root@server-1 'k3s kubectl get lease -n kube-system plndr-cp-lock -o jsonpath={.spec.holderIdentity}; ip neigh show 10.2.0.100'
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: Confirms exactly one holder (lease and ARP agree, both point at server-2) -- the plan's stop condition includes split-brain VIP, so agreement between the control-plane's own lease and the actual live ARP table on the wire is the relevant check, not the lease alone.
+--- unedited output ---
+holder identity (lease), during the outage: veridex-server-2
+ARP for 10.2.0.100, during the outage: lladdr ca:b5:7f:4b:2a:47 REACHABLE
+(matches veridex-server-2's recorded vLAN MAC)
+Only one holder observed at any point; no second lladdr ever seen answering for the VIP.

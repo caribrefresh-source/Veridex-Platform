@@ -28,7 +28,12 @@ Cross-field (not expressible in JSON Schema):
     block, and is not any node's address
 
 Identity is defined in one place:
-  - ansible/ansible.cfg points at exactly the production hosts.yml
+  - ansible/ansible.cfg points at exactly the production hosts.yml, and no other
+    tracked ansible.cfg exists (Ansible reads the first config it finds, and a
+    config in the working directory wins)
+  - no tracked file outside ansible/inventory/ looks like an inventory: an INI
+    host line with an ansible_host assignment, or a YAML document whose
+    top-level all has hosts or children (documentation is exempt)
   - no group_vars or host_vars file anywhere under ansible/ (inventories or
     playbooks, flat files or per-host directories) sets ansible_host,
     ansible_ssh_host, private_ip, vlan_mac, netcup_server_id, node_index or
@@ -54,6 +59,7 @@ import configparser
 import ipaddress
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -76,12 +82,32 @@ IDENTITY_KEYS = frozenset({
 ALLOWED_INVENTORY_ENTRIES = {"hosts.yml", "group_vars", "host_vars"}
 VARS_DIRS = {"group_vars", "host_vars"}
 VARS_SUFFIXES = ("", ".yml", ".yaml", ".json")
+DOC_SUFFIXES = (".md", ".markdown", ".rst", ".txt")
 UNREADABLE = (yaml.YAMLError, UnicodeDecodeError, RecursionError, OSError)
+INI_HOST_LINE = re.compile(r"(?m)^\s*[A-Za-z0-9_.\-\[\]:]+\s+.*\bansible_(?:ssh_)?host\s*=")
 
 
 def load_yaml(path: Path):
     with path.open(encoding="utf-8") as fh:
         return yaml.safe_load(fh)
+
+
+def tracked_files(root: Path) -> list[str]:
+    """Files Git tracks; every file on disk when this is not a Git checkout."""
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(root), "ls-files", "-z"], capture_output=True, check=True
+        ).stdout
+        files = sorted(f for f in out.decode("utf-8").split("\0") if f)
+    except (OSError, subprocess.CalledProcessError):
+        files = []
+    if files:
+        return files
+    return sorted(
+        p.relative_to(root).as_posix()
+        for p in root.rglob("*")
+        if p.is_file() and ".git" not in p.relative_to(root).parts
+    )
 
 
 def hosts_in(inventory) -> dict[str, dict]:
@@ -170,6 +196,41 @@ def check_ansible_cfg(root: Path, errors: list[str]) -> None:
         )
 
 
+def check_stray_inventory_sources(root: Path, errors: list[str]) -> None:
+    """Another ansible.cfg, or an inventory-shaped file, anywhere outside ansible/inventory/."""
+    inventory_prefix = INVENTORY_ROOT.as_posix() + "/"
+    for rel in tracked_files(root):
+        if rel.rsplit("/", 1)[-1] == "ansible.cfg" and rel != ANSIBLE_CFG.as_posix():
+            errors.append(
+                f"{rel}: only {ANSIBLE_CFG.as_posix()} may configure Ansible -- another ansible.cfg "
+                "can load a different inventory"
+            )
+            continue
+        if rel.startswith(inventory_prefix) or rel.startswith("docs/") or rel.lower().endswith(DOC_SUFFIXES):
+            continue
+        try:
+            data = (root / rel).read_bytes()
+        except OSError:
+            continue
+        if b"\0" in data[:8192]:
+            continue
+        text = data.decode("utf-8", errors="replace")
+        if INI_HOST_LINE.search(text):
+            errors.append(
+                f"{rel}: looks like an INI inventory (a host line assigning ansible_host) outside "
+                f"{PRODUCTION.as_posix()}/hosts.yml"
+            )
+            continue
+        if rel.lower().endswith((".yml", ".yaml")):
+            try:
+                loaded = yaml.safe_load(text)
+            except (yaml.YAMLError, RecursionError):
+                continue
+            top = loaded.get("all") if isinstance(loaded, dict) else None
+            if isinstance(top, dict) and {"hosts", "children"} & {str(key) for key in top}:
+                errors.append(f"{rel}: looks like a YAML inventory outside {INVENTORY_ROOT.as_posix()}/")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Validate the netcup Ansible inventory.")
     ap.add_argument("--root", default=".", help="repository root (default: cwd)")
@@ -210,7 +271,7 @@ def main() -> int:
     except (KeyError, TypeError, ValueError) as exc:
         return report(
             [f"group_vars/all.yml: private_network_cidr, private_node_allocation_block "
-             f"and kubevip_vip must all be present and valid ({exc!r})"],
+             f"and kubevip_vip must all be present and valid ({exc.__class__.__name__})"],
             "",
         )
 
@@ -263,6 +324,7 @@ def main() -> int:
         )
 
     check_ansible_cfg(root, errors)
+    check_stray_inventory_sources(root, errors)
     known_hosts = set(hosts_in(inventory))
     check_identity_overrides(root, known_hosts, errors)
 

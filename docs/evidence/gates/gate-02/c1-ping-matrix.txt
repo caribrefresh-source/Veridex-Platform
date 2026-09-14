@@ -1,0 +1,44 @@
+gate: 2
+check: G02-C1
+captured_utc: 2026-09-14T03:46:35Z
+repo_commit: 5cb1bebad43f3df8ee4e3a3b1cfa2408f5434354
+plan_commit: 4ebc8def34df78a0bc6b29e42656986ef987f4c9
+plan_sha256: 42eaac5e61d177430ce8e331767d2137b3f9b2bd197e13945b84f7c5e8cd79c7
+target_identity: hosts veridex-server-1 (152.53.177.26), veridex-server-2 (152.53.140.210), veridex-server-3 (152.53.142.131), veridex-agent-1 (159.195.197.136), veridex-agent-2 (159.195.197.40); host-key fingerprints match ansible/files/known_hosts
+captured_by: agent
+command: for src in <5 nodes>: for dst in <5 nodes>: ssh root@$src 'ping -c1 -W2 <dst private IP>'
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: One packet per pair over the private interface; does not stress-test sustained throughput or packet loss under load.
+--- unedited output ---
+=== from veridex-server-1 (152.53.177.26) ===
+  -> veridex-server-1 (10.2.1.10): OK
+  -> veridex-server-2 (10.2.1.11): OK
+  -> veridex-server-3 (10.2.1.12): OK
+  -> veridex-agent-1 (10.2.1.100): OK
+  -> veridex-agent-2 (10.2.1.101): OK
+=== from veridex-server-2 (152.53.140.210) ===
+  -> veridex-server-1 (10.2.1.10): OK
+  -> veridex-server-2 (10.2.1.11): OK
+  -> veridex-server-3 (10.2.1.12): OK
+  -> veridex-agent-1 (10.2.1.100): OK
+  -> veridex-agent-2 (10.2.1.101): OK
+=== from veridex-server-3 (152.53.142.131) ===
+  -> veridex-server-1 (10.2.1.10): OK
+  -> veridex-server-2 (10.2.1.11): OK
+  -> veridex-server-3 (10.2.1.12): OK
+  -> veridex-agent-1 (10.2.1.100): OK
+  -> veridex-agent-2 (10.2.1.101): OK
+=== from veridex-agent-1 (159.195.197.136) ===
+  -> veridex-server-1 (10.2.1.10): OK
+  -> veridex-server-2 (10.2.1.11): OK
+  -> veridex-server-3 (10.2.1.12): OK
+  -> veridex-agent-1 (10.2.1.100): OK
+  -> veridex-agent-2 (10.2.1.101): OK
+=== from veridex-agent-2 (159.195.197.40) ===
+  -> veridex-server-1 (10.2.1.10): OK
+  -> veridex-server-2 (10.2.1.11): OK
+  -> veridex-server-3 (10.2.1.12): OK
+  -> veridex-agent-1 (10.2.1.100): OK
+  -> veridex-agent-2 (10.2.1.101): OK

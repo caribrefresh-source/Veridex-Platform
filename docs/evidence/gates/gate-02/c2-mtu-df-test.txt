@@ -1,0 +1,52 @@
+gate: 2
+check: G02-C2
+captured_utc: 2026-09-14T03:46:35Z
+repo_commit: 5cb1bebad43f3df8ee4e3a3b1cfa2408f5434354
+plan_commit: 4ebc8def34df78a0bc6b29e42656986ef987f4c9
+plan_sha256: 42eaac5e61d177430ce8e331767d2137b3f9b2bd197e13945b84f7c5e8cd79c7
+target_identity: hosts veridex-server-1 (152.53.177.26), veridex-server-2 (152.53.140.210), veridex-server-3 (152.53.142.131), veridex-agent-1 (159.195.197.136), veridex-agent-2 (159.195.197.40); host-key fingerprints match ansible/files/known_hosts
+captured_by: agent
+command: ssh root@<node> 'ping -M do -s 1472 -c3 <peer private IP>; ping -M do -s 1473 -c3 <peer private IP>' on two node pairs
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: Confirms path MTU is exactly 1500 on the private interface for the pairs tested (server-1<->server-2, agent-2<->agent-1); does not exhaustively test every one of the 10 node pairs, and CLAUDE.md records 1500 was last measured 2026-09-12 on the same nodes.
+--- unedited output ---
+=== MTU DF test: server-1 -> server-2 (10.2.1.11) ===
+-- 1472 byte payload, DF set --
+PING 10.2.1.11 (10.2.1.11) 1472(1500) bytes of data.
+1480 bytes from 10.2.1.11: icmp_seq=1 ttl=64 time=0.449 ms
+1480 bytes from 10.2.1.11: icmp_seq=2 ttl=64 time=0.370 ms
+1480 bytes from 10.2.1.11: icmp_seq=3 ttl=64 time=0.390 ms
+
+--- 10.2.1.11 ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2068ms
+rtt min/avg/max/mdev = 0.370/0.403/0.449/0.033 ms
+-- 1473 byte payload, DF set --
+PING 10.2.1.11 (10.2.1.11) 1473(1501) bytes of data.
+ping: local error: message too long, mtu=1500
+ping: local error: message too long, mtu=1500
+ping: local error: message too long, mtu=1500
+
+--- 10.2.1.11 ping statistics ---
+3 packets transmitted, 0 received, +3 errors, 100% packet loss, time 2046ms
+
+=== MTU DF test: agent-2 -> agent-1 (10.2.1.100) ===
+-- 1472 byte payload, DF set --
+PING 10.2.1.100 (10.2.1.100) 1472(1500) bytes of data.
+1480 bytes from 10.2.1.100: icmp_seq=1 ttl=63 time=1.28 ms
+1480 bytes from 10.2.1.100: icmp_seq=2 ttl=63 time=1.25 ms
+1480 bytes from 10.2.1.100: icmp_seq=3 ttl=63 time=0.751 ms
+
+--- 10.2.1.100 ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2001ms
+rtt min/avg/max/mdev = 0.751/1.093/1.279/0.242 ms
+-- 1473 byte payload, DF set --
+PING 10.2.1.100 (10.2.1.100) 1473(1501) bytes of data.
+ping: local error: message too long, mtu=1500
+ping: local error: message too long, mtu=1500
+ping: local error: message too long, mtu=1500
+
+--- 10.2.1.100 ping statistics ---
+3 packets transmitted, 0 received, +3 errors, 100% packet loss, time 2045ms
+

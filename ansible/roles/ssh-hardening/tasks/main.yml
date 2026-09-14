@@ -55,7 +55,7 @@
 - name: Assert the hardened values are actually effective
   ansible.builtin.assert:
     that:
-      - "'permitrootlogin prohibit-password' in _sshd_effective.stdout"
+      - "'permitrootlogin without-password' in _sshd_effective.stdout"
       - "'passwordauthentication no' in _sshd_effective.stdout"
     fail_msg: >-
       sshd -T on {{ inventory_hostname }} does not report the hardened

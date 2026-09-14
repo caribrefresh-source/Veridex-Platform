@@ -20,12 +20,12 @@ What counts as a consumed secret
                      secret-like names count (token, secret, password, key,
                      credential, PAT).
   github-actions     secrets.<name> and secrets['<name>'] inside workflow
-                     expressions (GITHUB_TOKEN is built in)
+                     expressions, in any letter case (GITHUB_TOKEN is built in)
   kubernetes-secret  any YAML, JSON or template file declaring kind Secret, and
                      any kustomize secretGenerator
   file               Ansible private key file settings (inventory variables,
-                     ansible.cfg, the private-key command-line option), community.sops
-                     lookups and ~/.config/veridex/<file> paths
+                     ansible.cfg, the private-key command-line option),
+                     community.sops lookups and ~/.config/veridex/<file> paths
 
 Documentation (docs/, Markdown and text files) is not a consumer.
 
@@ -35,22 +35,29 @@ registered name nothing consumes fails as stale.
 
 It also fails when
 ------------------
-  - a destination is empty or a placeholder, or held_in / provider names
-    Hetzner or the old cluster
+  - a destination is empty, a placeholder, or names Hetzner or an old or
+    legacy cluster; or an active entry says the secret does not exist yet
   - status is deferred without deferred_until_gate
   - an env lookup, a Python env read or an Actions secrets reference uses a
     name that is not a literal, or a workflow passes every secret at once
-  - a literal value is assigned to a sensitive registered name, or to an
-    Ansible variable fed from a sensitive env lookup -- in YAML and JSON parsed
-    structurally, elsewhere line by line
+  - a literal value is assigned to a sensitive registered name (anywhere), or
+    to an Ansible variable fed from a sensitive env lookup (under ansible/) --
+    YAML and JSON are parsed, other files are read line by line. SOPS-encrypted
+    values in a document carrying a sops block, and Ansible Vault values, are
+    not literals.
   - a Kubernetes Secret, a kustomize secretGenerator or a kubectl command
-    creates a secret from a literal value
-  - any tracked file contains private key material (PEM or PGP private key
-    blocks, age secret keys)
+    (options in any order, across continuation lines) creates a secret from a
+    literal value
+  - any tracked file contains private key material: PEM or PGP private key
+    blocks, age secret keys, PuTTY private key files, kubeconfig client key
+    data, or any of these base64-encoded or inside a YAML scalar
+  - a file cannot be read as text: NUL bytes without a byte-order mark, unless
+    its extension is a known binary type
 
 It never reads environment values and prints names, files and line numbers
 only. This file's pattern definitions sit between the BEGIN and END secret-scan
-patterns comments; only those lines are exempt from its own scan.
+patterns comments; those lines are exempt from discovery and literal checks,
+but not from the private key check.
 
 Usage
 -----
@@ -60,9 +67,12 @@ Usage
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
 import re
 import subprocess
 import sys
+import unicodedata
 from collections import defaultdict
 from pathlib import Path, PurePosixPath
 
@@ -75,10 +85,24 @@ PATTERNS_END = "# END secret-scan patterns"
 
 STRICT_ROOTS = ("ansible/", "scripts/", ".github/", "kubernetes/", "gitops/")
 STRICT_FILES = ("Makefile",)
+ANSIBLE_ROOT = "ansible/"
 DOC_SUFFIXES = (".md", ".markdown", ".rst", ".txt")
 STRUCTURED_SUFFIXES = (".yml", ".yaml", ".json")
 SHELL_SUFFIXES = (".sh", ".bash", ".zsh", ".env", ".envrc")
 MAKEFILE_NAMES = ("Makefile", "makefile", "GNUmakefile")
+BINARY_SUFFIXES = (
+    ".png", ".jpg", ".jpeg", ".gif", ".ico", ".icns", ".webp", ".bmp", ".pdf",
+    ".zip", ".gz", ".tgz", ".bz2", ".xz", ".7z", ".jar", ".war", ".whl",
+    ".woff", ".woff2", ".ttf", ".otf", ".eot", ".mp3", ".mp4", ".wav", ".webm",
+    ".wasm", ".so", ".dll", ".dylib", ".exe", ".bin", ".pyc", ".class",
+)
+BYTE_ORDER_MARKS = (
+    (b"\xff\xfe\x00\x00", "utf-32"),
+    (b"\x00\x00\xfe\xff", "utf-32"),
+    (b"\xef\xbb\xbf", "utf-8-sig"),
+    (b"\xff\xfe", "utf-16"),
+    (b"\xfe\xff", "utf-16"),
+)
 
 KINDS = {"env", "github-actions", "kubernetes-secret", "file"}
 STATUSES = {"active", "deferred"}
@@ -116,18 +140,22 @@ SECRET_LIKE = re.compile(
 
 ACTIONS_EXPRESSION = re.compile(r"\$\{\{(.*?)\}\}", re.DOTALL)
 ACTIONS_SECRET_REF = re.compile(
-    r"\bsecrets\s*(?:\.\s*" + NAME + r"|\[\s*['\"]" + NAME + r"['\"]\s*\])"
+    r"\bsecrets\s*(?:\.\s*" + NAME + r"|\[\s*['\"]" + NAME + r"['\"]\s*\])", re.IGNORECASE
 )
-ACTIONS_SECRET_DYNAMIC = re.compile(r"\bsecrets\s*\[\s*(?!['\"])")
-ACTIONS_ALL_SECRETS = re.compile(r"\btoJSON\s*\(\s*secrets\s*\)")
-ACTIONS_INHERIT = re.compile(r"^\s*secrets\s*:\s*['\"]?inherit['\"]?\s*(?:#.*)?$", re.MULTILINE)
+ACTIONS_SECRET_DYNAMIC = re.compile(r"\bsecrets\s*\[\s*(?!['\"])", re.IGNORECASE)
+ACTIONS_ALL_SECRETS = re.compile(r"\btoJSON\s*\(\s*secrets\s*\)", re.IGNORECASE)
+ACTIONS_INHERIT = re.compile(
+    r"^\s*secrets\s*:\s*['\"]?inherit['\"]?\s*(?:#.*)?$", re.MULTILINE | re.IGNORECASE
+)
 ACTIONS_BUILTIN = {"GITHUB_TOKEN"}
 
 K8S_SECRET_LINE = re.compile(
     r"^\s*['\"]?kind['\"]?\s*:\s*['\"]?Secret['\"]?\s*,?\s*(?:#.*)?$", re.MULTILINE
 )
-KUBECTL_LITERAL_SECRET = re.compile(r"\bkubectl\s+create\s+secret\b[^\n]*--from-literal")
+KUBECTL_LITERAL_SECRET = re.compile(r"\bkubectl\b[^\n]*?\bcreate\s+secret\b[^\n]*--from-literal")
 STRINGDATA_NON_SECRET_KEYS = {"type", "url", "project", "name", "insecure", "enableLfs", "proxy", "noProxy"}
+SOPS_VALUE = re.compile(r"^ENC\[AES256_GCM,data:[^\]]*\]$")
+VAULT_PREFIX = "$ANSIBLE_VAULT;"
 
 FILE_PATTERNS = (
     re.compile(r"\bansible(?:_ssh)?_private_key_file\s*[:=]\s*['\"]?([^'\"\s#,}]+)"),
@@ -141,13 +169,21 @@ PYTHON_HOME_PATH = re.compile(
 
 KEY_MATERIAL = re.compile(
     r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----|\bAGE-SECRET-KEY-1[0-9A-Z]{58}\b"
+    r"|PuTTY-User-Key-File-\d|client-key-data:\s*[\"']?[A-Za-z0-9+/]{20,}"
 )
+BASE64_BLOB = re.compile(r"[A-Za-z0-9+/]{64,}={0,2}")
+DECODED_KEY_MARKERS = (b"PRIVATE KEY-----", b"AGE-SECRET-KEY-1", b"PuTTY-User-Key-File-")
 LITERAL_ASSIGNMENT = r"(?<![A-Za-z0-9_]){name}[\"']?\s*[:=]\s*[\"']?([^\s\"']{{8,}})"
 TEMPLATE_MARKERS = ("{{", "{%", "lookup(", "query(", "${{", "$(", "${")
 
-PLACEHOLDER = re.compile(r"^(?:tbd|tba|todo|unknown|unresolved|n/?a|none|null|pending|\?*)$", re.IGNORECASE)
+PLACEHOLDER = re.compile(
+    r"^(?:tbd|tba|tbc|todo|unknown|unresolved|n/?a|none|null|pending|later|notset"
+    r"|tobedecided|tobedetermined|\?*)$",
+    re.IGNORECASE,
+)
+NOT_YET = re.compile(r"\bnot\s+(?:created|issued|yet)\b", re.IGNORECASE)
 FORBIDDEN_DESTINATION = re.compile(
-    r"hetzner|hcloud|your-objectstorage|your-server\.de|k3s-ha|old cluster|entrepeai", re.IGNORECASE  # provider-drift-ok: rejects old-cluster secret destinations
+    r"hetzner|hcloud|your-objectstorage|your-server\.de|your-storagebox|k3s-ha|entrepeai|\b(?:old|legacy|previous)\b[^\n]{0,40}?\bcluster\b", re.IGNORECASE  # provider-drift-ok: rejects old-cluster secret destinations
 )
 # END secret-scan patterns
 
@@ -167,14 +203,23 @@ def tracked_files(root: Path) -> list[str]:
     return sorted(f for f in out.decode("utf-8").split("\0") if f)
 
 
-def read_text(path: Path) -> str | None:
+def read_text(path: Path, rel: str) -> tuple[str | None, str | None]:
+    """Return (text, problem). A known binary file returns (None, None)."""
     try:
         data = path.read_bytes()
-    except OSError:
-        return None
-    if b"\0" in data[:8192]:
-        return None
-    return data.decode("utf-8", errors="replace")
+    except OSError as exc:
+        return None, f"cannot be read ({exc.__class__.__name__})"
+    for bom, encoding in BYTE_ORDER_MARKS:
+        if data.startswith(bom):
+            try:
+                return data.decode(encoding), None
+            except UnicodeDecodeError:
+                return None, "starts with a byte-order mark but does not decode"
+    if b"\0" in data:
+        if rel.lower().endswith(BINARY_SUFFIXES):
+            return None, None
+        return None, "contains NUL bytes without a byte-order mark -- cannot be checked for secrets"
+    return data.decode("utf-8", errors="replace"), None
 
 
 def pattern_block_lines(text: str) -> set[int]:
@@ -203,20 +248,48 @@ def is_literal(value: str | None) -> bool:
     return not any(marker in value for marker in TEMPLATE_MARKERS)
 
 
+def is_encrypted(node, value: str | None, sops_document: bool) -> bool:
+    """Ansible Vault values, and SOPS values inside a document that carries a sops block."""
+    if isinstance(node, yaml.ScalarNode) and node.tag == "!vault":
+        return True
+    if value and value.lstrip().startswith(VAULT_PREFIX):
+        return True
+    return bool(sops_document and value and SOPS_VALUE.match(value.strip()))
+
+
+def contains_key_material(text: str) -> bool:
+    if KEY_MATERIAL.search(text):
+        return True
+    for blob in BASE64_BLOB.findall(text)[:20]:
+        try:
+            decoded = base64.b64decode(blob + "=" * (-len(blob) % 4))
+        except (binascii.Error, ValueError):
+            continue
+        if any(marker in decoded for marker in DECODED_KEY_MARKERS):
+            return True
+    return False
+
+
 def compose_documents(text: str):
     try:
         return [node for node in yaml.compose_all(text, Loader=yaml.SafeLoader) if node is not None]
-    except yaml.YAMLError:
+    except (yaml.YAMLError, RecursionError):
         return None
 
 
-def iter_mappings(root_node):
+def walk_nodes(root_node):
+    """Every node once, following aliases a single time."""
+    seen: set[int] = set()
     stack = [root_node]
     while stack:
         node = stack.pop()
+        if id(node) in seen:
+            continue
+        seen.add(id(node))
+        yield node
         if isinstance(node, yaml.MappingNode):
-            yield node
-            stack.extend(value for _, value in node.value)
+            for key, value in node.value:
+                stack.extend((key, value))
         elif isinstance(node, yaml.SequenceNode):
             stack.extend(node.value)
 
@@ -232,6 +305,23 @@ def mapping_get(mapping: yaml.MappingNode, key: str):
         if scalar(key_node) == key:
             return value_node
     return None
+
+
+def has_sops_block(document) -> bool:
+    return isinstance(document, yaml.MappingNode) and isinstance(mapping_get(document, "sops"), yaml.MappingNode)
+
+
+def join_continuations(text: str) -> tuple[str, list[int]]:
+    """Join backslash-newline continuations; return the text and the offsets of each join."""
+    joins: list[int] = []
+    parts: list[str] = []
+    position = 0
+    for match in re.finditer(r"\\\r?\n", text):
+        parts.append(text[position:match.start()])
+        joins.append(sum(len(part) for part in parts))
+        position = match.end()
+    parts.append(text[position:])
+    return "".join(parts), joins
 
 
 def discover(rel: str, text: str, strict: bool, found, problems: list[str], documents) -> None:
@@ -273,7 +363,7 @@ def discover(rel: str, text: str, strict: bool, found, problems: list[str], docu
         body = expression.group(1)
         for dotted, indexed in ACTIONS_SECRET_REF.findall(body):
             name = dotted or indexed
-            if name not in ACTIONS_BUILTIN:
+            if name.upper() not in ACTIONS_BUILTIN:
                 found[("github-actions", name)].append(at(expression.start()))
         if ACTIONS_SECRET_DYNAMIC.search(body):
             problems.append(f"{at(expression.start())}: Actions secrets reference with a non-literal name -- its destination cannot be checked")
@@ -286,27 +376,32 @@ def discover(rel: str, text: str, strict: bool, found, problems: list[str], docu
     secret_line = K8S_SECRET_LINE.search(text)
     if secret_line:
         found[("kubernetes-secret", rel)].append(at(secret_line.start()))
-    for match in KUBECTL_LITERAL_SECRET.finditer(text):
-        problems.append(f"{at(match.start())}: kubectl creates a secret from a literal flag, putting its value on the command line (value not shown)")
+    joined, joins = join_continuations(text)
+    for match in KUBECTL_LITERAL_SECRET.finditer(joined):
+        lineno = joined.count("\n", 0, match.start()) + 1 + sum(1 for offset in joins if offset <= match.start())
+        problems.append(f"{rel}:{lineno}: kubectl creates a secret from a literal flag, putting its value on the command line (value not shown)")
 
     for document in documents or []:
-        for mapping in iter_mappings(document):
-            if scalar(mapping_get(mapping, "kind")) == "Secret":
-                found[("kubernetes-secret", rel)].append(f"{rel}:{mapping.start_mark.line + 1}")
+        sops_document = has_sops_block(document)
+        for node in walk_nodes(document):
+            if not isinstance(node, yaml.MappingNode):
+                continue
+            if scalar(mapping_get(node, "kind")) == "Secret":
+                found[("kubernetes-secret", rel)].append(f"{rel}:{node.start_mark.line + 1}")
                 for field in ("data", "stringData"):
-                    block = mapping_get(mapping, field)
+                    block = mapping_get(node, field)
                     if not isinstance(block, yaml.MappingNode):
                         continue
                     for key_node, value_node in block.value:
-                        key = scalar(key_node)
+                        key, value = scalar(key_node), scalar(value_node)
                         if field == "stringData" and key in STRINGDATA_NON_SECRET_KEYS:
                             continue
-                        if is_literal(scalar(value_node)):
+                        if is_literal(value) and not is_encrypted(value_node, value, sops_document):
                             problems.append(
                                 f"{rel}:{value_node.start_mark.line + 1}: Secret {field}.{key} holds a literal "
                                 "value -- commit it encrypted or templated (value not shown)"
                             )
-            generators = mapping_get(mapping, "secretGenerator")
+            generators = mapping_get(node, "secretGenerator")
             if isinstance(generators, yaml.SequenceNode):
                 found[("kubernetes-secret", rel)].append(f"{rel}:{generators.start_mark.line + 1}")
                 for generator in generators.value:
@@ -318,6 +413,12 @@ def discover(rel: str, text: str, strict: bool, found, problems: list[str], docu
                             f"{rel}:{generator.start_mark.line + 1}: kustomize secretGenerator with literals "
                             "commits a secret value (value not shown)"
                         )
+            secrets_value = scalar(mapping_get(node, "secrets"))
+            if mapping_get(node, "uses") is not None and secrets_value and secrets_value.strip().lower() == "inherit":
+                problems.append(
+                    f"{rel}:{node.start_mark.line + 1}: inheriting secrets passes every secret to the called "
+                    "workflow -- pass secrets by name"
+                )
 
     for pattern in FILE_PATTERNS:
         for match in pattern.finditer(text):
@@ -329,7 +430,7 @@ def discover(rel: str, text: str, strict: bool, found, problems: list[str], docu
 def load_register(path: Path, errors: list[str]) -> dict[tuple[str, str], dict]:
     try:
         data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError) as exc:
+    except (OSError, UnicodeDecodeError, yaml.YAMLError, RecursionError) as exc:
         errors.append(f"{REGISTER}: cannot be read ({exc.__class__.__name__})")
         return {}
     entries = (data or {}).get("secrets") if isinstance(data, dict) else None
@@ -355,14 +456,19 @@ def load_register(path: Path, errors: list[str]) -> dict[tuple[str, str], dict]:
             errors.append(f"{label}: sensitive must be true or false")
         if entry["status"] not in STATUSES:
             errors.append(f"{label}: status must be one of {sorted(STATUSES)}")
+        texts = {}
         for field in ("purpose", "held_in", "provider"):
             value = entry[field]
-            compact = re.sub(r"[^A-Za-z0-9/?]+", "", value) if isinstance(value, str) else ""
+            normalized = unicodedata.normalize("NFKC", value) if isinstance(value, str) else ""
+            texts[field] = normalized
+            compact = re.sub(r"[^A-Za-z0-9/?]+", "", normalized)
             if not isinstance(value, str) or PLACEHOLDER.match(compact):
                 errors.append(f"{label}: {field} is empty or a placeholder -- unresolved secret destination")
         for field in ("held_in", "provider"):
-            if isinstance(entry[field], str) and FORBIDDEN_DESTINATION.search(entry[field]):
-                errors.append(f"{label}: {field} names Hetzner or the old cluster -- not an allowed secret destination")
+            if FORBIDDEN_DESTINATION.search(texts[field]):
+                errors.append(f"{label}: {field} names Hetzner or an old or legacy cluster -- not an allowed secret destination")
+        if entry["status"] == "active" and NOT_YET.search(texts["held_in"]):
+            errors.append(f"{label}: active entry says the secret does not exist yet -- mark it deferred with a gate")
         gate = entry.get("deferred_until_gate")
         if entry["status"] == "deferred":
             if not isinstance(gate, int) or isinstance(gate, bool) or not 1 <= gate <= 31:
@@ -397,7 +503,10 @@ def main() -> int:
 
     for rel in files:
         path = root / rel
-        raw = read_text(path)
+        raw, problem = read_text(path, rel)
+        if problem:
+            problems.append(f"{rel}: {problem}")
+            continue
         if raw is None:
             continue
         exempt = pattern_block_lines(raw) if path.resolve() == SELF else set()
@@ -423,55 +532,79 @@ def main() -> int:
             kind, name = key
             problems.append(f"{REGISTER}: {kind} {name} is registered but nothing consumes it -- remove the stale entry")
 
-    # Names whose literal assignment would commit a secret: sensitive registered
-    # env / Actions names, and every Ansible variable fed from a sensitive env lookup.
+    # Names whose literal assignment would commit a secret. Sensitive registered
+    # env / Actions names are protected in every file. An Ansible variable fed
+    # from a sensitive env lookup is protected only under ansible/, where
+    # Ansible's variable precedence can override it -- elsewhere the same key
+    # name (password, token) is ordinary text.
     non_sensitive = {name for (kind, name), entry in register.items() if kind == "env" and entry.get("sensitive") is False}
-    protected = {
+    protected_everywhere = {
         name for (kind, name), entry in register.items()
         if kind in ("env", "github-actions") and entry.get("sensitive") is not False
     }
+    protected_ansible: set[str] = set()
     for rel, parsed in documents.items():
         if not rel.startswith(STRICT_ROOTS):
             continue
         for document in parsed:
-            for mapping in iter_mappings(document):
-                for key_node, value_node in mapping.value:
+            for node in walk_nodes(document):
+                if not isinstance(node, yaml.MappingNode):
+                    continue
+                for key_node, value_node in node.value:
                     key, value = scalar(key_node), scalar(value_node)
                     if not key or not value:
                         continue
                     for call in ANSIBLE_ENV_CALL.finditer(value):
                         if any(name not in non_sensitive for name in QUOTED_NAME.findall(call.group(1))):
-                            protected.add(key)
+                            protected_ansible.add(key)
+
+    def protected_in(rel: str) -> set[str]:
+        return protected_everywhere | protected_ansible if rel.startswith(ANSIBLE_ROOT) else protected_everywhere
 
     for rel, parsed in documents.items():
         if rel == REGISTER.as_posix():
             continue
+        names = protected_in(rel)
         for document in parsed:
-            for mapping in iter_mappings(document):
-                for key_node, value_node in mapping.value:
-                    key = scalar(key_node)
-                    if key in protected and is_literal(scalar(value_node)):
+            sops_document = has_sops_block(document)
+            for node in walk_nodes(document):
+                if not isinstance(node, yaml.MappingNode):
+                    continue
+                for key_node, value_node in node.value:
+                    key, value = scalar(key_node), scalar(value_node)
+                    if key in names and is_literal(value) and not is_encrypted(value_node, value, sops_document):
                         problems.append(
                             f"{rel}:{value_node.start_mark.line + 1}: {key} is assigned a literal value (value not shown)"
                         )
 
-    literal_patterns = [
-        (name, re.compile(LITERAL_ASSIGNMENT.format(name=re.escape(name))))
-        for name in sorted(protected)
-    ]
+    patterns_cache: dict[str, re.Pattern] = {}
+
+    def assignment(name: str) -> re.Pattern:
+        if name not in patterns_cache:
+            patterns_cache[name] = re.compile(LITERAL_ASSIGNMENT.format(name=re.escape(name)))
+        return patterns_cache[name]
+
+    reported_keys: set[tuple[str, int]] = set()
     for rel, (raw, exempt) in texts.items():
         structured = rel in documents
+        names = sorted(protected_in(rel))
         for lineno, line in enumerate(raw.splitlines(), 1):
-            if lineno in exempt:
-                continue
-            if KEY_MATERIAL.search(line):
+            if contains_key_material(line) and (rel, lineno) not in reported_keys:
+                reported_keys.add((rel, lineno))
                 problems.append(f"{rel}:{lineno}: private key material in a tracked file (content not shown)")
-            if structured or rel == REGISTER.as_posix():
+            if lineno in exempt or structured or rel == REGISTER.as_posix():
                 continue
-            for name, pattern in literal_patterns:
-                for match in pattern.finditer(line):
+            for name in names:
+                for match in assignment(name).finditer(line):
                     if is_literal(match.group(1)) and not match.group(1).startswith(("$", "{", "<")):
                         problems.append(f"{rel}:{lineno}: {name} appears to be assigned a literal value (value not shown)")
+        for document in documents.get(rel, []):
+            for node in walk_nodes(document):
+                value = scalar(node)
+                lineno = node.start_mark.line + 1
+                if value and contains_key_material(value) and (rel, lineno) not in reported_keys:
+                    reported_keys.add((rel, lineno))
+                    problems.append(f"{rel}:{lineno}: private key material in a tracked file (content not shown)")
 
     for problem in problems:
         print(f"ERROR: {problem}")

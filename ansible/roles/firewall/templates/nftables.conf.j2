@@ -21,11 +21,23 @@ table inet filter {
     ip6 nexthdr ipv6-icmp accept
 
     # The private vLAN is trusted in full. This covers the entire k3s and
-    # Cilium port surface -- 6443, 2379-2380, 10250, 8472/udp VXLAN,
-    # 51871/udp WireGuard, 4240 health -- without enumerating ports that
-    # would then need maintaining as Cilium's needs change.
+    # Cilium NODE-to-node port surface -- 6443, 2379-2380, 10250, 8472/udp
+    # VXLAN, 51871/udp WireGuard, 4240 health -- without enumerating ports
+    # that would then need maintaining as Cilium's needs change.
 {% for net in firewall_trusted_networks %}
     ip saddr {{ net }} accept
+{% endfor %}
+
+    # The pod CIDR gets ONLY the port it needs, not a blanket trust like the
+    # vLAN above: a pod's traffic to a host-network service on a different
+    # node (e.g. `kubernetes:443` -> Cilium DNATs to a real node:6443)
+    # arrives with the pod's own address as source, which the vLAN rule
+    # above does not cover (Gate 6). Scoped to the API port only -- pods have
+    # no other reason to reach a host directly today, and widening this
+    # again needs its own justification, the same discipline as the public
+    # ports below.
+{% for net in firewall_trusted_pod_networks %}
+    ip saddr {{ net }} tcp dport {{ firewall_trusted_pod_api_port }} accept
 {% endfor %}
 
     # SSH on the public interface. Always allowed: locking this out costs a

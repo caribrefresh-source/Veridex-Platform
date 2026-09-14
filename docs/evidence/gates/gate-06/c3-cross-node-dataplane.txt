@@ -1,0 +1,33 @@
+gate: 6
+check: G06-C3
+captured_utc: 2026-09-14T11:55:01Z
+repo_commit: 4971cbca9a52ce3946d345c944dfdbc20bc27e4b
+plan_commit: 4ebc8def34df78a0bc6b29e42656986ef987f4c9
+plan_sha256: 42eaac5e61d177430ce8e331767d2137b3f9b2bd197e13945b84f7c5e8cd79c7
+target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API server https://10.2.0.100:6443 (private VIP); hosts veridex-server-1/2/3, veridex-agent-1/2
+captured_by: agent
+command: Two disposable pods pinned to different nodes (server-1, agent-1) via nodeName override; ping across the pod overlay; plus the pod-to-API-across-nodes path this gate's firewall fix was built to close (see c4/build commit for that specific check)
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: Confirms pod-to-pod cross-node connectivity over the VXLAN overlay. The pod-to-host-network-service cross-node path (the actual gap this gate found and fixed) is evidenced separately by the successful CoreDNS deployment itself (C4/C5), which could not have worked otherwise.
+--- unedited output ---
+pod/dp-test-a condition met
+pod/dp-test-b condition met
+--- pod IPs and nodes ---
+NAME        READY   STATUS    RESTARTS   AGE   IP            NODE               NOMINATED NODE   READINESS GATES
+dp-test-a   1/1     Running   0          16s   10.44.0.52    veridex-server-1   <none>           <none>
+dp-test-b   1/1     Running   0          16s   10.44.4.160   veridex-agent-1    <none>           <none>
+--- ping across nodes (server-1 -> agent-1) ---
+PING 10.44.4.160 (10.44.4.160): 56 data bytes
+64 bytes from 10.44.4.160: seq=0 ttl=63 time=1.715 ms
+64 bytes from 10.44.4.160: seq=1 ttl=63 time=2.236 ms
+64 bytes from 10.44.4.160: seq=2 ttl=63 time=2.684 ms
+
+--- 10.44.4.160 ping statistics ---
+3 packets transmitted, 3 packets received, 0% packet loss
+round-trip min/avg/max = 1.715/2.211/2.684 ms
+--- cleanup ---
+pod "dp-test-a" deleted from default namespace
+pod "dp-test-b" deleted from default namespace
+error: timed out waiting for the condition on pods/dp-test-a

@@ -154,6 +154,12 @@ spec:
               add: ["NET_BIND_SERVICE"]
               drop: ["all"]
             readOnlyRootFilesystem: true
+            # Verified live 2026-09-14: the image's own default is UID 65532
+            # (distroless "nonroot" convention) -- enforced explicitly rather
+            # than left implicit, so a future image change that defaulted to
+            # root would fail to start instead of silently running as root.
+            runAsNonRoot: true
+            runAsUser: 65532
           livenessProbe:
             httpGet:
               path: /health
@@ -201,3 +207,21 @@ spec:
     - name: metrics
       port: 9153
       protocol: TCP
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: coredns
+  namespace: {{ coredns_namespace }}
+  labels:
+    k8s-app: kube-dns
+spec:
+  # Found by independent review: with 2 replicas and no PDB, a routine node
+  # drain (this repo's own Ansible-driven host maintenance) could evict a
+  # CoreDNS pod with no protection, and if the other replica were
+  # concurrently restarting, cluster DNS would briefly have zero ready pods
+  # with nothing preventing it.
+  minAvailable: 1
+  selector:
+    matchLabels:
+      k8s-app: kube-dns

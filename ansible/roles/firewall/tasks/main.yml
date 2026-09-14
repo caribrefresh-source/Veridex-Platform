@@ -22,6 +22,18 @@
       leaving a cluster that cannot form.
     quiet: true
 
+- name: Assert the pod-network trust list is not empty
+  ansible.builtin.assert:
+    that:
+      - firewall_trusted_pod_networks | length > 0
+      - firewall_trusted_pod_api_port | int > 0
+    fail_msg: >-
+      firewall_trusted_pod_networks or firewall_trusted_pod_api_port is unset.
+      Without this, a pod's own traffic to a host-network service on a
+      different node (e.g. the API server via the kubernetes ClusterIP) has
+      no path through the default-drop INPUT policy (Gate 6).
+    quiet: true
+
 - name: Write the nftables ruleset
   ansible.builtin.template:
     src: nftables.conf.j2
@@ -50,12 +62,38 @@
   register: _nft
   changed_when: false
 
-- name: Assert the vLAN is trusted and SSH survived
+- name: Assert every trusted network and the SSH rule are present in the live ruleset
   ansible.builtin.assert:
     that:
       - "'policy drop' in _nft.stdout"
-      - firewall_trusted_networks[0] in _nft.stdout
+      - item in _nft.stdout
       - "'dport ' ~ firewall_ssh_port in _nft.stdout"
-    fail_msg: "Active ruleset is missing the drop policy, the vLAN accept, or the SSH accept."
-    success_msg: "nftables active: default drop, {{ firewall_trusted_networks | join(', ') }} trusted, SSH {{ firewall_ssh_port }} open"
+    fail_msg: "Active ruleset is missing the drop policy, the '{{ item }}' accept, or the SSH accept."
     quiet: true
+  loop: "{{ firewall_trusted_networks + firewall_trusted_pod_networks }}"
+
+- name: Assert the pod-network rule is scoped to the API port, not a blanket accept
+  ansible.builtin.assert:
+    that:
+      - (firewall_trusted_pod_networks[0] ~ ' tcp dport ' ~ firewall_trusted_pod_api_port) in (_nft.stdout | replace('\n', ' '))
+    fail_msg: >-
+      The pod-network rule does not appear scoped to tcp/{{ firewall_trusted_pod_api_port }}
+      in the live ruleset -- it may have rendered as (or regressed to) a
+      blanket accept, which an independent review flagged as an unnecessary
+      blast-radius widening (Gate 6).
+    quiet: true
+
+- name: Force a brand-new SSH connection (drop any multiplexed socket)
+  # Same reasoning as roles/ssh-hardening: a string appearing in `nft list
+  # ruleset` proves the rule TEXT is present, not that the ruleset actually
+  # still admits a real connection. Forcing a fresh TCP+auth handshake is
+  # the only test that would actually catch a logic error (wrong chain,
+  # shadowed rule) rather than just a missing line.
+  ansible.builtin.meta: reset_connection
+
+- name: Confirm SSH still works over a fresh connection after the reload
+  ansible.builtin.command:
+    cmd: whoami
+  register: _post_fw_whoami
+  changed_when: false
+  failed_when: _post_fw_whoami.stdout != "root"

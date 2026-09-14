@@ -1,0 +1,35 @@
+gate: 6
+check: G06-C1
+captured_utc: 2026-09-14T11:55:01Z
+repo_commit: 4971cbca9a52ce3946d345c944dfdbc20bc27e4b
+plan_commit: 4ebc8def34df78a0bc6b29e42656986ef987f4c9
+plan_sha256: 42eaac5e61d177430ce8e331767d2137b3f9b2bd197e13945b84f7c5e8cd79c7
+target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API server https://10.2.0.100:6443 (private VIP); hosts veridex-server-1/2/3, veridex-agent-1/2
+captured_by: agent
+command: ssh root@server-1 -- KUBECONFIG=/etc/rancher/k3s/k3s.yaml cilium status --wait=false
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: Confirms DaemonSet/Operator health at capture time; Cilium itself was already built and verified at an earlier point in this session -- this gate re-confirms it, not re-builds it.
+--- unedited output ---
+=== cilium status ===
+[33m    /¯¯\
+[36m /¯¯[33m\__/[32m¯¯\[0m    Cilium:             [32mOK[0m
+[36m \__[31m/¯¯\[32m__/[0m    Operator:           [32mOK[0m
+[32m /¯¯[31m\__/[35m¯¯\[0m    Envoy DaemonSet:    [32mOK[0m
+[32m \__[34m/¯¯\[35m__/[0m    Hubble Relay:       [36mdisabled[0m
+[34m[34m[34m    \__/[0m       ClusterMesh:        [36mdisabled[0m
+
+DaemonSet              cilium                   Desired: 5, Ready: [32m5/5[0m, Available: [32m5/5[0m
+DaemonSet              cilium-envoy             Desired: 5, Ready: [32m5/5[0m, Available: [32m5/5[0m
+Deployment             cilium-operator          Desired: 2, Ready: [32m2/2[0m, Available: [32m2/2[0m
+Containers:            cilium                   Running: [32m5[0m
+                       cilium-envoy             Running: [32m5[0m
+                       cilium-operator          Running: [32m2[0m
+                       clustermesh-apiserver    
+                       hubble-relay             
+Cluster Pods:          10/10 managed by Cilium
+Helm chart version:    1.20.1
+Image versions         cilium             quay.io/cilium/cilium:v1.20.1@sha256:ae9ea21f7427fe24bc6ea7247eb552157a1b0a431744045d3f641545ca71d11b: 5
+                       cilium-envoy       quay.io/cilium/cilium-envoy:v1.37.5-1786810558-766ccfb37260a43e9d228837aa84ce3faf9f64e7@sha256:75b8094c7127736a2ffd2dce3945e0931cb6df21b0372ff661940eca26730b91: 5
+                       cilium-operator    quay.io/cilium/operator-generic:v1.20.1@sha256:6c3885fc7b629099fdbe2a5c87869c86feb825fa18fae299eac0f61918d16ecf: 2

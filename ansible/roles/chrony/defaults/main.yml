@@ -1,0 +1,18 @@
+---
+# chrony role default variables
+
+# Pinned NTP pools -- explicit rather than relying on the chrony package's
+# distro-default pool list, which varies between Ubuntu point releases and is
+# not version-controlled. Two independent providers for redundancy; neither
+# is Hetzner-operated (CLAUDE.md provider boundary).
+chrony_pools:
+  - ntp.ubuntu.com
+  - time.cloudflare.com
+
+# Maximum acceptable offset (seconds) for chronyc waitsync to accept as
+# "synchronized" during verification.
+chrony_max_offset_seconds: 1.0
+
+# Bound on chronyc waitsync's polling attempts, so a node that never
+# synchronizes fails the play instead of hanging it.
+chrony_waitsync_max_tries: 30

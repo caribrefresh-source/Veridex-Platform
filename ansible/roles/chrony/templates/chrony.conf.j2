@@ -1,0 +1,21 @@
+# Managed by Ansible (roles/chrony). Do not edit by hand -- changes here are
+# overwritten on the next converge; edit ansible/roles/chrony/templates and
+# ansible/inventory/production/group_vars/all.yml (chrony_pools) instead.
+#
+# Gate 1 requires healthy, verifiable time synchronization; Gate 4's embedded
+# etcd needs bounded clock skew across all three voters. Verified live
+# 2026-09-13: chrony was not installed on any of the five nodes before this
+# role existed.
+{% for pool in chrony_pools %}
+pool {{ pool }} iburst
+{% endfor %}
+
+driftfile /var/lib/chrony/chrony.drift
+
+# Step the clock on the first few large corrections at boot, then only slew.
+# Avoids a large one-time jump being mistaken for ongoing drift.
+makestep 1.0 3
+
+rtcsync
+
+logdir /var/log/chrony

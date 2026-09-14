@@ -1,0 +1,29 @@
+gate: 1
+check: G01-C5
+captured_utc: 2026-09-14T03:11:49Z
+repo_commit: 35730638452fac63972aa37bd38346d96e37e5e1
+plan_commit: 4ebc8def34df78a0bc6b29e42656986ef987f4c9
+plan_sha256: 42eaac5e61d177430ce8e331767d2137b3f9b2bd197e13945b84f7c5e8cd79c7
+target_identity: hosts veridex-server-1 (152.53.177.26), veridex-server-2 (152.53.140.210), veridex-server-3 (152.53.142.131), veridex-agent-1 (159.195.197.136), veridex-agent-2 (159.195.197.40); host-key fingerprints match ansible/files/known_hosts
+captured_by: agent
+command: ssh -i ~/.ssh/veridex_breakglass_ed25519 root@<node> 'whoami; hostname' -- using ONLY the break-glass key, on all five nodes (added after an independent review flagged the first pass as only 2 of 5)
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: Proves the fallback key authenticates as root on every node today. Does not simulate the primary key's workstation actually being lost, and does not test netcup's own rescue console. Known limitation disclosed in docs/security/emergency-access.md: both keys currently live on the same operator workstation, so this closes "lost one key file" but not "lost the workstation" -- tracked as an open gap, not fixed by this gate.
+--- unedited output ---
+=== break-glass key access test (server-1) ===
+root
+veridex-server-1
+=== break-glass key access test (agent-2, different node) ===
+root
+veridex-agent-2
+=== break-glass key access test (veridex-server-2, 152.53.140.210) ===
+root
+veridex-server-2
+=== break-glass key access test (veridex-server-3, 152.53.142.131) ===
+root
+veridex-server-3
+=== break-glass key access test (veridex-agent-1, 159.195.197.136) ===
+root
+veridex-agent-1

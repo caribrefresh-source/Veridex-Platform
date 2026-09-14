@@ -1,0 +1,30 @@
+gate: 1
+check: G01-C4
+captured_utc: 2026-09-14T02:51:21Z
+repo_commit: 35730638452fac63972aa37bd38346d96e37e5e1
+plan_commit: 4ebc8def34df78a0bc6b29e42656986ef987f4c9
+plan_sha256: 42eaac5e61d177430ce8e331767d2137b3f9b2bd197e13945b84f7c5e8cd79c7
+target_identity: hosts veridex-server-1 (152.53.177.26), veridex-server-2 (152.53.140.210), veridex-server-3 (152.53.142.131), veridex-agent-1 (159.195.197.136), veridex-agent-2 (159.195.197.40); host-key fingerprints match ansible/files/known_hosts
+captured_by: agent
+command: ssh-keyscan -t ed25519 <5 public IPs>, diffed against the committed ansible/files/known_hosts
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: Confirms host keys are unchanged since the Gate 1 baseline capture (2026-09-13). Baseline itself was trust-on-first-use, disclosed in ansible/files/known_hosts -- no independent out-of-band source (e.g. netcup provisioning email) was available to this session to cross-check the original capture against.
+--- unedited output ---
+-- fresh ssh-keyscan, sorted --
+152.53.140.210 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHyaf5djwks5cbzlKr9/AiPaMXE5fVali3g8gxFtBEci
+152.53.142.131 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIO9pIy9q9CSH8/nhineKkH8uSrQxTkKuENMt/+mt/B6p
+152.53.177.26 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKTi+64sPNZu5CrIvSWShoWlMPvbKZJIJ88dH5UX44qJ
+159.195.197.136 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGEwtFbO3y/VygSc4cfq8hV2RnwlQM5Tn3Iq5VpeRMx+
+159.195.197.40 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDMmuscxcK2NMzsg1npgcwvE2ndJ8IDZjvewjrkgHPcI
+
+-- committed baseline (ansible/files/known_hosts), sorted, comments stripped --
+152.53.140.210 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHyaf5djwks5cbzlKr9/AiPaMXE5fVali3g8gxFtBEci
+152.53.142.131 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIO9pIy9q9CSH8/nhineKkH8uSrQxTkKuENMt/+mt/B6p
+152.53.177.26 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKTi+64sPNZu5CrIvSWShoWlMPvbKZJIJ88dH5UX44qJ
+159.195.197.136 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGEwtFbO3y/VygSc4cfq8hV2RnwlQM5Tn3Iq5VpeRMx+
+159.195.197.40 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDMmuscxcK2NMzsg1npgcwvE2ndJ8IDZjvewjrkgHPcI
+
+-- diff (empty = exact match) --
+diff exit status: 0

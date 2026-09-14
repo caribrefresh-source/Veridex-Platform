@@ -2,6 +2,17 @@
 - name: Prepare hosts for k3s
   hosts: all
   become: true
+  # One node at a time: ssh-hardening reloads sshd and reconnects on every
+  # host it touches. Without this, a bad config change fails loudly on node 1
+  # only after 4 other hosts already ran the same reload in the same batch
+  # (default forks=5) -- serial makes "fails on the first node" true instead
+  # of aspirational.
+  serial: 1
   roles:
     - common
+    - chrony
+    # ssh-access before ssh-hardening: the break-glass key must already be
+    # installed before root login is tightened, not after.
+    - ssh-access
+    - ssh-hardening
     - firewall

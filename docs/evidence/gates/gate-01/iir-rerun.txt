@@ -1,0 +1,580 @@
+gate: 1
+check: G01-IIR
+captured_utc: 2026-09-14T03:16:09Z
+repo_commit: 35730638452fac63972aa37bd38346d96e37e5e1
+plan_commit: 4ebc8def34df78a0bc6b29e42656986ef987f4c9
+plan_sha256: 42eaac5e61d177430ce8e331767d2137b3f9b2bd197e13945b84f7c5e8cd79c7
+target_identity: hosts veridex-server-1 (152.53.177.26), veridex-server-2 (152.53.140.210), veridex-server-3 (152.53.142.131), veridex-agent-1 (159.195.197.136), veridex-agent-2 (159.195.197.40); host-key fingerprints match ansible/files/known_hosts
+captured_by: agent
+command: ansible-playbook -i inventory/production/hosts.yml playbooks/prepare-hosts.yml (fleet-wide, serial: 1, no --limit; rerun against nodes already converged by this gate, including the hardening-loop fixes)
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: Proves this converge is idempotent and safe to rerun on this commit; does not by itself prove reproducibility from a bare/reinstalled node (that would additionally exercise the k3s/kubevip/kubeconfig roles, out of Gate 1's scope).
+--- unedited output ---
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+[WARNING]: Ansible is being run in a world writable directory (/work/ansible), ignoring it as an ansible.cfg source. For more information see https://docs.ansible.com/ansible/devel/reference_appendices/config.html#cfg-in-world-writable-dir
+
+PLAY [Prepare hosts for k3s] ***************************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [veridex-server-1]
+
+TASK [common : Assert the node runs the approved Ubuntu release (Gate 1 stop condition)] ***
+[WARNING]: Deprecation warnings can be disabled by setting `deprecation_warnings=False` in ansible.cfg.
+[DEPRECATION WARNING]: INJECT_FACTS_AS_VARS default to `True` is deprecated, top-level facts will not be auto injected after the change. This feature will be removed from ansible-core version 2.24.
+Origin: /work/ansible/roles/common/tasks/main.yml:20:15
+
+18       - ansible_distribution == "Ubuntu"
+19       - ansible_distribution_version == "24.04"
+20     fail_msg: >-
+                 ^ column 15
+
+Use `ansible_facts["fact_name"]` (no `ansible_` prefix) instead.
+
+[DEPRECATION WARNING]: INJECT_FACTS_AS_VARS default to `True` is deprecated, top-level facts will not be auto injected after the change. This feature will be removed from ansible-core version 2.24.
+Origin: /work/ansible/roles/common/tasks/main.yml:18:9
+
+16   ansible.builtin.assert:
+17     that:
+18       - ansible_distribution == "Ubuntu"
+           ^ column 9
+
+Use `ansible_facts["fact_name"]` (no `ansible_` prefix) instead.
+
+[DEPRECATION WARNING]: INJECT_FACTS_AS_VARS default to `True` is deprecated, top-level facts will not be auto injected after the change. This feature will be removed from ansible-core version 2.24.
+Origin: /work/ansible/roles/common/tasks/main.yml:19:9
+
+17     that:
+18       - ansible_distribution == "Ubuntu"
+19       - ansible_distribution_version == "24.04"
+           ^ column 9
+
+Use `ansible_facts["fact_name"]` (no `ansible_` prefix) instead.
+
+ok: [veridex-server-1]
+
+TASK [common : Assert the inventory carries the facts this role needs] *********
+ok: [veridex-server-1]
+
+TASK [common : Assert the vLAN prefix is /16, not /24] *************************
+ok: [veridex-server-1]
+
+TASK [common : Configure the private vLAN interface] ***************************
+ok: [veridex-server-1]
+
+TASK [common : Flush handlers so the address exists before anything depends on it] ***
+
+TASK [common : Read back the configured address] *******************************
+ok: [veridex-server-1]
+
+TASK [common : Assert the interface actually carries the intended address] *****
+ok: [veridex-server-1]
+
+TASK [chrony : Install chrony] *************************************************
+ok: [veridex-server-1]
+
+TASK [chrony : Render pinned chrony configuration] *****************************
+ok: [veridex-server-1]
+
+TASK [chrony : Ensure chrony is enabled and running] ***************************
+ok: [veridex-server-1]
+
+TASK [chrony : Flush handlers so a config change is applied before verification] ***
+
+TASK [chrony : Wait for chrony to reach a synchronized source (bounded, not a sleep)] ***
+ok: [veridex-server-1]
+
+TASK [chrony : Assert chrony reports a synchronized source] ********************
+ok: [veridex-server-1]
+
+TASK [ssh-access : Assert at least two admin keys are registered (primary + break-glass)] ***
+ok: [veridex-server-1]
+
+TASK [ssh-access : Validate each managed key is a well-formed public key] ******
+ok: [veridex-server-1] => (item=veridex-netcup-prod)
+ok: [veridex-server-1] => (item=veridex-breakglass-20260913)
+
+TASK [ssh-access : Ensure /root/.ssh exists with correct permissions] **********
+ok: [veridex-server-1]
+
+TASK [ssh-access : Render authorized_keys as the exact, version-controlled key list] ***
+ok: [veridex-server-1]
+
+TASK [ssh-access : Read back authorized_keys] **********************************
+ok: [veridex-server-1]
+
+TASK [ssh-access : Assert every managed key is present verbatim after write] ***
+ok: [veridex-server-1] => (item=ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBA7DycmfVL0xn6PmaeNRF9WMbxj6TEwTsT4wnRjc2JQ veridex-netcup-prod 2026-09-12)
+ok: [veridex-server-1] => (item=ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICkVHpa5QDvDNtnuypS2JjSik58cRomRqU6EQ/ci8ljD veridex-breakglass-20260913)
+
+TASK [ssh-hardening : Render the veridex SSH hardening drop-in] ****************
+ok: [veridex-server-1]
+
+TASK [ssh-hardening : Validate sshd configuration before reloading] ************
+ok: [veridex-server-1]
+
+TASK [ssh-hardening : Reload sshd to apply the drop-in] ************************
+skipping: [veridex-server-1]
+
+TASK [ssh-hardening : Force a brand-new SSH connection (drop any multiplexed socket)] ***
+
+TASK [ssh-hardening : Confirm key-only access still works over a fresh connection] ***
+ok: [veridex-server-1]
+
+TASK [ssh-hardening : Assert the fresh connection actually authenticated as root] ***
+ok: [veridex-server-1]
+
+TASK [ssh-hardening : Read sshd's effective configuration] *********************
+ok: [veridex-server-1]
+
+TASK [ssh-hardening : Assert the hardened values are actually effective] *******
+ok: [veridex-server-1]
+
+TASK [firewall : Install nftables] *********************************************
+ok: [veridex-server-1]
+
+TASK [firewall : Assert the trusted network list is not empty] *****************
+ok: [veridex-server-1]
+
+TASK [firewall : Write the nftables ruleset] ***********************************
+ok: [veridex-server-1]
+
+TASK [firewall : Enable and start nftables] ************************************
+ok: [veridex-server-1]
+
+TASK [firewall : Flush handlers so the ruleset is live before it is verified] ***
+
+TASK [firewall : Read back the active ruleset] *********************************
+ok: [veridex-server-1]
+
+TASK [firewall : Assert the vLAN is trusted and SSH survived] ******************
+ok: [veridex-server-1]
+
+PLAY [Prepare hosts for k3s] ***************************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [veridex-server-2]
+
+TASK [common : Assert the node runs the approved Ubuntu release (Gate 1 stop condition)] ***
+ok: [veridex-server-2]
+
+TASK [common : Assert the inventory carries the facts this role needs] *********
+ok: [veridex-server-2]
+
+TASK [common : Assert the vLAN prefix is /16, not /24] *************************
+ok: [veridex-server-2]
+
+TASK [common : Configure the private vLAN interface] ***************************
+ok: [veridex-server-2]
+
+TASK [common : Flush handlers so the address exists before anything depends on it] ***
+
+TASK [common : Read back the configured address] *******************************
+ok: [veridex-server-2]
+
+TASK [common : Assert the interface actually carries the intended address] *****
+ok: [veridex-server-2]
+
+TASK [chrony : Install chrony] *************************************************
+ok: [veridex-server-2]
+
+TASK [chrony : Render pinned chrony configuration] *****************************
+ok: [veridex-server-2]
+
+TASK [chrony : Ensure chrony is enabled and running] ***************************
+ok: [veridex-server-2]
+
+TASK [chrony : Flush handlers so a config change is applied before verification] ***
+
+TASK [chrony : Wait for chrony to reach a synchronized source (bounded, not a sleep)] ***
+ok: [veridex-server-2]
+
+TASK [chrony : Assert chrony reports a synchronized source] ********************
+ok: [veridex-server-2]
+
+TASK [ssh-access : Assert at least two admin keys are registered (primary + break-glass)] ***
+ok: [veridex-server-2]
+
+TASK [ssh-access : Validate each managed key is a well-formed public key] ******
+ok: [veridex-server-2] => (item=veridex-netcup-prod)
+ok: [veridex-server-2] => (item=veridex-breakglass-20260913)
+
+TASK [ssh-access : Ensure /root/.ssh exists with correct permissions] **********
+ok: [veridex-server-2]
+
+TASK [ssh-access : Render authorized_keys as the exact, version-controlled key list] ***
+ok: [veridex-server-2]
+
+TASK [ssh-access : Read back authorized_keys] **********************************
+ok: [veridex-server-2]
+
+TASK [ssh-access : Assert every managed key is present verbatim after write] ***
+ok: [veridex-server-2] => (item=ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBA7DycmfVL0xn6PmaeNRF9WMbxj6TEwTsT4wnRjc2JQ veridex-netcup-prod 2026-09-12)
+ok: [veridex-server-2] => (item=ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICkVHpa5QDvDNtnuypS2JjSik58cRomRqU6EQ/ci8ljD veridex-breakglass-20260913)
+
+TASK [ssh-hardening : Render the veridex SSH hardening drop-in] ****************
+ok: [veridex-server-2]
+
+TASK [ssh-hardening : Validate sshd configuration before reloading] ************
+ok: [veridex-server-2]
+
+TASK [ssh-hardening : Reload sshd to apply the drop-in] ************************
+skipping: [veridex-server-2]
+
+TASK [ssh-hardening : Force a brand-new SSH connection (drop any multiplexed socket)] ***
+
+TASK [ssh-hardening : Confirm key-only access still works over a fresh connection] ***
+ok: [veridex-server-2]
+
+TASK [ssh-hardening : Assert the fresh connection actually authenticated as root] ***
+ok: [veridex-server-2]
+
+TASK [ssh-hardening : Read sshd's effective configuration] *********************
+ok: [veridex-server-2]
+
+TASK [ssh-hardening : Assert the hardened values are actually effective] *******
+ok: [veridex-server-2]
+
+TASK [firewall : Install nftables] *********************************************
+ok: [veridex-server-2]
+
+TASK [firewall : Assert the trusted network list is not empty] *****************
+ok: [veridex-server-2]
+
+TASK [firewall : Write the nftables ruleset] ***********************************
+ok: [veridex-server-2]
+
+TASK [firewall : Enable and start nftables] ************************************
+ok: [veridex-server-2]
+
+TASK [firewall : Flush handlers so the ruleset is live before it is verified] ***
+
+TASK [firewall : Read back the active ruleset] *********************************
+ok: [veridex-server-2]
+
+TASK [firewall : Assert the vLAN is trusted and SSH survived] ******************
+ok: [veridex-server-2]
+
+PLAY [Prepare hosts for k3s] ***************************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [veridex-server-3]
+
+TASK [common : Assert the node runs the approved Ubuntu release (Gate 1 stop condition)] ***
+ok: [veridex-server-3]
+
+TASK [common : Assert the inventory carries the facts this role needs] *********
+ok: [veridex-server-3]
+
+TASK [common : Assert the vLAN prefix is /16, not /24] *************************
+ok: [veridex-server-3]
+
+TASK [common : Configure the private vLAN interface] ***************************
+ok: [veridex-server-3]
+
+TASK [common : Flush handlers so the address exists before anything depends on it] ***
+
+TASK [common : Read back the configured address] *******************************
+ok: [veridex-server-3]
+
+TASK [common : Assert the interface actually carries the intended address] *****
+ok: [veridex-server-3]
+
+TASK [chrony : Install chrony] *************************************************
+ok: [veridex-server-3]
+
+TASK [chrony : Render pinned chrony configuration] *****************************
+ok: [veridex-server-3]
+
+TASK [chrony : Ensure chrony is enabled and running] ***************************
+ok: [veridex-server-3]
+
+TASK [chrony : Flush handlers so a config change is applied before verification] ***
+
+TASK [chrony : Wait for chrony to reach a synchronized source (bounded, not a sleep)] ***
+ok: [veridex-server-3]
+
+TASK [chrony : Assert chrony reports a synchronized source] ********************
+ok: [veridex-server-3]
+
+TASK [ssh-access : Assert at least two admin keys are registered (primary + break-glass)] ***
+ok: [veridex-server-3]
+
+TASK [ssh-access : Validate each managed key is a well-formed public key] ******
+ok: [veridex-server-3] => (item=veridex-netcup-prod)
+ok: [veridex-server-3] => (item=veridex-breakglass-20260913)
+
+TASK [ssh-access : Ensure /root/.ssh exists with correct permissions] **********
+ok: [veridex-server-3]
+
+TASK [ssh-access : Render authorized_keys as the exact, version-controlled key list] ***
+ok: [veridex-server-3]
+
+TASK [ssh-access : Read back authorized_keys] **********************************
+ok: [veridex-server-3]
+
+TASK [ssh-access : Assert every managed key is present verbatim after write] ***
+ok: [veridex-server-3] => (item=ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBA7DycmfVL0xn6PmaeNRF9WMbxj6TEwTsT4wnRjc2JQ veridex-netcup-prod 2026-09-12)
+ok: [veridex-server-3] => (item=ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICkVHpa5QDvDNtnuypS2JjSik58cRomRqU6EQ/ci8ljD veridex-breakglass-20260913)
+
+TASK [ssh-hardening : Render the veridex SSH hardening drop-in] ****************
+ok: [veridex-server-3]
+
+TASK [ssh-hardening : Validate sshd configuration before reloading] ************
+ok: [veridex-server-3]
+
+TASK [ssh-hardening : Reload sshd to apply the drop-in] ************************
+skipping: [veridex-server-3]
+
+TASK [ssh-hardening : Force a brand-new SSH connection (drop any multiplexed socket)] ***
+
+TASK [ssh-hardening : Confirm key-only access still works over a fresh connection] ***
+ok: [veridex-server-3]
+
+TASK [ssh-hardening : Assert the fresh connection actually authenticated as root] ***
+ok: [veridex-server-3]
+
+TASK [ssh-hardening : Read sshd's effective configuration] *********************
+ok: [veridex-server-3]
+
+TASK [ssh-hardening : Assert the hardened values are actually effective] *******
+ok: [veridex-server-3]
+
+TASK [firewall : Install nftables] *********************************************
+ok: [veridex-server-3]
+
+TASK [firewall : Assert the trusted network list is not empty] *****************
+ok: [veridex-server-3]
+
+TASK [firewall : Write the nftables ruleset] ***********************************
+ok: [veridex-server-3]
+
+TASK [firewall : Enable and start nftables] ************************************
+ok: [veridex-server-3]
+
+TASK [firewall : Flush handlers so the ruleset is live before it is verified] ***
+
+TASK [firewall : Read back the active ruleset] *********************************
+ok: [veridex-server-3]
+
+TASK [firewall : Assert the vLAN is trusted and SSH survived] ******************
+ok: [veridex-server-3]
+
+PLAY [Prepare hosts for k3s] ***************************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [veridex-agent-1]
+
+TASK [common : Assert the node runs the approved Ubuntu release (Gate 1 stop condition)] ***
+ok: [veridex-agent-1]
+
+TASK [common : Assert the inventory carries the facts this role needs] *********
+ok: [veridex-agent-1]
+
+TASK [common : Assert the vLAN prefix is /16, not /24] *************************
+ok: [veridex-agent-1]
+
+TASK [common : Configure the private vLAN interface] ***************************
+ok: [veridex-agent-1]
+
+TASK [common : Flush handlers so the address exists before anything depends on it] ***
+
+TASK [common : Read back the configured address] *******************************
+ok: [veridex-agent-1]
+
+TASK [common : Assert the interface actually carries the intended address] *****
+ok: [veridex-agent-1]
+
+TASK [chrony : Install chrony] *************************************************
+ok: [veridex-agent-1]
+
+TASK [chrony : Render pinned chrony configuration] *****************************
+ok: [veridex-agent-1]
+
+TASK [chrony : Ensure chrony is enabled and running] ***************************
+ok: [veridex-agent-1]
+
+TASK [chrony : Flush handlers so a config change is applied before verification] ***
+
+TASK [chrony : Wait for chrony to reach a synchronized source (bounded, not a sleep)] ***
+ok: [veridex-agent-1]
+
+TASK [chrony : Assert chrony reports a synchronized source] ********************
+ok: [veridex-agent-1]
+
+TASK [ssh-access : Assert at least two admin keys are registered (primary + break-glass)] ***
+ok: [veridex-agent-1]
+
+TASK [ssh-access : Validate each managed key is a well-formed public key] ******
+ok: [veridex-agent-1] => (item=veridex-netcup-prod)
+ok: [veridex-agent-1] => (item=veridex-breakglass-20260913)
+
+TASK [ssh-access : Ensure /root/.ssh exists with correct permissions] **********
+ok: [veridex-agent-1]
+
+TASK [ssh-access : Render authorized_keys as the exact, version-controlled key list] ***
+ok: [veridex-agent-1]
+
+TASK [ssh-access : Read back authorized_keys] **********************************
+ok: [veridex-agent-1]
+
+TASK [ssh-access : Assert every managed key is present verbatim after write] ***
+ok: [veridex-agent-1] => (item=ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBA7DycmfVL0xn6PmaeNRF9WMbxj6TEwTsT4wnRjc2JQ veridex-netcup-prod 2026-09-12)
+ok: [veridex-agent-1] => (item=ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICkVHpa5QDvDNtnuypS2JjSik58cRomRqU6EQ/ci8ljD veridex-breakglass-20260913)
+
+TASK [ssh-hardening : Render the veridex SSH hardening drop-in] ****************
+ok: [veridex-agent-1]
+
+TASK [ssh-hardening : Validate sshd configuration before reloading] ************
+ok: [veridex-agent-1]
+
+TASK [ssh-hardening : Reload sshd to apply the drop-in] ************************
+skipping: [veridex-agent-1]
+
+TASK [ssh-hardening : Force a brand-new SSH connection (drop any multiplexed socket)] ***
+
+TASK [ssh-hardening : Confirm key-only access still works over a fresh connection] ***
+ok: [veridex-agent-1]
+
+TASK [ssh-hardening : Assert the fresh connection actually authenticated as root] ***
+ok: [veridex-agent-1]
+
+TASK [ssh-hardening : Read sshd's effective configuration] *********************
+ok: [veridex-agent-1]
+
+TASK [ssh-hardening : Assert the hardened values are actually effective] *******
+ok: [veridex-agent-1]
+
+TASK [firewall : Install nftables] *********************************************
+ok: [veridex-agent-1]
+
+TASK [firewall : Assert the trusted network list is not empty] *****************
+ok: [veridex-agent-1]
+
+TASK [firewall : Write the nftables ruleset] ***********************************
+ok: [veridex-agent-1]
+
+TASK [firewall : Enable and start nftables] ************************************
+ok: [veridex-agent-1]
+
+TASK [firewall : Flush handlers so the ruleset is live before it is verified] ***
+
+TASK [firewall : Read back the active ruleset] *********************************
+ok: [veridex-agent-1]
+
+TASK [firewall : Assert the vLAN is trusted and SSH survived] ******************
+ok: [veridex-agent-1]
+
+PLAY [Prepare hosts for k3s] ***************************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [veridex-agent-2]
+
+TASK [common : Assert the node runs the approved Ubuntu release (Gate 1 stop condition)] ***
+ok: [veridex-agent-2]
+
+TASK [common : Assert the inventory carries the facts this role needs] *********
+ok: [veridex-agent-2]
+
+TASK [common : Assert the vLAN prefix is /16, not /24] *************************
+ok: [veridex-agent-2]
+
+TASK [common : Configure the private vLAN interface] ***************************
+ok: [veridex-agent-2]
+
+TASK [common : Flush handlers so the address exists before anything depends on it] ***
+
+TASK [common : Read back the configured address] *******************************
+ok: [veridex-agent-2]
+
+TASK [common : Assert the interface actually carries the intended address] *****
+ok: [veridex-agent-2]
+
+TASK [chrony : Install chrony] *************************************************
+ok: [veridex-agent-2]
+
+TASK [chrony : Render pinned chrony configuration] *****************************
+ok: [veridex-agent-2]
+
+TASK [chrony : Ensure chrony is enabled and running] ***************************
+ok: [veridex-agent-2]
+
+TASK [chrony : Flush handlers so a config change is applied before verification] ***
+
+TASK [chrony : Wait for chrony to reach a synchronized source (bounded, not a sleep)] ***
+ok: [veridex-agent-2]
+
+TASK [chrony : Assert chrony reports a synchronized source] ********************
+ok: [veridex-agent-2]
+
+TASK [ssh-access : Assert at least two admin keys are registered (primary + break-glass)] ***
+ok: [veridex-agent-2]
+
+TASK [ssh-access : Validate each managed key is a well-formed public key] ******
+ok: [veridex-agent-2] => (item=veridex-netcup-prod)
+ok: [veridex-agent-2] => (item=veridex-breakglass-20260913)
+
+TASK [ssh-access : Ensure /root/.ssh exists with correct permissions] **********
+ok: [veridex-agent-2]
+
+TASK [ssh-access : Render authorized_keys as the exact, version-controlled key list] ***
+ok: [veridex-agent-2]
+
+TASK [ssh-access : Read back authorized_keys] **********************************
+ok: [veridex-agent-2]
+
+TASK [ssh-access : Assert every managed key is present verbatim after write] ***
+ok: [veridex-agent-2] => (item=ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBA7DycmfVL0xn6PmaeNRF9WMbxj6TEwTsT4wnRjc2JQ veridex-netcup-prod 2026-09-12)
+ok: [veridex-agent-2] => (item=ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICkVHpa5QDvDNtnuypS2JjSik58cRomRqU6EQ/ci8ljD veridex-breakglass-20260913)
+
+TASK [ssh-hardening : Render the veridex SSH hardening drop-in] ****************
+ok: [veridex-agent-2]
+
+TASK [ssh-hardening : Validate sshd configuration before reloading] ************
+ok: [veridex-agent-2]
+
+TASK [ssh-hardening : Reload sshd to apply the drop-in] ************************
+skipping: [veridex-agent-2]
+
+TASK [ssh-hardening : Force a brand-new SSH connection (drop any multiplexed socket)] ***
+
+TASK [ssh-hardening : Confirm key-only access still works over a fresh connection] ***
+ok: [veridex-agent-2]
+
+TASK [ssh-hardening : Assert the fresh connection actually authenticated as root] ***
+ok: [veridex-agent-2]
+
+TASK [ssh-hardening : Read sshd's effective configuration] *********************
+ok: [veridex-agent-2]
+
+TASK [ssh-hardening : Assert the hardened values are actually effective] *******
+ok: [veridex-agent-2]
+
+TASK [firewall : Install nftables] *********************************************
+ok: [veridex-agent-2]
+
+TASK [firewall : Assert the trusted network list is not empty] *****************
+ok: [veridex-agent-2]
+
+TASK [firewall : Write the nftables ruleset] ***********************************
+ok: [veridex-agent-2]
+
+TASK [firewall : Enable and start nftables] ************************************
+ok: [veridex-agent-2]
+
+TASK [firewall : Flush handlers so the ruleset is live before it is verified] ***
+
+TASK [firewall : Read back the active ruleset] *********************************
+ok: [veridex-agent-2]
+
+TASK [firewall : Assert the vLAN is trusted and SSH survived] ******************
+ok: [veridex-agent-2]
+
+PLAY RECAP *********************************************************************
+veridex-agent-1            : ok=30   changed=0    unreachable=0    failed=0    skipped=1    rescued=0    ignored=0   
+veridex-agent-2            : ok=30   changed=0    unreachable=0    failed=0    skipped=1    rescued=0    ignored=0   
+veridex-server-1           : ok=30   changed=0    unreachable=0    failed=0    skipped=1    rescued=0    ignored=0   
+veridex-server-2           : ok=30   changed=0    unreachable=0    failed=0    skipped=1    rescued=0    ignored=0   
+veridex-server-3           : ok=30   changed=0    unreachable=0    failed=0    skipped=1    rescued=0    ignored=0   
+

@@ -1,0 +1,139 @@
+gate: 1
+check: G01-C3
+captured_utc: 2026-09-14T02:51:21Z
+repo_commit: 35730638452fac63972aa37bd38346d96e37e5e1
+plan_commit: 4ebc8def34df78a0bc6b29e42656986ef987f4c9
+plan_sha256: 42eaac5e61d177430ce8e331767d2137b3f9b2bd197e13945b84f7c5e8cd79c7
+target_identity: hosts veridex-server-1 (152.53.177.26), veridex-server-2 (152.53.140.210), veridex-server-3 (152.53.142.131), veridex-agent-1 (159.195.197.136), veridex-agent-2 (159.195.197.40); host-key fingerprints match ansible/files/known_hosts
+captured_by: agent
+command: for ip in <5 nodes>; do ssh root@$ip 'chronyc tracking; chronyc sources'; done
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: chronyc tracking/sources at capture time; does not prove sync survives an outage of both pinned pools (ntp.ubuntu.com, time.cloudflare.com).
+--- unedited output ---
+=== veridex-server-1 (152.53.177.26) ===
+Reference ID    : A29FC801 (time.cloudflare.com)
+Stratum         : 4
+Ref time (UTC)  : Mon Sep 14 02:52:32 2026
+System time     : 0.000029099 seconds fast of NTP time
+Last offset     : -0.000010642 seconds
+RMS offset      : 0.000401906 seconds
+Frequency       : 66.930 ppm slow
+Residual freq   : -0.001 ppm
+Skew            : 0.153 ppm
+Root delay      : 0.011713678 seconds
+Root dispersion : 0.000240738 seconds
+Update interval : 65.1 seconds
+Leap status     : Normal
+
+MS Name/IP address         Stratum Poll Reach LastRx Last sample               
+===============================================================================
+^+ prod-ntp-4.ntp4.ps5.cano>     2   6   377    12   +192us[ +182us] +/-   11ms
+^+ prod-ntp-3.ntp4.ps5.cano>     2   6   377    14   +161us[ +150us] +/-   11ms
+^+ prod-ntp-3.ntp1.ps5.cano>     2   6   377    76    -54us[  +54us] +/-   11ms
+^- alphyn.canonical.com          2   6   377    13  +1690us[+1679us] +/-   67ms
+^+ time.cloudflare.com           3   6   377    12    +50us[  +39us] +/- 5891us
+^+ time.cloudflare.com           3   6   377    13   -294us[ -305us] +/- 6019us
+^+ time.cloudflare.com           3   6   377    11    -96us[ -107us] +/- 5885us
+^* time.cloudflare.com           3   6   377    11   -241us[ -252us] +/- 6055us
+=== veridex-server-2 (152.53.140.210) ===
+Reference ID    : E1FE1EBE (time.cloudflare.com)
+Stratum         : 4
+Ref time (UTC)  : Mon Sep 14 02:52:36 2026
+System time     : 0.000125868 seconds fast of NTP time
+Last offset     : +0.000032731 seconds
+RMS offset      : 0.000758465 seconds
+Frequency       : 67.065 ppm slow
+Residual freq   : +0.009 ppm
+Skew            : 0.107 ppm
+Root delay      : 0.011305618 seconds
+Root dispersion : 0.000237479 seconds
+Update interval : 64.0 seconds
+Leap status     : Normal
+
+MS Name/IP address         Stratum Poll Reach LastRx Last sample               
+===============================================================================
+^- alphyn.canonical.com          2   7   377     8  +1102us[+1102us] +/-   67ms
+^+ prod-ntp-3.ntp1.ps5.cano>     2   7   377     7   +563us[ +563us] +/-   10ms
+^+ prod-ntp-3.ntp1.ps5.cano>     2   7   377     7   +243us[ +243us] +/-   11ms
+^+ prod-ntp-4.ntp4.ps5.cano>     2   7   377    11   +417us[ +450us] +/-   11ms
+^+ time.cloudflare.com           3   6   377     7   -175us[ -175us] +/- 5949us
+^+ time.cloudflare.com           3   6   377    10  +2025us[+2058us] +/-   15ms
+^* time.cloudflare.com           3   6   377     9  -8622ns[  +24us] +/- 5872us
+^+ time.cloudflare.com           3   7   377     6   -345us[ -345us] +/- 6000us
+=== veridex-server-3 (152.53.142.131) ===
+Reference ID    : A29FC87B (time.cloudflare.com)
+Stratum         : 4
+Ref time (UTC)  : Mon Sep 14 02:52:05 2026
+System time     : 0.000034660 seconds slow of NTP time
+Last offset     : -0.000010827 seconds
+RMS offset      : 0.000447543 seconds
+Frequency       : 60.392 ppm slow
+Residual freq   : +0.003 ppm
+Skew            : 0.190 ppm
+Root delay      : 0.011645513 seconds
+Root dispersion : 0.000282473 seconds
+Update interval : 64.4 seconds
+Leap status     : Normal
+
+MS Name/IP address         Stratum Poll Reach LastRx Last sample               
+===============================================================================
+^+ prod-ntp-4.ntp4.ps5.cano>     2   6   377    44   +412us[ +401us] +/-   11ms
+^- alphyn.canonical.com          2   6   373    42  +1417us[+1417us] +/-   67ms
+^+ prod-ntp-3.ntp1.ps5.cano>     2   6   377    44   +188us[ +177us] +/-   11ms
+^+ prod-ntp-3.ntp4.ps5.cano>     2   6   377    43   +540us[ +529us] +/-   10ms
+^* time.cloudflare.com           3   6   377    43   -333us[ -343us] +/- 6021us
+^+ time.cloudflare.com           3   6   377    43   -188us[ -199us] +/- 5774us
+^+ time.cloudflare.com           3   6   377    43   -286us[ -286us] +/- 6081us
+^+ time.cloudflare.com           3   6   377    45    -41us[  -52us] +/- 5882us
+=== veridex-agent-1 (159.195.197.136) ===
+Reference ID    : A29FC801 (time.cloudflare.com)
+Stratum         : 4
+Ref time (UTC)  : Mon Sep 14 02:51:54 2026
+System time     : 0.000045939 seconds fast of NTP time
+Last offset     : +0.000063457 seconds
+RMS offset      : 0.000265443 seconds
+Frequency       : 67.211 ppm slow
+Residual freq   : +0.004 ppm
+Skew            : 0.324 ppm
+Root delay      : 0.011775637 seconds
+Root dispersion : 0.000285658 seconds
+Update interval : 64.4 seconds
+Leap status     : Normal
+
+MS Name/IP address         Stratum Poll Reach LastRx Last sample               
+===============================================================================
+^+ prod-ntp-5.ntp4.ps5.cano>     2   6   377    57   +372us[ +435us] +/-   11ms
+^+ prod-ntp-4.ntp1.ps5.cano>     2   6   377    56   +333us[ +333us] +/-   11ms
+^- alphyn.canonical.com          2   6   377    56  +1573us[+1573us] +/-   67ms
+^+ prod-ntp-3.ntp1.ps5.cano>     2   6   377    57   +155us[ +219us] +/-   11ms
+^* time.cloudflare.com           3   6   377    57   -203us[ -139us] +/- 6040us
+^+ time.cloudflare.com           3   6   377    58  +1944us[+2008us] +/-   15ms
+^+ time.cloudflare.com           3   6   377    55   -268us[ -268us] +/- 6017us
+^+ time.cloudflare.com           3   6   377    56   -267us[ -267us] +/- 5829us
+=== veridex-agent-2 (159.195.197.40) ===
+Reference ID    : A29FC87B (time.cloudflare.com)
+Stratum         : 4
+Ref time (UTC)  : Mon Sep 14 02:52:40 2026
+System time     : 0.000268732 seconds fast of NTP time
+Last offset     : +0.000077102 seconds
+RMS offset      : 0.000338792 seconds
+Frequency       : 66.501 ppm slow
+Residual freq   : +0.003 ppm
+Skew            : 0.496 ppm
+Root delay      : 0.011664813 seconds
+Root dispersion : 0.000190083 seconds
+Update interval : 64.8 seconds
+Leap status     : Normal
+
+MS Name/IP address         Stratum Poll Reach LastRx Last sample               
+===============================================================================
+^+ prod-ntp-3.ntp4.ps5.cano>     2   6   377    11    +47us[  +47us] +/-   11ms
+^+ prod-ntp-4.ntp4.ps5.cano>     2   6   377    11   +368us[ +368us] +/-   11ms
+^+ prod-ntp-5.ntp4.ps5.cano>     2   6   377     9   +119us[ +119us] +/-   11ms
+^- alphyn.canonical.com          2   6   377    14  +1278us[+1355us] +/-   67ms
+^+ time.cloudflare.com           3   6   377    10   -274us[ -274us] +/- 5808us
+^* time.cloudflare.com           3   6   377    13   -669us[ -592us] +/- 5970us
+^+ time.cloudflare.com           3   6   377     9   -517us[ -517us] +/- 6053us
+^+ time.cloudflare.com           3   6   377    13  +1881us[+1958us] +/-   15ms

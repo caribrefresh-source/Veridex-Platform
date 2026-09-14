@@ -1,0 +1,21 @@
+# Managed by Ansible (roles/ssh-hardening). Do not edit by hand.
+#
+# Gate 1 (Operating systems and access): SSH must be key-only with an
+# explicit root policy. Verified live 2026-09-13: PasswordAuthentication no
+# was already in effect globally (set by netcup's provisioning API,
+# sshPasswordAuthentication=false -- not version-controlled until this role),
+# but PermitRootLogin was the permissive explicit value "yes", not
+# "without-password": a later change to the global PasswordAuthentication
+# setting would silently reopen root to password login. Both are restated
+# here explicitly. Ubuntu's /etc/ssh/sshd_config includes this directory
+# first, so these values take precedence over the rest of that file.
+#
+# "without-password" is OpenSSH's canonical name for this setting -- "sshd
+# -T" echoes it back that way even though "prohibit-password" is accepted as
+# an input alias. Written here as without-password so the value in this file
+# matches what verification reads back, instead of two spellings of the same
+# setting.
+PermitRootLogin without-password
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitEmptyPasswords no

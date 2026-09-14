@@ -10,6 +10,7 @@
   serial: 1
   roles:
     - common
+    - host-prereqs
     - chrony
     # ssh-access before ssh-hardening: the break-glass key must already be
     # installed before root login is tightened, not after.

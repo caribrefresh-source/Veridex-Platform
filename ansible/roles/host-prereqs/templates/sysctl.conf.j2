@@ -1,0 +1,9 @@
+# Managed by Ansible (roles/host-prereqs). Do not edit by hand.
+#
+# Gate 3: k3s and Cilium require IP forwarding and bridged-traffic netfilter
+# hooks. Verified live 2026-09-14: these were already 1 at runtime (Cilium
+# and/or kubelet set them when they start) but nothing in this repo persisted
+# them -- a reboot before those components start had an unproven outcome.
+{% for key, value in host_prereq_sysctls.items() %}
+{{ key }} = {{ value }}
+{% endfor %}

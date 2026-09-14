@@ -1,0 +1,35 @@
+---
+# host-prereqs role default variables
+#
+# Gate 3 (Host prerequisites and firewall): kernel, sysctl, modules and
+# packages must satisfy k3s, Cilium and Longhorn. Verified live 2026-09-14:
+# open-iscsi was installed but iscsid was inactive and disabled; nfs-common
+# was not installed anywhere; the required kernel modules and sysctls were
+# active at runtime but not persisted anywhere this repo manages -- nothing
+# guarantees they survive a reboot.
+
+# Kernel modules Cilium (overlay networking, bridged traffic) and Longhorn's
+# V1 (iSCSI) engine need loaded at boot, not just present at the moment
+# someone happens to check.
+host_prereq_modules:
+  - overlay
+  - br_netfilter
+  - vxlan
+  - iscsi_tcp
+
+# Sysctls Cilium/k3s require. Deliberately narrow: this does not manage
+# net.ipv4.conf.*.rp_filter (Cilium's own installer already writes
+# /etc/sysctl.d/99-zzz-override_cilium.conf for that) or netcup's own
+# /etc/sysctl.d/99-nc-kernel.conf tuning -- this role owns only the settings
+# Gate 3 itself is responsible for. Verified live 2026-09-14 that neither of
+# those two files sets any of the three keys below, so this role's own file
+# (60-, sorting before both 99-* files) cannot be silently overridden by them
+# at the next boot -- checked directly, not assumed.
+host_prereq_sysctls:
+  net.ipv4.ip_forward: 1
+  net.bridge.bridge-nf-call-iptables: 1
+  net.bridge.bridge-nf-call-ip6tables: 1
+
+host_prereq_packages:
+  - open-iscsi
+  - nfs-common

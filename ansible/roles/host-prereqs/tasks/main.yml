@@ -1,0 +1,113 @@
+---
+# host-prereqs role tasks
+#
+# Gate 3 (Host prerequisites and firewall). Verified live 2026-09-14: open-iscsi
+# was installed but iscsid was inactive/disabled; nfs-common was missing
+# everywhere; the sysctls and kernel modules Cilium/k3s need were correct at
+# runtime but persisted nowhere this repo manages.
+
+- name: Install host prerequisite packages
+  ansible.builtin.apt:
+    name: "{{ host_prereq_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure iscsid is enabled and running (Longhorn V1/iSCSI engine)
+  ansible.builtin.systemd:
+    name: iscsid
+    enabled: true
+    state: started
+
+- name: Render the kernel modules to load at boot
+  ansible.builtin.template:
+    src: modules-load.conf.j2
+    dest: /etc/modules-load.d/veridex-host-prereqs.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Check which required modules are already loaded
+  ansible.builtin.command:
+    cmd: lsmod
+  register: _lsmod
+  changed_when: false
+
+- name: Load any required module that is not already loaded
+  # Line-anchored on the lsmod Module column, not a raw substring search over
+  # the whole block -- a substring match could mis-fire if a future module
+  # name were a prefix of another module's name or appeared inside another
+  # module's "Used by" list.
+  ansible.builtin.command:
+    cmd: "modprobe {{ item }}"
+  loop: "{{ host_prereq_modules }}"
+  when: item not in (_lsmod.stdout_lines | map('split') | map('first') | list)
+  changed_when: true
+
+- name: Render the required sysctls (persisted)
+  # ansible.builtin has no sysctl module (it lives in ansible.posix, a
+  # collection this repo does not otherwise depend on) -- templated file plus
+  # an explicit reload, same pattern as the modules-load file above.
+  ansible.builtin.template:
+    src: sysctl.conf.j2
+    dest: /etc/sysctl.d/60-veridex-host-prereqs.conf
+    owner: root
+    group: root
+    mode: "0644"
+  register: _sysctl_file
+
+- name: Apply the sysctl file now
+  # Always runs, even when the file content is unchanged: `sysctl -p` is a
+  # safe no-op when live values already match, and running it unconditionally
+  # means live drift (something else setting a value back) gets corrected on
+  # every converge instead of only failing the assert below and requiring
+  # manual intervention to recover.
+  ansible.builtin.command:
+    cmd: sysctl -p /etc/sysctl.d/60-veridex-host-prereqs.conf
+  changed_when: _sysctl_file.changed
+
+- name: Read back loaded modules after convergence
+  ansible.builtin.command:
+    cmd: lsmod
+  register: _lsmod_after
+  changed_when: false
+
+- name: Assert every required module is loaded
+  ansible.builtin.assert:
+    that:
+      - (item + ' ') in _lsmod_after.stdout
+    fail_msg: "Required module not loaded on {{ inventory_hostname }}: {{ item }}"
+    quiet: true
+  loop: "{{ host_prereq_modules }}"
+
+- name: Read back effective sysctl values
+  ansible.builtin.command:
+    cmd: "sysctl -n {{ item.key }}"
+  loop: "{{ host_prereq_sysctls | dict2items }}"
+  register: _sysctl_after
+  changed_when: false
+
+- name: Assert every required sysctl has the intended value
+  ansible.builtin.assert:
+    that:
+      - result.stdout | trim == (result.item.value | string)
+    fail_msg: "{{ result.item.key }} is {{ result.stdout }} on {{ inventory_hostname }}, expected {{ result.item.value }}"
+    quiet: true
+  loop: "{{ _sysctl_after.results }}"
+  loop_control:
+    loop_var: result
+    label: "{{ result.item.key }}"
+
+- name: Assert iscsid is active
+  ansible.builtin.command:
+    cmd: systemctl is-active iscsid
+  register: _iscsid_active
+  changed_when: false
+  failed_when: _iscsid_active.stdout != "active"
+
+- name: Confirm nfs-common is installed
+  ansible.builtin.command:
+    cmd: dpkg-query -W -f='${Status}' nfs-common
+  register: _nfs_common
+  changed_when: false
+  failed_when: "'install ok installed' not in _nfs_common.stdout"

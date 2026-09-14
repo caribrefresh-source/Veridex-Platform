@@ -118,14 +118,20 @@ k3s_version: "v1.36.4+k3s1"
 k3s_token: "{{ lookup('env', 'K3S_TOKEN') | default('', true) }}"
 
 # TLS SANs for the API server certificate. The VIP must be present or every
-# client reaching the API through kube-vip fails certificate validation. Add
-# the public API DNS name here before bootstrap -- an API cert that only
-# covers private addresses cannot be used from outside the vLAN.
+# client reaching the API through kube-vip fails certificate validation.
+#
+# api.veridexeai.com (Gate 4): the plan requires the API cert to carry the
+# public API DNS name. This name is NOT published as a public DNS record --
+# an FQDN cannot point at a private (vLAN) address, and 6443 stays firewalled
+# from the public internet (Gate 0/3). Operators resolve it privately (e.g.
+# a hosts-file entry pointing at the VIP) when they need to reach the API by
+# name instead of address; the cert simply has to be valid for that name when
+# they do.
 k3s_tls_san:
   - "{{ kubevip_vip }}"
   - 127.0.0.1
   - localhost
-  # - api.veridexeai.com   # add at Gate 4; resolved privately, no public record
+  - api.veridexeai.com
 
 # Pod and Service CIDRs deliberately differ from the Hetzner cluster's
 # 10.42.0.0/16 / 10.43.0.0/16. Overlapping them would permanently rule out

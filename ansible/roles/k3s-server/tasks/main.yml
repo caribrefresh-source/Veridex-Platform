@@ -182,3 +182,62 @@
       Cluster traffic would traverse the public interface.
     success_msg: "node advertises {{ private_ip }} on the vLAN"
     quiet: true
+
+# Gate 4: "required public DNS SAN are present" on the certificate. The
+# checks above prove the API is reachable and this node registered -- neither
+# proves the certificate THIS node serves actually carries every intended
+# SAN. Read the node's own served cert file directly, not through the VIP
+# (which only proves whichever node currently holds the VIP lease is
+# correct).
+- name: Read this node's own served API certificate
+  ansible.builtin.command:
+    cmd: "openssl x509 -in {{ k3s_data_dir }}/server/tls/serving-kube-apiserver.crt -noout -text"
+  register: _served_cert
+  changed_when: false
+
+- name: Assert every configured TLS SAN is present on this node's served certificate
+  ansible.builtin.assert:
+    that:
+      - item | string in _served_cert.stdout
+    fail_msg: >-
+      {{ inventory_hostname }}'s own served certificate does not include
+      {{ item }} -- the SAN change may not have reached this node even
+      though its health checks passed.
+    quiet: true
+  loop: "{{ k3s_tls_san }}"
+
+# Gate 4 stop condition, verbatim: "fewer than three voters". /healthz and
+# node-Ready are a proxy for etcd being reachable, not for its actual voter
+# count -- a member stuck as a non-voting learner, or a member count that
+# silently dropped, would not necessarily fail either of those checks. This
+# is the one check that reads the literal metric the gate defines, per node,
+# as part of the same gate that decides whether Ansible proceeds -- not a
+# manual command run once after every node is already done.
+- name: Ensure etcdctl is available for verification
+  ansible.builtin.apt:
+    name: etcd-client
+    state: present
+
+- name: Read the etcd member list
+  ansible.builtin.command:
+    cmd: >-
+      etcdctl
+      --cacert={{ k3s_data_dir }}/server/tls/etcd/server-ca.crt
+      --cert={{ k3s_data_dir }}/server/tls/etcd/server-client.crt
+      --key={{ k3s_data_dir }}/server/tls/etcd/server-client.key
+      --endpoints=https://127.0.0.1:2379
+      member list -w json
+  environment:
+    ETCDCTL_API: "3"
+  register: _etcd_members
+  changed_when: false
+
+- name: Assert exactly three etcd voters, none a learner
+  ansible.builtin.assert:
+    that:
+      - (_etcd_members.stdout | from_json).members | length == 3
+      - (_etcd_members.stdout | from_json).members | selectattr('isLearner', 'defined') | selectattr('isLearner') | list | length == 0
+    fail_msg: >-
+      etcd member list from {{ inventory_hostname }} does not show exactly
+      three non-learner voters: {{ _etcd_members.stdout }}
+    quiet: true

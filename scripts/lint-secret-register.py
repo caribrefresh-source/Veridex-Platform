@@ -35,19 +35,21 @@ registered name nothing consumes fails as stale.
 
 It also fails when
 ------------------
-  - a destination is empty, a placeholder, or names Hetzner or an old or
-    legacy cluster; or an active entry says the secret does not exist yet
+  - a destination is empty, a placeholder (including a leading placeholder word
+    or "to be confirmed"-style wording), or names Hetzner or an old or legacy
+    cluster; or an active entry says the secret does not exist yet
   - status is deferred without deferred_until_gate
   - an env lookup, a Python env read or an Actions secrets reference uses a
     name that is not a literal, or a workflow passes every secret at once
+    (toJSON of secrets, the secrets wildcard, or inheriting secrets)
   - a literal value is assigned to a sensitive registered name (anywhere), or
     to an Ansible variable fed from a sensitive env lookup (under ansible/) --
     YAML and JSON are parsed, other files are read line by line. SOPS-encrypted
     values in a document carrying a sops block, and Ansible Vault values, are
     not literals.
   - a Kubernetes Secret, a kustomize secretGenerator or a kubectl command
-    (options in any order, across continuation lines) creates a secret from a
-    literal value
+    (options in any position, across continuation lines) creates a secret from
+    a literal value
   - any tracked file contains private key material: PEM or PGP private key
     blocks, age secret keys, PuTTY private key files, kubeconfig client key
     data, or any of these base64-encoded or inside a YAML scalar
@@ -69,6 +71,7 @@ from __future__ import annotations
 import argparse
 import base64
 import binascii
+import bisect
 import re
 import subprocess
 import sys
@@ -143,7 +146,7 @@ ACTIONS_SECRET_REF = re.compile(
     r"\bsecrets\s*(?:\.\s*" + NAME + r"|\[\s*['\"]" + NAME + r"['\"]\s*\])", re.IGNORECASE
 )
 ACTIONS_SECRET_DYNAMIC = re.compile(r"\bsecrets\s*\[\s*(?!['\"])", re.IGNORECASE)
-ACTIONS_ALL_SECRETS = re.compile(r"\btoJSON\s*\(\s*secrets\s*\)", re.IGNORECASE)
+ACTIONS_ALL_SECRETS = re.compile(r"\btoJSON\s*\(\s*secrets\s*\)|\bsecrets\s*\.\s*\*", re.IGNORECASE)
 ACTIONS_INHERIT = re.compile(
     r"^\s*secrets\s*:\s*['\"]?inherit['\"]?\s*(?:#.*)?$", re.MULTILINE | re.IGNORECASE
 )
@@ -152,7 +155,9 @@ ACTIONS_BUILTIN = {"GITHUB_TOKEN"}
 K8S_SECRET_LINE = re.compile(
     r"^\s*['\"]?kind['\"]?\s*:\s*['\"]?Secret['\"]?\s*,?\s*(?:#.*)?$", re.MULTILINE
 )
-KUBECTL_LITERAL_SECRET = re.compile(r"\bkubectl\b[^\n]*?\bcreate\s+secret\b[^\n]*--from-literal")
+KUBECTL_LITERAL_SECRET = re.compile(
+    r"\bkubectl\b[^\n]*?\bcreate(?:\s+--?[\w-]+(?:[=\s]+[^\s-]\S*)?){0,6}\s+secret\b[^\n]*--from-literal"
+)
 STRINGDATA_NON_SECRET_KEYS = {"type", "url", "project", "name", "insecure", "enableLfs", "proxy", "noProxy"}
 SOPS_VALUE = re.compile(r"^ENC\[AES256_GCM,data:[^\]]*\]$")
 VAULT_PREFIX = "$ANSIBLE_VAULT;"
@@ -172,7 +177,7 @@ KEY_MATERIAL = re.compile(
     r"|PuTTY-User-Key-File-\d|client-key-data:\s*[\"']?[A-Za-z0-9+/]{20,}"
 )
 BASE64_BLOB = re.compile(r"[A-Za-z0-9+/]{64,}={0,2}")
-DECODED_KEY_MARKERS = (b"PRIVATE KEY-----", b"AGE-SECRET-KEY-1", b"PuTTY-User-Key-File-")
+DECODED_KEY_MARKERS = (b"PRIVATE KEY-----", b"PRIVATE KEY BLOCK-----", b"AGE-SECRET-KEY-1", b"PuTTY-User-Key-File-")
 LITERAL_ASSIGNMENT = r"(?<![A-Za-z0-9_]){name}[\"']?\s*[:=]\s*[\"']?([^\s\"']{{8,}})"
 TEMPLATE_MARKERS = ("{{", "{%", "lookup(", "query(", "${{", "$(", "${")
 
@@ -181,7 +186,16 @@ PLACEHOLDER = re.compile(
     r"|tobedecided|tobedetermined|\?*)$",
     re.IGNORECASE,
 )
-NOT_YET = re.compile(r"\bnot\s+(?:created|issued|yet)\b", re.IGNORECASE)
+PLACEHOLDER_WORD = re.compile(
+    r"^\W*(?:tbd|tba|tbc|todo|unknown|unresolved|pending|n/?a|none|null|later)\b", re.IGNORECASE
+)
+PLACEHOLDER_PHRASE = re.compile(
+    r"\bto\s+be\s+(?:confirmed|decided|determined|defined)\b|^\W*not\s+set\b", re.IGNORECASE
+)
+NOT_YET = re.compile(
+    r"\bnot\s+(?:yet\s+)?(?:created|issued|set|decided|known|chosen)\b|\bnot\s+yet\b|\bdoes\s+not\s+exist\b",
+    re.IGNORECASE,
+)
 FORBIDDEN_DESTINATION = re.compile(
     r"hetzner|hcloud|your-objectstorage|your-server\.de|your-storagebox|k3s-ha|entrepeai|\b(?:old|legacy|previous)\b[^\n]{0,40}?\bcluster\b", re.IGNORECASE  # provider-drift-ok: rejects old-cluster secret destinations
 )
@@ -316,9 +330,12 @@ def join_continuations(text: str) -> tuple[str, list[int]]:
     joins: list[int] = []
     parts: list[str] = []
     position = 0
+    length = 0
     for match in re.finditer(r"\\\r?\n", text):
-        parts.append(text[position:match.start()])
-        joins.append(sum(len(part) for part in parts))
+        chunk = text[position:match.start()]
+        parts.append(chunk)
+        length += len(chunk)
+        joins.append(length)
         position = match.end()
     parts.append(text[position:])
     return "".join(parts), joins
@@ -378,7 +395,7 @@ def discover(rel: str, text: str, strict: bool, found, problems: list[str], docu
         found[("kubernetes-secret", rel)].append(at(secret_line.start()))
     joined, joins = join_continuations(text)
     for match in KUBECTL_LITERAL_SECRET.finditer(joined):
-        lineno = joined.count("\n", 0, match.start()) + 1 + sum(1 for offset in joins if offset <= match.start())
+        lineno = joined.count("\n", 0, match.start()) + 1 + bisect.bisect_right(joins, match.start())
         problems.append(f"{rel}:{lineno}: kubectl creates a secret from a literal flag, putting its value on the command line (value not shown)")
 
     for document in documents or []:
@@ -462,7 +479,12 @@ def load_register(path: Path, errors: list[str]) -> dict[tuple[str, str], dict]:
             normalized = unicodedata.normalize("NFKC", value) if isinstance(value, str) else ""
             texts[field] = normalized
             compact = re.sub(r"[^A-Za-z0-9/?]+", "", normalized)
-            if not isinstance(value, str) or PLACEHOLDER.match(compact):
+            if (
+                not isinstance(value, str)
+                or PLACEHOLDER.match(compact)
+                or PLACEHOLDER_WORD.match(normalized)
+                or PLACEHOLDER_PHRASE.search(normalized)
+            ):
                 errors.append(f"{label}: {field} is empty or a placeholder -- unresolved secret destination")
         for field in ("held_in", "provider"):
             if FORBIDDEN_DESTINATION.search(texts[field]):

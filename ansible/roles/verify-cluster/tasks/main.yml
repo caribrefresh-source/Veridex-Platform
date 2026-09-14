@@ -41,12 +41,19 @@
 # --- Cluster identity (Gate 7: "identifies the cluster") -------------------
 
 - name: Read the live kube-system namespace UID
+  # tags: [always] -- deliberately not just gate7-identity. A `--tags gateN`
+  # run is meant to re-verify one gate in isolation (documented in the
+  # `always` note on the include_vars task above), not to skip cluster
+  # identification while still making live API reads/asserts against
+  # whatever it's connected to. Found in independent review: without this,
+  # `--tags gate4` (etc.) reproduced Gate 7's own stop condition --
+  # "success against the wrong cluster" -- through ordinary, documented use.
   ansible.builtin.command:
     cmd: k3s kubectl get namespace kube-system -o jsonpath={.metadata.uid}
   register: _kube_system_uid
   changed_when: false
   when: is_first_server | bool
-  tags: [gate7-identity]
+  tags: [always]
 
 - name: Assert the live cluster matches the recorded target identity
   ansible.builtin.assert:
@@ -62,7 +69,7 @@
       against a cluster this playbook cannot positively identify.
     quiet: true
   when: is_first_server | bool
-  tags: [gate7-identity]
+  tags: [always]
 
 # --- Gate 3: host prerequisites and firewall (every host) ------------------
 
@@ -233,12 +240,18 @@
   when: is_first_server | bool
   tags: [gate4]
 
-- name: "Gate 4 -- assert exactly three etcd voters, none a learner"
+- name: "Gate 4 -- assert every control-plane node is a non-learner etcd voter"
+  # Derived from the inventory (groups['k3s_servers'] | length), not a
+  # literal 3 -- found in independent review: a hardcoded count here is a
+  # maintainability trap if the control-plane size ever changes, even though
+  # roles/k3s-server's own equivalent assert (Gate 4) does hardcode it.
   ansible.builtin.assert:
     that:
-      - (_g4_etcd_members.stdout | from_json).members | length == 3
+      - (_g4_etcd_members.stdout | from_json).members | length == (groups['k3s_servers'] | length)
       - (_g4_etcd_members.stdout | from_json).members | selectattr('isLearner', 'defined') | selectattr('isLearner') | list | length == 0
-    fail_msg: "etcd member list does not show exactly three non-learner voters."
+    fail_msg: >-
+      etcd member list does not show exactly {{ groups['k3s_servers'] | length }}
+      non-learner voters.
     quiet: true
   when: is_first_server | bool
   tags: [gate4]

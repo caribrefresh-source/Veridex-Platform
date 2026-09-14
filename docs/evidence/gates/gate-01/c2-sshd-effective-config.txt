@@ -1,0 +1,44 @@
+gate: 1
+check: G01-C2
+captured_utc: 2026-09-14T02:51:21Z
+repo_commit: 35730638452fac63972aa37bd38346d96e37e5e1
+plan_commit: 4ebc8def34df78a0bc6b29e42656986ef987f4c9
+plan_sha256: 42eaac5e61d177430ce8e331767d2137b3f9b2bd197e13945b84f7c5e8cd79c7
+target_identity: hosts veridex-server-1 (152.53.177.26), veridex-server-2 (152.53.140.210), veridex-server-3 (152.53.142.131), veridex-agent-1 (159.195.197.136), veridex-agent-2 (159.195.197.40); host-key fingerprints match ansible/files/known_hosts
+captured_by: agent
+command: for ip in <5 nodes>; do ssh root@$ip 'sshd -T | grep -E "^(permitrootlogin|passwordauthentication|kbdinteractiveauthentication|permitemptypasswords|pubkeyauthentication)"'; done
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: Filtered to the settings this gate's stop condition names (password auth, root policy, empty passwords); full sshd -T output for one node is captured separately under docs/evidence/gates/gate-00 tooling is not reused here to keep this file small.
+--- unedited output ---
+=== veridex-server-1 (152.53.177.26) ===
+permitrootlogin without-password
+pubkeyauthentication yes
+passwordauthentication no
+kbdinteractiveauthentication no
+permitemptypasswords no
+=== veridex-server-2 (152.53.140.210) ===
+permitrootlogin without-password
+pubkeyauthentication yes
+passwordauthentication no
+kbdinteractiveauthentication no
+permitemptypasswords no
+=== veridex-server-3 (152.53.142.131) ===
+permitrootlogin without-password
+pubkeyauthentication yes
+passwordauthentication no
+kbdinteractiveauthentication no
+permitemptypasswords no
+=== veridex-agent-1 (159.195.197.136) ===
+permitrootlogin without-password
+pubkeyauthentication yes
+passwordauthentication no
+kbdinteractiveauthentication no
+permitemptypasswords no
+=== veridex-agent-2 (159.195.197.40) ===
+permitrootlogin without-password
+pubkeyauthentication yes
+passwordauthentication no
+kbdinteractiveauthentication no
+permitemptypasswords no

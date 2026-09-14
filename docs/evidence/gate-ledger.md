@@ -9,8 +9,8 @@ Plan: `docs/Engineering Documents/Initial Stages Plan.txt`
 
 ## Position
 
-Last deliverable **D8**, last exit-gate check **EG4** (Gate 0, closed
-2026-09-14). The next closed gate starts at **D9** and **EG5**.
+Last deliverable **D20**, last exit-gate check **EG9** (Gate 1, closed
+2026-09-14). The next closed gate starts at **D21** and **EG10**.
 
 Evidence recorded before Revision 3 lives in `docs/evidence/legacy/`. It is not
 closure evidence; `docs/evidence/legacy/README.md` maps it to Revision 3 gates.
@@ -20,6 +20,7 @@ closure evidence; `docs/evidence/legacy/README.md` maps it to Revision 3 gates.
 | Gate | Title | D-range | EG-range | Closed (UTC date) | Plan commit | Tested repo commit | Target identity | Record |
 |---|---|---|---|---|---|---|---|---|
 | 0 | Repository and provider boundary | D1–D8 | EG1–EG4 | 2026-09-14 | `4ebc8de` | `82a1dd4` | repository `github.com/caribrefresh-source/Veridex-Platform` @ `82a1dd4` | `docs/evidence/gates/gate-00/closure.md` |
+| 1 | Operating systems and access | D9–D20 | EG5–EG9 | 2026-09-14 | `4ebc8de` | `3573063` | hosts veridex-server-1/2/3, veridex-agent-1/2 @ `3573063` (SSH host-key fingerprints in `ansible/files/known_hosts`) | `docs/evidence/gates/gate-01/closure.md` |
 
 ## Reopen log
 

@@ -1,0 +1,456 @@
+---
+# verify-cluster role tasks
+#
+# Gate 7 (Verification automation): read-only assertions for Gates 3-6.
+# Nothing below may create, modify or delete a cluster object, install a
+# package, or write a file on a target host -- every command is a read
+# (`changed_when: false` throughout, no `ignore_errors` anywhere) and every
+# failure is `ansible.builtin.assert`, which fails the play (non-zero exit,
+# with a specific fail_msg as the diagnostic) by default.
+#
+# Ordering is deliberate: cluster identity is asserted first, before any
+# other read is attempted, so a wrong cluster fails at the first task in the
+# batch rather than after other checks have already run against it.
+
+- name: Load variable defaults owned by the roles this gate verifies
+  # Read-only: loads each role's defaults/main.yml as data (a plain variable
+  # source), it does not run that role's tasks. Verifying host-prereqs,
+  # firewall, k3s-server, cilium and coredns's OWN intended values (not a
+  # second, drifting copy of them) means this role has no values of its own
+  # to fall out of sync with theirs.
+  ansible.builtin.include_vars:
+    file: "{{ item }}"
+  loop:
+    - "{{ role_path }}/../host-prereqs/defaults/main.yml"
+    - "{{ role_path }}/../firewall/defaults/main.yml"
+    - "{{ role_path }}/../k3s-server/defaults/main.yml"
+    - "{{ role_path }}/../cilium/defaults/main.yml"
+    - "{{ role_path }}/../coredns/defaults/main.yml"
+  # Every gate-specific check below is tagged (gate3/gate4/gate5/gate6) so a
+  # single gate can be re-verified in isolation. Without `always` here, a
+  # `--tags gateN` run would skip this prerequisite (untagged tasks are
+  # skipped when --tags filters), and every check would fail on an
+  # undefined variable instead of the real result.
+  tags: [always]
+
+- name: Identify the bootstrap server
+  ansible.builtin.set_fact:
+    is_first_server: "{{ inventory_hostname == (groups['k3s_servers'] | sort | first) }}"
+  tags: [always]
+
+# --- Cluster identity (Gate 7: "identifies the cluster") -------------------
+
+- name: Read the live kube-system namespace UID
+  ansible.builtin.command:
+    cmd: k3s kubectl get namespace kube-system -o jsonpath={.metadata.uid}
+  register: _kube_system_uid
+  changed_when: false
+  when: is_first_server | bool
+  tags: [gate7-identity]
+
+- name: Assert the live cluster matches the recorded target identity
+  ansible.builtin.assert:
+    that:
+      - verify_cluster_expected_kube_system_uid is defined
+      - verify_cluster_expected_kube_system_uid | length > 0
+      - _kube_system_uid.stdout == verify_cluster_expected_kube_system_uid
+    fail_msg: >-
+      kube-system namespace UID is
+      {{ _kube_system_uid.stdout | default('EMPTY') }}, expected
+      {{ verify_cluster_expected_kube_system_uid | default('UNSET') }}
+      (ansible/inventory/production/group_vars/all.yml). Refusing to proceed
+      against a cluster this playbook cannot positively identify.
+    quiet: true
+  when: is_first_server | bool
+  tags: [gate7-identity]
+
+# --- Gate 3: host prerequisites and firewall (every host) ------------------
+
+- name: "Gate 3 -- read lsmod"
+  ansible.builtin.command:
+    cmd: lsmod
+  register: _g3_lsmod
+  changed_when: false
+  tags: [gate3]
+
+- name: "Gate 3 -- assert every required kernel module is loaded (Cilium + Longhorn preflight)"
+  ansible.builtin.assert:
+    that:
+      - (item + ' ') in _g3_lsmod.stdout
+    fail_msg: "Required module not loaded on {{ inventory_hostname }}: {{ item }}"
+    quiet: true
+  loop: "{{ host_prereq_modules }}"
+  tags: [gate3]
+
+- name: "Gate 3 -- read effective sysctl values"
+  ansible.builtin.command:
+    cmd: "sysctl -n {{ item.key }}"
+  loop: "{{ host_prereq_sysctls | dict2items }}"
+  register: _g3_sysctl
+  changed_when: false
+  tags: [gate3]
+
+- name: "Gate 3 -- assert every required sysctl has the intended value (Cilium preflight)"
+  ansible.builtin.assert:
+    that:
+      - result.stdout | trim == (result.item.value | string)
+    fail_msg: >-
+      {{ result.item.key }} is {{ result.stdout }} on {{ inventory_hostname }},
+      expected {{ result.item.value }}
+    quiet: true
+  loop: "{{ _g3_sysctl.results }}"
+  loop_control:
+    loop_var: result
+    label: "{{ result.item.key }}"
+  tags: [gate3]
+
+- name: "Gate 3 -- read systemd unit states (iscsid, nftables, chrony)"
+  ansible.builtin.command:
+    cmd: "systemctl is-active {{ item }}"
+  loop:
+    - iscsid
+    - nftables
+    - chrony
+  register: _g3_units
+  changed_when: false
+  failed_when: false
+  tags: [gate3]
+
+- name: "Gate 3 -- assert every required systemd unit is active"
+  ansible.builtin.assert:
+    that:
+      - result.stdout | trim == 'active'
+    fail_msg: >-
+      {{ result.item }} is {{ result.stdout | trim }} on {{ inventory_hostname }},
+      expected active
+    quiet: true
+  loop: "{{ _g3_units.results }}"
+  loop_control:
+    loop_var: result
+    label: "{{ result.item }}"
+  tags: [gate3]
+
+- name: "Gate 3 -- confirm nfs-common is installed (Longhorn RWX preflight)"
+  ansible.builtin.command:
+    cmd: dpkg-query -W -f='${Status}' nfs-common
+  register: _g3_nfs_common
+  changed_when: false
+  failed_when: "'install ok installed' not in _g3_nfs_common.stdout"
+  tags: [gate3]
+
+- name: "Gate 3 -- read the active nftables ruleset"
+  ansible.builtin.command:
+    cmd: nft list ruleset
+  register: _g3_nft
+  changed_when: false
+  tags: [gate3]
+
+- name: "Gate 3 -- assert the firewall default-drops and admits the trusted/pod networks and SSH"
+  ansible.builtin.assert:
+    that:
+      - "'policy drop' in _g3_nft.stdout"
+      - item in _g3_nft.stdout
+      - "'dport ' ~ firewall_ssh_port in _g3_nft.stdout"
+    fail_msg: >-
+      Active ruleset on {{ inventory_hostname }} is missing the drop policy,
+      the '{{ item }}' accept, or the SSH accept.
+    quiet: true
+  loop: "{{ firewall_trusted_networks + firewall_trusted_pod_networks }}"
+  tags: [gate3]
+
+- name: "Gate 3 -- assert the pod-network rule stays scoped to the API port, not a blanket accept"
+  ansible.builtin.assert:
+    that:
+      - (firewall_trusted_pod_networks[0] ~ ' tcp dport ' ~ firewall_trusted_pod_api_port) in (_g3_nft.stdout | replace('\n', ' '))
+    fail_msg: >-
+      Pod-network rule on {{ inventory_hostname }} does not appear scoped to
+      tcp/{{ firewall_trusted_pod_api_port }} in the live ruleset.
+    quiet: true
+  tags: [gate3]
+
+# --- Gate 4: k3s control plane ----------------------------------------------
+# Per-node checks run on every k3s_servers host; cluster-singleton reads
+# (etcd member list, node list, encryption-at-rest) run once, from the
+# bootstrap server.
+
+- name: "Gate 4 -- read this node's own served API certificate"
+  ansible.builtin.command:
+    cmd: "openssl x509 -in {{ k3s_data_dir }}/server/tls/serving-kube-apiserver.crt -noout -text"
+  register: _g4_cert
+  changed_when: false
+  when: inventory_hostname in groups['k3s_servers']
+  tags: [gate4]
+
+- name: "Gate 4 -- assert every configured TLS SAN is present on this node's served certificate"
+  ansible.builtin.assert:
+    that:
+      - item | string in _g4_cert.stdout
+    fail_msg: "{{ inventory_hostname }}'s served certificate does not include {{ item }}."
+    quiet: true
+  loop: "{{ k3s_tls_san }}"
+  when: inventory_hostname in groups['k3s_servers']
+  tags: [gate4]
+
+- name: "Gate 4 -- confirm secrets-encryption is configured on this node"
+  ansible.builtin.command:
+    cmd: "grep -c '^secrets-encryption: true' {{ k3s_config_file }}"
+  register: _g4_enc_config
+  changed_when: false
+  failed_when: _g4_enc_config.stdout | trim | int < 1
+  when: inventory_hostname in groups['k3s_servers']
+  tags: [gate4]
+
+- name: "Gate 4 -- confirm the AES-CBC encryption-provider prefix protects existing etcd data"
+  # Read-only proxy for the plan's mutating "create a marked Secret, grep for
+  # it, delete it" proof -- done once, live, at Gate 4's own closure
+  # (docs/evidence/gates/gate-04/c4-encrypted-at-rest.txt). This playbook must
+  # not create cluster objects, so it confirms the provider prefix already
+  # protects whatever Secrets already exist rather than writing a fresh one
+  # on every run. Weaker than a marker test: disclosed as a known limitation.
+  ansible.builtin.shell:
+    cmd: "grep -ac 'k8s:enc:aescbc:v1:' {{ k3s_data_dir }}/server/db/etcd/member/snap/db || true"
+  args:
+    executable: /bin/bash
+  register: _g4_enc_prefix
+  changed_when: false
+  failed_when: _g4_enc_prefix.stdout | trim | int < 1
+  when: is_first_server | bool
+  tags: [gate4]
+
+- name: "Gate 4 -- read the etcd member list"
+  ansible.builtin.command:
+    cmd: >-
+      etcdctl
+      --cacert={{ k3s_data_dir }}/server/tls/etcd/server-ca.crt
+      --cert={{ k3s_data_dir }}/server/tls/etcd/server-client.crt
+      --key={{ k3s_data_dir }}/server/tls/etcd/server-client.key
+      --endpoints=https://127.0.0.1:2379
+      member list -w json
+  environment:
+    ETCDCTL_API: "3"
+  register: _g4_etcd_members
+  changed_when: false
+  when: is_first_server | bool
+  tags: [gate4]
+
+- name: "Gate 4 -- assert exactly three etcd voters, none a learner"
+  ansible.builtin.assert:
+    that:
+      - (_g4_etcd_members.stdout | from_json).members | length == 3
+      - (_g4_etcd_members.stdout | from_json).members | selectattr('isLearner', 'defined') | selectattr('isLearner') | list | length == 0
+    fail_msg: "etcd member list does not show exactly three non-learner voters."
+    quiet: true
+  when: is_first_server | bool
+  tags: [gate4]
+
+- name: "Gate 4 -- read node identity"
+  ansible.builtin.command:
+    cmd: k3s kubectl get nodes -o json
+  register: _g4_nodes
+  changed_when: false
+  when: is_first_server | bool
+  tags: [gate4]
+
+- name: "Gate 4 -- assert the node count matches the inventory"
+  # Subscript, not dot notation: `.items` on the parsed dict would resolve to
+  # Python's own dict.items() bound method before Jinja ever tries the JSON
+  # key of the same name, and silently break every check built on it.
+  ansible.builtin.assert:
+    that:
+      - (_g4_nodes.stdout | from_json)['items'] | length == (groups['k3s_servers'] | length) + (groups['k3s_agents'] | length)
+    fail_msg: >-
+      Node list has {{ (_g4_nodes.stdout | from_json)['items'] | length }} nodes,
+      expected {{ (groups['k3s_servers'] | length) + (groups['k3s_agents'] | length) }}
+      (one per inventory host).
+    quiet: true
+  when: is_first_server | bool
+  tags: [gate4]
+
+- name: "Gate 4 -- assert every node reports condition Ready=True"
+  ansible.builtin.assert:
+    that:
+      - item.status.conditions | selectattr('type', 'equalto', 'Ready') | map(attribute='status') | first == 'True'
+    fail_msg: "{{ item.metadata.name }} is not Ready."
+    quiet: true
+  loop: "{{ (_g4_nodes.stdout | from_json)['items'] }}"
+  loop_control:
+    label: "{{ item.metadata.name }}"
+  when: is_first_server | bool
+  tags: [gate4]
+
+- name: "Gate 4 -- check audit log freshness"
+  ansible.builtin.stat:
+    path: "{{ k3s_audit_log_dir }}/audit.log"
+  register: _g4_audit_stat
+  when: inventory_hostname in groups['k3s_servers']
+  tags: [gate4]
+
+- name: "Gate 4 -- assert the audit log exists, is non-empty and was written recently"
+  # Read-only proxy for the plan's "trigger a request, find the matching
+  # event" proof (done once, live, at Gate 4's own closure). Repeating that
+  # here would mean this playbook generates the very audit traffic it is
+  # supposed to be observing. Freshness works because control-plane API
+  # traffic (leader election, node heartbeats, lease renewals) is continuous.
+  ansible.builtin.assert:
+    that:
+      - _g4_audit_stat.stat.exists
+      - _g4_audit_stat.stat.size > 0
+      - (ansible_facts['date_time']['epoch'] | int) - (_g4_audit_stat.stat.mtime | int) < (verify_cluster_audit_freshness_seconds | int)
+    fail_msg: >-
+      {{ k3s_audit_log_dir }}/audit.log on {{ inventory_hostname }} is
+      missing, empty, or has not been written to in the last
+      {{ verify_cluster_audit_freshness_seconds }}s.
+    quiet: true
+  when: inventory_hostname in groups['k3s_servers']
+  tags: [gate4]
+
+# --- Gate 5: kube-vip -------------------------------------------------------
+# A non-destructive consistency check, not a replay of Gate 5's hard
+# power-off drill: that drill is a human-approved destructive runbook
+# action (CLAUDE.md/plan Workflow ownership table), not something a routine
+# verification playbook triggers. This confirms the failover mechanism is
+# currently in a healthy, single-holder state.
+
+- name: "Gate 5 -- read the kube-vip control-plane lease holder"
+  # Named lease, not every lease in kube-system: that namespace also holds
+  # per-apiserver identity leases, k3s's own leader-election locks, and
+  # cilium-operator's -- reading all of them would report multiple
+  # "holders" that have nothing to do with kube-vip. kube-vip's
+  # control-plane lock is unconditionally named plndr-cp-lock (kube-vip's
+  # own default, not set by roles/kubevip's manifest).
+  ansible.builtin.command:
+    cmd: k3s kubectl -n kube-system get lease plndr-cp-lock -o jsonpath={.spec.holderIdentity}
+  register: _g5_lease
+  changed_when: false
+  when: is_first_server | bool
+  tags: [gate5]
+
+- name: "Gate 5 -- assert the VIP lease has exactly one holder, and it is a known control-plane node"
+  ansible.builtin.assert:
+    that:
+      - _g5_lease.stdout | trim | length > 0
+      - _g5_lease.stdout | trim in groups['k3s_servers']
+    fail_msg: >-
+      kube-vip (plndr-cp-lock) lease holder is '{{ _g5_lease.stdout }}',
+      expected exactly one recognized control-plane node.
+    quiet: true
+  when: is_first_server | bool
+  tags: [gate5]
+
+- name: "Gate 5 -- confirm the API answers through the VIP"
+  ansible.builtin.command:
+    cmd: "k3s kubectl --server=https://{{ kubevip_vip }}:{{ api_port }} get --raw /healthz"
+  register: _g5_vip_healthz
+  changed_when: false
+  failed_when: _g5_vip_healthz.stdout | trim != 'ok'
+  when: is_first_server | bool
+  tags: [gate5]
+
+# --- Gate 6: Cilium and cluster DNS -----------------------------------------
+
+- name: "Gate 6 -- read cilium status"
+  ansible.builtin.command:
+    cmd: "{{ cilium_cli_bin }} status --wait=false"
+  environment:
+    KUBECONFIG: "{{ cilium_kubeconfig }}"
+  register: _g6_status
+  changed_when: false
+  when: is_first_server | bool
+  tags: [gate6]
+
+- name: "Gate 6 -- assert cilium reports healthy"
+  ansible.builtin.assert:
+    that:
+      - _g6_status.rc == 0
+    fail_msg: "cilium status did not report healthy: {{ _g6_status.stdout }}"
+    quiet: true
+  when: is_first_server | bool
+  tags: [gate6]
+
+- name: "Gate 6 -- read the cilium-config ConfigMap"
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail;
+      k3s kubectl -n {{ cilium_namespace }} get configmap cilium-config -o yaml
+      | grep -E '^  (routing-mode|tunnel-protocol|enable-wireguard|kube-proxy-replacement):'
+      | tr -d ' "'
+      | tr '\n' ' '
+  args:
+    executable: /bin/bash
+  register: _g6_config
+  changed_when: false
+  when: is_first_server | bool
+  tags: [gate6]
+
+- name: "Gate 6 -- assert the intended Cilium settings are live"
+  ansible.builtin.assert:
+    that:
+      - "'routing-mode:tunnel' in _g6_config.stdout"
+      - "'tunnel-protocol:vxlan' in _g6_config.stdout"
+      - "'enable-wireguard:true' in _g6_config.stdout"
+      - "('kube-proxy-replacement:true' in _g6_config.stdout) == (cilium_kube_proxy_replacement | bool)"
+    fail_msg: "cilium-config does not match intended settings: {{ _g6_config.stdout }}"
+    quiet: true
+  when: is_first_server | bool
+  tags: [gate6]
+
+- name: "Gate 6 -- read the CoreDNS Deployment"
+  ansible.builtin.command:
+    cmd: "k3s kubectl -n {{ coredns_namespace }} get deployment coredns -o json"
+  register: _g6_coredns_deploy
+  changed_when: false
+  when: is_first_server | bool
+  tags: [gate6]
+
+- name: "Gate 6 -- assert CoreDNS meets the intended replica count and is Ready"
+  ansible.builtin.assert:
+    that:
+      - (_g6_coredns_deploy.stdout | from_json).status.readyReplicas | default(0) >= (coredns_replicas | int)
+    fail_msg: "CoreDNS readyReplicas below the intended {{ coredns_replicas }}."
+    quiet: true
+  when: is_first_server | bool
+  tags: [gate6]
+
+- name: "Gate 6 -- read the CoreDNS Service ClusterIP"
+  ansible.builtin.command:
+    cmd: "k3s kubectl -n {{ coredns_namespace }} get service kube-dns -o jsonpath={.spec.clusterIP}"
+  register: _g6_coredns_svc
+  changed_when: false
+  when: is_first_server | bool
+  tags: [gate6]
+
+- name: "Gate 6 -- assert the Service holds the address kubelet already expects"
+  ansible.builtin.assert:
+    that:
+      - _g6_coredns_svc.stdout | trim == coredns_cluster_ip
+    fail_msg: "kube-dns ClusterIP is {{ _g6_coredns_svc.stdout }}, expected {{ coredns_cluster_ip }}."
+    quiet: true
+  when: is_first_server | bool
+  tags: [gate6]
+
+- name: "Gate 6 -- read CoreDNS pod-to-node spread"
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail;
+      k3s kubectl -n {{ coredns_namespace }} get pods -l k8s-app=kube-dns
+      -o jsonpath='{.items[*].spec.nodeName}' | tr ' ' '\n' | sort -u | wc -l
+  args:
+    executable: /bin/bash
+  register: _g6_coredns_spread
+  changed_when: false
+  when: is_first_server | bool
+  tags: [gate6]
+
+- name: "Gate 6 -- assert CoreDNS pods are spread across distinct nodes"
+  # Structural proxy for the plan's live cross-node ping / DNS-resolution
+  # proof (Gate 6's own closure, using disposable test pods). This playbook
+  # must not create objects, so it checks CoreDNS's actual scheduling and
+  # Service state instead of re-running a live query. Disclosed as a known
+  # limitation: it does not exercise a resolution path end-to-end.
+  ansible.builtin.assert:
+    that:
+      - (_g6_coredns_spread.stdout | trim | int) >= ([coredns_replicas | int, 2] | min)
+    fail_msg: "CoreDNS pods are not spread across at least {{ [coredns_replicas | int, 2] | min }} distinct nodes."
+    quiet: true
+  when: is_first_server | bool
+  tags: [gate6]

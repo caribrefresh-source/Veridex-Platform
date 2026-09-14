@@ -17,6 +17,7 @@ jobs:
   provider-drift:
     name: Provider drift (no Hetzner assumptions)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -49,6 +50,7 @@ jobs:
   namespace-rules:
     name: Namespace declarations
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -69,6 +71,7 @@ jobs:
   yaml-lint:
     name: YAML lint
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -86,6 +89,7 @@ jobs:
   ansible-syntax:
     name: Ansible syntax check
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     # ansible.cfg lives in ansible/, but these steps run from the repo root,
     # and Ansible only reads a cfg from the current directory. Its roles_path
     # therefore never applies and roles resolve to playbooks/roles, which does
@@ -123,6 +127,7 @@ jobs:
   inventory-schema:
     name: Inventory schema (five netcup nodes)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -145,6 +150,7 @@ jobs:
   secret-register:
     name: Secret register (names only)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 

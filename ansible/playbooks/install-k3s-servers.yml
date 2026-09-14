@@ -1,7 +1,26 @@
 ---
 - name: Install k3s control plane
-  hosts: k3s_servers
+  # Bootstrap (--cluster-init) server last. It is not architecturally more
+  # fragile to restart than a joiner once the cluster is up -- any single
+  # restart under serial: 1 leaves 2 of 3 etcd voters -- but restarting it
+  # first was reordered here to match the precaution actually taken the one
+  # time this playbook rolled out a live config change (Gate 4), rather than
+  # leaving that judgment as unenforced tribal knowledge.
+  hosts: >-
+    {{ (groups['k3s_servers'] | difference([groups['k3s_servers'] | sort | first]))
+       + [groups['k3s_servers'] | sort | first] }}
   become: true
+  # One server at a time. This playbook is also how a config change (e.g. a
+  # new tls-san) gets rolled out to an ALREADY LIVE cluster, not just used for
+  # initial bring-up: k3s-server's config.yaml template change notifies a
+  # restart, and without serial, Ansible's default forks would restart k3s on
+  # all three servers -- all three etcd voters -- at once. Each server's own
+  # post-restart health/registration checks (k3s-server/tasks/main.yml) then
+  # gate whether Ansible proceeds to the next one -- and any_errors_fatal
+  # makes a failed check actually stop the play, not just skip that one host
+  # while continuing to restart the remaining voters regardless.
+  serial: 1
+  any_errors_fatal: true
   roles:
     # Order matters. kube-vip must be up before kubeconfig rewrites the
     # server URL to the VIP, and before Cilium, whose k8sServiceHost points

@@ -1,0 +1,30 @@
+gate: 4
+check: G04-C2
+captured_utc: 2026-09-14T06:21:38Z
+repo_commit: ccf4041ffb3f53282ec4f89c095135716f28e5da
+plan_commit: 4ebc8def34df78a0bc6b29e42656986ef987f4c9
+plan_sha256: 42eaac5e61d177430ce8e331767d2137b3f9b2bd197e13945b84f7c5e8cd79c7
+target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API server https://10.2.0.100:6443 (private VIP); hosts veridex-server-1/2/3 (control-plane,etcd), SSH host-key fingerprints match ansible/files/known_hosts
+captured_by: agent
+command: ssh root@<server-1> 'etcdctl member list -w table; etcdctl endpoint health -w table' (etcd client certs, local endpoint)
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: Confirms exactly three members, all IS LEARNER=false, all healthy at the moment captured; this is the same check now also run automatically per-node by roles/k3s-server on every converge.
+--- unedited output ---
+=== etcd member list ===
++------------------+---------+---------------------------+------------------------+------------------------+------------+
+|        ID        | STATUS  |           NAME            |       PEER ADDRS       |      CLIENT ADDRS      | IS LEARNER |
++------------------+---------+---------------------------+------------------------+------------------------+------------+
+| 3c5cbf89c7f7e0c0 | started | veridex-server-2-b9bf04c4 | https://10.2.1.11:2380 | https://10.2.1.11:2379 |      false |
+| 6e7b3b4f64fb8476 | started | veridex-server-1-e3293534 | https://10.2.1.10:2380 | https://10.2.1.10:2379 |      false |
+| 8e751b79f88bbec6 | started | veridex-server-3-4310cc30 | https://10.2.1.12:2380 | https://10.2.1.12:2379 |      false |
++------------------+---------+---------------------------+------------------------+------------------------+------------+
+
++------------------------+--------+------------+-------+
+|        ENDPOINT        | HEALTH |    TOOK    | ERROR |
++------------------------+--------+------------+-------+
+| https://10.2.1.10:2379 |   true | 5.156795ms |       |
+| https://10.2.1.12:2379 |   true | 5.370589ms |       |
+| https://10.2.1.11:2379 |   true | 5.085393ms |       |
++------------------------+--------+------------+-------+

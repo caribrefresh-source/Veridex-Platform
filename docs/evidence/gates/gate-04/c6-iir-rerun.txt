@@ -1,0 +1,345 @@
+gate: 4
+check: G04-IIR
+captured_utc: 2026-09-14T06:21:38Z
+repo_commit: ccf4041ffb3f53282ec4f89c095135716f28e5da
+plan_commit: 4ebc8def34df78a0bc6b29e42656986ef987f4c9
+plan_sha256: 42eaac5e61d177430ce8e331767d2137b3f9b2bd197e13945b84f7c5e8cd79c7
+target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API server https://10.2.0.100:6443 (private VIP); hosts veridex-server-1/2/3 (control-plane,etcd), SSH host-key fingerprints match ansible/files/known_hosts
+captured_by: agent
+command: ansible-playbook -i inventory/production/hosts.yml playbooks/install-k3s-servers.yml (all three servers, serial: 1, any_errors_fatal: true, bootstrap node last)
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: Proves the rollout playbook is idempotent and restarts nothing on a converged commit; does not prove reproducibility from a bare/reinstalled node (would additionally exercise initial --cluster-init bring-up, not exercised here since the cluster already existed).
+--- unedited output ---
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+[WARNING]: Ansible is being run in a world writable directory (/work/ansible), ignoring it as an ansible.cfg source. For more information see https://docs.ansible.com/ansible/devel/reference_appendices/config.html#cfg-in-world-writable-dir
+
+PLAY [Install k3s control plane] ***********************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [veridex-server-2]
+
+TASK [k3s-server : Assert the node identity matches the inventory] *************
+ok: [veridex-server-2]
+
+TASK [k3s-server : Identify the bootstrap server] ******************************
+ok: [veridex-server-2]
+
+TASK [k3s-server : Ensure config and audit directories exist] ******************
+ok: [veridex-server-2] => (item=/etc/rancher/k3s)
+ok: [veridex-server-2] => (item=/var/log/kubernetes/audit)
+
+TASK [k3s-server : Write the API audit policy] *********************************
+ok: [veridex-server-2]
+
+TASK [k3s-server : Write k3s config.yaml] **************************************
+ok: [veridex-server-2]
+
+TASK [k3s-server : Check whether k3s is already installed and running] *********
+ok: [veridex-server-2]
+
+TASK [k3s-server : Check whether this node already holds cluster state] ********
+ok: [veridex-server-2]
+
+TASK [k3s-server : Refuse to bootstrap over a running cluster] *****************
+skipping: [veridex-server-2]
+
+TASK [k3s-server : Install k3s] ************************************************
+skipping: [veridex-server-2]
+
+TASK [k3s-server : Ensure the systemd drop-in directory exists] ****************
+ok: [veridex-server-2]
+
+TASK [k3s-server : Apply systemd hardening for the k3s unit] *******************
+ok: [veridex-server-2]
+
+TASK [k3s-server : Reload systemd] *********************************************
+ok: [veridex-server-2]
+
+TASK [k3s-server : Start and enable k3s] ***************************************
+ok: [veridex-server-2]
+
+TASK [k3s-server : Flush handlers so any config change is live before verification] ***
+
+TASK [k3s-server : Wait for the API server to answer /healthz] *****************
+ok: [veridex-server-2]
+
+TASK [k3s-server : Wait for this node to register in the API] ******************
+ok: [veridex-server-2]
+
+TASK [k3s-server : Verify the installed version matches the pin] ***************
+ok: [veridex-server-2]
+
+TASK [k3s-server : Read the node's advertised addresses] ***********************
+ok: [veridex-server-2]
+
+TASK [k3s-server : Assert the node advertises its vLAN address, not the public one] ***
+ok: [veridex-server-2]
+
+TASK [k3s-server : Read this node's own served API certificate] ****************
+ok: [veridex-server-2]
+
+TASK [k3s-server : Assert every configured TLS SAN is present on this node's served certificate] ***
+ok: [veridex-server-2] => (item=10.2.0.100)
+ok: [veridex-server-2] => (item=127.0.0.1)
+ok: [veridex-server-2] => (item=localhost)
+ok: [veridex-server-2] => (item=api.veridexeai.com)
+
+TASK [k3s-server : Ensure etcdctl is available for verification] ***************
+ok: [veridex-server-2]
+
+TASK [k3s-server : Read the etcd member list] **********************************
+ok: [veridex-server-2]
+
+TASK [k3s-server : Assert exactly three etcd voters, none a learner] ***********
+ok: [veridex-server-2]
+
+TASK [kubevip : Assert the VIP is defined and inside the private network] ******
+ok: [veridex-server-2]
+
+TASK [kubevip : Assert the VIP is not statically configured in netplan] ********
+ok: [veridex-server-2]
+
+TASK [kubevip : Identify the bootstrap server] *********************************
+ok: [veridex-server-2]
+
+TASK [kubevip : Deploy the kube-vip manifest] **********************************
+skipping: [veridex-server-2]
+
+TASK [kubevip : Wait for the kube-vip DaemonSet to become available] ***********
+skipping: [veridex-server-2]
+
+TASK [kubevip : Wait for the VIP to answer on the API port] ********************
+skipping: [veridex-server-2]
+
+TASK [kubevip : Verify the API serves through the VIP] *************************
+skipping: [veridex-server-2]
+
+TASK [kubevip : Report which node currently holds the VIP] *********************
+skipping: [veridex-server-2]
+
+TASK [kubevip : Show VIP ownership] ********************************************
+skipping: [veridex-server-2]
+
+PLAY [Install k3s control plane] ***********************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [veridex-server-3]
+
+TASK [k3s-server : Assert the node identity matches the inventory] *************
+ok: [veridex-server-3]
+
+TASK [k3s-server : Identify the bootstrap server] ******************************
+ok: [veridex-server-3]
+
+TASK [k3s-server : Ensure config and audit directories exist] ******************
+ok: [veridex-server-3] => (item=/etc/rancher/k3s)
+ok: [veridex-server-3] => (item=/var/log/kubernetes/audit)
+
+TASK [k3s-server : Write the API audit policy] *********************************
+ok: [veridex-server-3]
+
+TASK [k3s-server : Write k3s config.yaml] **************************************
+ok: [veridex-server-3]
+
+TASK [k3s-server : Check whether k3s is already installed and running] *********
+ok: [veridex-server-3]
+
+TASK [k3s-server : Check whether this node already holds cluster state] ********
+ok: [veridex-server-3]
+
+TASK [k3s-server : Refuse to bootstrap over a running cluster] *****************
+skipping: [veridex-server-3]
+
+TASK [k3s-server : Install k3s] ************************************************
+skipping: [veridex-server-3]
+
+TASK [k3s-server : Ensure the systemd drop-in directory exists] ****************
+ok: [veridex-server-3]
+
+TASK [k3s-server : Apply systemd hardening for the k3s unit] *******************
+ok: [veridex-server-3]
+
+TASK [k3s-server : Reload systemd] *********************************************
+ok: [veridex-server-3]
+
+TASK [k3s-server : Start and enable k3s] ***************************************
+ok: [veridex-server-3]
+
+TASK [k3s-server : Flush handlers so any config change is live before verification] ***
+
+TASK [k3s-server : Wait for the API server to answer /healthz] *****************
+ok: [veridex-server-3]
+
+TASK [k3s-server : Wait for this node to register in the API] ******************
+ok: [veridex-server-3]
+
+TASK [k3s-server : Verify the installed version matches the pin] ***************
+ok: [veridex-server-3]
+
+TASK [k3s-server : Read the node's advertised addresses] ***********************
+ok: [veridex-server-3]
+
+TASK [k3s-server : Assert the node advertises its vLAN address, not the public one] ***
+ok: [veridex-server-3]
+
+TASK [k3s-server : Read this node's own served API certificate] ****************
+ok: [veridex-server-3]
+
+TASK [k3s-server : Assert every configured TLS SAN is present on this node's served certificate] ***
+ok: [veridex-server-3] => (item=10.2.0.100)
+ok: [veridex-server-3] => (item=127.0.0.1)
+ok: [veridex-server-3] => (item=localhost)
+ok: [veridex-server-3] => (item=api.veridexeai.com)
+
+TASK [k3s-server : Ensure etcdctl is available for verification] ***************
+ok: [veridex-server-3]
+
+TASK [k3s-server : Read the etcd member list] **********************************
+ok: [veridex-server-3]
+
+TASK [k3s-server : Assert exactly three etcd voters, none a learner] ***********
+ok: [veridex-server-3]
+
+TASK [kubevip : Assert the VIP is defined and inside the private network] ******
+ok: [veridex-server-3]
+
+TASK [kubevip : Assert the VIP is not statically configured in netplan] ********
+ok: [veridex-server-3]
+
+TASK [kubevip : Identify the bootstrap server] *********************************
+ok: [veridex-server-3]
+
+TASK [kubevip : Deploy the kube-vip manifest] **********************************
+skipping: [veridex-server-3]
+
+TASK [kubevip : Wait for the kube-vip DaemonSet to become available] ***********
+skipping: [veridex-server-3]
+
+TASK [kubevip : Wait for the VIP to answer on the API port] ********************
+skipping: [veridex-server-3]
+
+TASK [kubevip : Verify the API serves through the VIP] *************************
+skipping: [veridex-server-3]
+
+TASK [kubevip : Report which node currently holds the VIP] *********************
+skipping: [veridex-server-3]
+
+TASK [kubevip : Show VIP ownership] ********************************************
+skipping: [veridex-server-3]
+
+PLAY [Install k3s control plane] ***********************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [veridex-server-1]
+
+TASK [k3s-server : Assert the node identity matches the inventory] *************
+ok: [veridex-server-1]
+
+TASK [k3s-server : Identify the bootstrap server] ******************************
+ok: [veridex-server-1]
+
+TASK [k3s-server : Ensure config and audit directories exist] ******************
+ok: [veridex-server-1] => (item=/etc/rancher/k3s)
+ok: [veridex-server-1] => (item=/var/log/kubernetes/audit)
+
+TASK [k3s-server : Write the API audit policy] *********************************
+ok: [veridex-server-1]
+
+TASK [k3s-server : Write k3s config.yaml] **************************************
+ok: [veridex-server-1]
+
+TASK [k3s-server : Check whether k3s is already installed and running] *********
+ok: [veridex-server-1]
+
+TASK [k3s-server : Check whether this node already holds cluster state] ********
+ok: [veridex-server-1]
+
+TASK [k3s-server : Refuse to bootstrap over a running cluster] *****************
+skipping: [veridex-server-1]
+
+TASK [k3s-server : Install k3s] ************************************************
+skipping: [veridex-server-1]
+
+TASK [k3s-server : Ensure the systemd drop-in directory exists] ****************
+ok: [veridex-server-1]
+
+TASK [k3s-server : Apply systemd hardening for the k3s unit] *******************
+ok: [veridex-server-1]
+
+TASK [k3s-server : Reload systemd] *********************************************
+ok: [veridex-server-1]
+
+TASK [k3s-server : Start and enable k3s] ***************************************
+ok: [veridex-server-1]
+
+TASK [k3s-server : Flush handlers so any config change is live before verification] ***
+
+TASK [k3s-server : Wait for the API server to answer /healthz] *****************
+ok: [veridex-server-1]
+
+TASK [k3s-server : Wait for this node to register in the API] ******************
+ok: [veridex-server-1]
+
+TASK [k3s-server : Verify the installed version matches the pin] ***************
+ok: [veridex-server-1]
+
+TASK [k3s-server : Read the node's advertised addresses] ***********************
+ok: [veridex-server-1]
+
+TASK [k3s-server : Assert the node advertises its vLAN address, not the public one] ***
+ok: [veridex-server-1]
+
+TASK [k3s-server : Read this node's own served API certificate] ****************
+ok: [veridex-server-1]
+
+TASK [k3s-server : Assert every configured TLS SAN is present on this node's served certificate] ***
+ok: [veridex-server-1] => (item=10.2.0.100)
+ok: [veridex-server-1] => (item=127.0.0.1)
+ok: [veridex-server-1] => (item=localhost)
+ok: [veridex-server-1] => (item=api.veridexeai.com)
+
+TASK [k3s-server : Ensure etcdctl is available for verification] ***************
+ok: [veridex-server-1]
+
+TASK [k3s-server : Read the etcd member list] **********************************
+ok: [veridex-server-1]
+
+TASK [k3s-server : Assert exactly three etcd voters, none a learner] ***********
+ok: [veridex-server-1]
+
+TASK [kubevip : Assert the VIP is defined and inside the private network] ******
+ok: [veridex-server-1]
+
+TASK [kubevip : Assert the VIP is not statically configured in netplan] ********
+ok: [veridex-server-1]
+
+TASK [kubevip : Identify the bootstrap server] *********************************
+ok: [veridex-server-1]
+
+TASK [kubevip : Deploy the kube-vip manifest] **********************************
+ok: [veridex-server-1]
+
+TASK [kubevip : Wait for the kube-vip DaemonSet to become available] ***********
+ok: [veridex-server-1]
+
+TASK [kubevip : Wait for the VIP to answer on the API port] ********************
+ok: [veridex-server-1]
+
+TASK [kubevip : Verify the API serves through the VIP] *************************
+ok: [veridex-server-1]
+
+TASK [kubevip : Report which node currently holds the VIP] *********************
+ok: [veridex-server-1]
+
+TASK [kubevip : Show VIP ownership] ********************************************
+ok: [veridex-server-1] => {
+    "msg": "VIP 10.2.0.100:6443 serving /healthz; leases held by: apiserver-752pmerntlrgaruvnt3makgzia_fd07fd33-3424-4568-b2ec-9fa4a279dbef apiserver-qcoimdurfemr262cl4yld46u7u_f27ecfc9-64c3-401d-9849-cde5e771cc4d apiserver-xqkjafqhodocg36wnixonxz6kq_67f05ffc-2bf1-4251-9877-f5363726d52a veridex-agent-2-t9f4ntpj6d veridex-server-1 veridex-server-1 veridex-server-3_f149b86f-92a6-4cf1-be17-3d262dc465f6 veridex-server-3_7913f5dc-eb10-48f5-a40a-764702a8f8ba veridex-server-3"
+}
+
+PLAY RECAP *********************************************************************
+veridex-server-1           : ok=31   changed=0    unreachable=0    failed=0    skipped=2    rescued=0    ignored=0   
+veridex-server-2           : ok=25   changed=0    unreachable=0    failed=0    skipped=8    rescued=0    ignored=0   
+veridex-server-3           : ok=25   changed=0    unreachable=0    failed=0    skipped=8    rescued=0    ignored=0   
+

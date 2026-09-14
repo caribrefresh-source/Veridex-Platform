@@ -1,0 +1,24 @@
+gate: 4
+check: G04-C3
+captured_utc: 2026-09-14T06:21:38Z
+repo_commit: ccf4041ffb3f53282ec4f89c095135716f28e5da
+plan_commit: 4ebc8def34df78a0bc6b29e42656986ef987f4c9
+plan_sha256: 42eaac5e61d177430ce8e331767d2137b3f9b2bd197e13945b84f7c5e8cd79c7
+target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API server https://10.2.0.100:6443 (private VIP); hosts veridex-server-1/2/3 (control-plane,etcd), SSH host-key fingerprints match ansible/files/known_hosts
+captured_by: agent
+command: ssh root@<server-1> 'openssl x509 ... -text' on the served cert file; separately, an openssl s_client SNI handshake against the VIP using -servername api.veridexeai.com
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: Confirms the required public DNS SAN (api.veridexeai.com) is present and actually served over TLS/SNI. The s_client run reports 'self-signed certificate in certificate chain' -- expected and unrelated to hostname matching: k3s's cluster CA is intentionally self-signed, not a public CA, so no local trust root exists to chain to. api.veridexeai.com is not a public DNS record (6443 stays firewalled; resolved privately by operators, e.g. a hosts-file entry).
+--- unedited output ---
+=== Certificate SAN inspection (final merged cert, all three server hostnames+IPs+the required public DNS name) ===
+            X509v3 Subject Alternative Name: 
+                DNS:kubernetes, DNS:kubernetes.default, DNS:kubernetes.default.svc, DNS:kubernetes.default.svc.cluster.local, DNS:localhost, DNS:api.veridexeai.com, DNS:localhost, DNS:veridex-server-1, IP Address:10.2.0.100, IP Address:127.0.0.1, IP Address:10.2.1.10, IP Address:152.53.177.26, IP Address:127.0.0.1, IP Address:0:0:0:0:0:0:0:1, IP Address:10.2.1.10, IP Address:10.45.0.1, IP Address:10.2.1.10
+    Signature Algorithm: ecdsa-with-SHA256
+    Signature Value:
+
+--- TLS handshake against the VIP using the required public DNS SAN (SNI test; private resolution only, no public DNS record) ---
+subject=O = k3s, CN = k3s
+X509v3 Subject Alternative Name: 
+    DNS:api.veridexeai.com, DNS:kubernetes, DNS:kubernetes.default, DNS:kubernetes.default.svc, DNS:kubernetes.default.svc.cluster.local, DNS:localhost, DNS:veridex-server-1, DNS:veridex-server-2, DNS:veridex-server-3, IP Address:10.2.0.100, IP Address:10.2.1.10, IP Address:10.2.1.11, IP Address:10.2.1.12, IP Address:10.45.0.1, IP Address:127.0.0.1, IP Address:152.53.140.210, IP Address:152.53.142.131, IP Address:152.53.177.26, IP Address:0:0:0:0:0:0:0:1

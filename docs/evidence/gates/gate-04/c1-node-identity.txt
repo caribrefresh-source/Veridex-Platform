@@ -1,0 +1,21 @@
+gate: 4
+check: G04-C1
+captured_utc: 2026-09-14T06:21:38Z
+repo_commit: ccf4041ffb3f53282ec4f89c095135716f28e5da
+plan_commit: 4ebc8def34df78a0bc6b29e42656986ef987f4c9
+plan_sha256: 42eaac5e61d177430ce8e331767d2137b3f9b2bd197e13945b84f7c5e8cd79c7
+target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API server https://10.2.0.100:6443 (private VIP); hosts veridex-server-1/2/3 (control-plane,etcd), SSH host-key fingerprints match ansible/files/known_hosts
+captured_by: agent
+command: ssh root@<server-1> 'k3s kubectl get nodes -o wide'
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: Confirms three servers hold control-plane,etcd role and are Ready, matching the inventory's k3s_servers group; does not independently re-verify each node's host-key fingerprint here (done at Gate 1, unchanged since).
+--- unedited output ---
+=== Node identity ===
+NAME               STATUS   ROLES                AGE   VERSION        INTERNAL-IP   EXTERNAL-IP   OS-IMAGE             KERNEL-VERSION              CONTAINER-RUNTIME
+veridex-agent-1    Ready    worker               24h   v1.36.4+k3s1   10.2.1.100    <none>        Ubuntu 24.04.5 LTS   6.8.0-139-generic (amd64)   containerd://2.3.4-k3s1.36
+veridex-agent-2    Ready    worker               24h   v1.36.4+k3s1   10.2.1.101    <none>        Ubuntu 24.04.5 LTS   6.8.0-139-generic (amd64)   containerd://2.3.4-k3s1.36
+veridex-server-1   Ready    control-plane,etcd   33h   v1.36.4+k3s1   10.2.1.10     <none>        Ubuntu 24.04.5 LTS   6.8.0-139-generic (amd64)   containerd://2.3.4-k3s1.36
+veridex-server-2   Ready    control-plane,etcd   32h   v1.36.4+k3s1   10.2.1.11     <none>        Ubuntu 24.04.5 LTS   6.8.0-139-generic (amd64)   containerd://2.3.4-k3s1.36
+veridex-server-3   Ready    control-plane,etcd   32h   v1.36.4+k3s1   10.2.1.12     <none>        Ubuntu 24.04.5 LTS   6.8.0-139-generic (amd64)   containerd://2.3.4-k3s1.36

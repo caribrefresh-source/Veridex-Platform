@@ -31,7 +31,10 @@ Documentation (docs/, Markdown and text files) is not a consumer.
 
 Each must appear in docs/security/secret-register.yml saying where its value is
 held. The check runs both ways: consumed-but-unregistered fails, and a
-registered name nothing consumes fails as stale.
+registered name nothing consumes fails as stale -- unless the entry sets
+`manual_only: true`, for a secret that by design no automation ever reads
+(e.g. a break-glass credential a human uses directly), so it can never match
+a consumption pattern without defeating its own purpose.
 
 It also fails when
 ------------------
@@ -497,6 +500,11 @@ def load_register(path: Path, errors: list[str]) -> dict[tuple[str, str], dict]:
                 errors.append(f"{label}: deferred entries need deferred_until_gate between 1 and 31")
         elif gate is not None:
             errors.append(f"{label}: deferred_until_gate is only valid when status is deferred")
+        manual_only = entry.get("manual_only", False)
+        if not isinstance(manual_only, bool):
+            errors.append(f"{label}: manual_only must be true or false")
+        elif manual_only and entry["status"] != "active":
+            errors.append(f"{label}: manual_only is only valid when status is active")
         if (kind, name) in register:
             errors.append(f"{label}: registered more than once")
         register[(kind, name)] = entry
@@ -550,7 +558,7 @@ def main() -> int:
                 f"{kind} {name}: consumed at {consumed[key][0]} but not in {REGISTER} -- unresolved secret destination"
             )
     for key in sorted(register):
-        if key not in consumed:
+        if key not in consumed and not register[key].get("manual_only", False):
             kind, name = key
             problems.append(f"{REGISTER}: {kind} {name} is registered but nothing consumes it -- remove the stale entry")
 

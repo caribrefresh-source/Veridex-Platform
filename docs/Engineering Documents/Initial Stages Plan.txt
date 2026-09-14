@@ -1,9 +1,9 @@
 Contents
 Execution and acceptance specification
 Veridex Platform cluster: production end‑state plan
-Revision 3 (consolidated) · 13 September 2026 · Gate‑based structure, backup destination moved from GCS to Wasabi
+Revision 3 (consolidated) · 13 September 2026 · Gate‑based structure, backup destination moved from GCS to Wasabi to Backblaze B2
 
-Five netcup nodes, idempotent Ansible bootstrap, Argo CD GitOps after hand‑over. No Hetzner dependency anywhere in production or disaster recovery. Backup and recovery run on Wasabi, S3‑compatible object storage. Object storage is one distributed MinIO deployment of four server pods across four failure domains. Network policy promotes namespace by namespace. Recovery objectives are measured per subsystem, never as one combined figure.
+Five netcup nodes, idempotent Ansible bootstrap, Argo CD GitOps after hand‑over. No Hetzner dependency anywhere in production or disaster recovery. Backup and recovery run on Backblaze B2, via its S3‑compatible API. Object storage is one distributed MinIO deployment of four server pods across four failure domains. Network policy promotes namespace by namespace. Recovery objectives are measured per subsystem, never as one combined figure.
 
 36
 gates, 0–35
@@ -22,28 +22,35 @@ Superseded by Veridex Platform Cluster Production End State Plan Revision 2 — 
 Do not execute that stage list as written. Where the two disagree, this document governs. The disagreements were factual regressions introduced while restating the plan, not new decisions:
 
 Superseded statement	Confirmed decision
-Hetzner object storage is the backup destination.	No Hetzner dependency. Wasabi (S3‑compatible object storage) is the backup destination (Gates 17–19, 31).
+Hetzner object storage is the backup destination.	No Hetzner dependency. Backblaze B2 (via its S3‑compatible API) is the backup destination (Gates 17–19, 31).
 MinIO is described only as "spreads data across nodes."	One distributed MinIO deployment runs exactly four server pods, one per failure domain (Gate 13, Gate 23).
 Longhorn is the default two‑replica StorageClass.	Longhorn is tiered by workload (critical / standard / disposable); MinIO volumes never use Longhorn (Gate 26).
 Sealed Secrets remains unresolved.	Tracked explicitly under the KMS incident and secret‑mechanism gate (Gate 22) and the §6 conflict below — resolve before Gate 13 and Gate 24 close.
-Network policy is applied generically to every namespace.	Network policy is promoted namespace by namespace through the P0–P6 sequence (Defined network policy rollout), with explicit Wasabi egress handling (Gate 30).
+Network policy is applied generically to every namespace.	Network policy is promoted namespace by namespace through the P0–P6 sequence (Defined network policy rollout), with explicit Backblaze B2 egress handling (Gate 30).
 Recovery is summarized as one ≤30‑minute RTO and ≤1‑hour RPO.	Recovery objectives are measured separately per subsystem (Recovery objectives and proof); no combined figure is accepted (Gate 29).
-Changed this revision — backup destination
-The backup destination changes from Google Cloud Storage to Wasabi (S3‑compatible object storage). This resolves Gate 21 rather than complicating it: Wasabi has no Workload Identity concept and no GKE‑specific credential path to route around — every producer authenticates with a plain scoped access‑key/secret‑key pair, the same mechanism regardless of where it runs. Gates 17, 18, 19, 20, 21, 25, 26, 30 and 31 are rewritten below for Wasabi's terms (Object Lock instead of Bucket Lock, a Wasabi account instead of a Google Cloud project, S3 IAM policies instead of Cloud IAM). Gates 22–24 and 27–29 are backup‑destination‑agnostic and are unchanged.
+Changed this revision — backup destination (superseded 14 September 2026)
+The backup destination changed from Google Cloud Storage to Wasabi (S3‑compatible object storage). This resolved Gate 21 rather than complicating it: Wasabi has no Workload Identity concept and no GKE‑specific credential path to route around — every producer authenticates with a plain scoped access‑key/secret‑key pair, the same mechanism regardless of where it runs. Retained for provenance only: the destination moved again on 14 September 2026, from Wasabi to Backblaze B2, per the amendment below. Where this paragraph and that amendment disagree, the amendment governs.
+Amended 14 September 2026 — backup destination moved from Wasabi to Backblaze B2
+The backup and recovery destination is now Backblaze B2, reached through its S3‑compatible API. Gates 17, 18, 19, 20, 21, 25, 26, 30 and 31 are rewritten below in B2's terms. Gates 22–24 and 27–29 remain backup‑destination‑agnostic and are unchanged. This is not a rename: four differences between Wasabi and B2 change what those gates actually require, and each is reflected below rather than carried over.
+
+B2 uses capability‑scoped application keys, not AWS‑IAM‑compatible policy JSON. B2's S3‑compatible API does not support IAM roles, bucket policies, object ACLs or STS. Gates 20 and 21 are rewritten around the application‑key model (a master application key as the root‑equivalent, and restricted keys carrying an explicit capability set, an optional bucket restriction and an optional name prefix).
+B2 application keys can carry a native expiry (validDurationSeconds, under 1000 days). Gate 21's rotation requirement is therefore enforceable by the credential itself, not only by process.
+B2 Object Lock can be enabled on an existing bucket, including as a one‑time b2_update_bucket operation — it is not create‑time‑only. Gate 19's "recreate, do not convert" requirement was a Wasabi/S3 constraint and is withdrawn; the two‑phase Governance‑then‑Compliance sequence is kept, because that protects against locking the wrong retention period, which is still irreversible.
+B2 charges per byte‑hour with no minimum storage duration, so Wasabi's 90‑day minimum‑duration penalty on hourly‑churning buckets (etcd snapshots, WAL) does not apply and that cost warning is withdrawn. It is replaced by a different one: B2 egress is free only up to 3× average monthly storage, and a full restore is exactly a large egress burst in a short window (Gates 18, 24, 29).
 Amended 13 September 2026 — gap closure: network policy and namespace articulation
 Four gaps found in review of this document's network‑policy and identity content and of Gate 29 — unresolved namespace naming, the Wave 5/Wave 6 NATS‑Temporal overlap, thin per‑namespace Kubernetes RBAC, and an undeclared tenant‑to‑namespace model — are closed by new Gates 32–35 (Part D). This is still Revision 3; the amendment adds gates and cross‑references only and changes no decision already recorded for Gates 0–31. Source: docs/Engineering Documents/Gap Closure Plan — Network Policy.txt, whose four phases this amendment incorporates. That source document is superseded by this amendment and is retained only for provenance. Gates 32–35 follow this plan's own convention of not pre‑assigning deliverable (D) or exit‑gate (EG) numbers in gate text — the gate ledger (docs/evidence/gate-ledger.md) assigns those cumulatively, only when a gate reaches PASS, continuing from its recorded position at that time.
 
 Highest‑priority unresolved issue
-Proving each producer's actual path to Wasabi against its exact pinned version. Wasabi is a first‑party S3‑compatible endpoint, not a cross‑cloud interoperability workaround, so the protocol risk that existed under GCS mostly disappears — CloudNativePG, Longhorn and k3s etcd all have native, documented S3‑compatible backup‑target support. What is not yet proven is Wasabi‑specific behavior under this exact stack: multipart limits, request‑rate throttling during a full restore, and the minimum‑storage‑duration billing policy against buckets that churn hourly (etcd snapshots, WAL). See Gate 17.
+Proving each producer's actual path to Backblaze B2 against its exact pinned version. B2 exposes a first‑party S3‑compatible API, not a cross‑cloud interoperability workaround, so the protocol risk that existed under GCS mostly disappears — CloudNativePG, Longhorn and k3s etcd all have native, documented S3‑compatible backup‑target support, and B2 accepts both path‑style and virtual‑hosted addressing, which removes the specific addressing mismatch that bites some S3‑compatible backends. What is not yet proven is B2‑specific behavior under this exact stack: multipart limits, request‑rate and throttling behavior during a full restore, and whether a full restore's egress exceeds the free allowance (3× average monthly storage) and at what cost. B2's S3‑compatible API also does not implement object ACLs, IAM roles, bucket policies or object tagging — any producer or tool that assumes those must be identified before it is trusted. See Gate 17.
 
 Part A — Foundation
 Decision summary
 Decision	Required end state
 Provider boundary	No compute, object storage, DNS, backup, credential, monitoring, or recovery dependency on Hetzner.
-Backup destination	Wasabi (S3‑compatible object storage), in a dedicated backup account, provisioned as its own infrastructure‑as‑code stack (Gates 17–20, 31).
+Backup destination	Backblaze B2 (via its S3‑compatible API), in a dedicated backup account, provisioned as its own infrastructure‑as‑code stack (Gates 17–20, 31).
 MinIO topology	One distributed MinIO deployment of four server pods on four distinct nodes and four distinct directly attached storage paths; one pod per failure domain.
 MinIO protection	MinIO erasure coding owns object‑level protection. MinIO data must not use replicated Longhorn PVCs.
-GitOps boundary	Ansible creates the viable cluster and bootstraps Argo CD. Argo CD owns cluster services, data services, policies, and applications after explicit handover. Wasabi infrastructure is provisioned outside both (Gate 31).
+GitOps boundary	Ansible creates the viable cluster and bootstraps Argo CD. Argo CD owns cluster services, data services, policies, and applications after explicit handover. Backblaze B2 infrastructure is provisioned outside both (Gate 31).
 Policy rollout	Inventory flows, observe, create explicit allows, enforce one namespace at a time, run positive and negative tests, then promote.
 Recovery claim	No RTO or RPO is accepted until a dated restore drill proves it. Infrastructure, database, object storage, and volume recovery are measured separately — never as one combined number.
 Status vocabulary and evidence rules
@@ -58,7 +65,7 @@ A gate may be marked PASS only when every mandatory check passes on the identifi
 
 Non‑negotiable architecture policies
 No Hetzner endpoint, account, bucket, load balancer, DNS zone, secret, Terraform state, backup, recovery artifact, or CI variable may be required by production or disaster recovery.
-The backup and recovery destination is Wasabi (S3‑compatible object storage), provisioned as a separate infrastructure‑as‑code stack outside the netcup cluster, with deletion protection on every locked bucket (Gate 31).
+The backup and recovery destination is Backblaze B2 (via its S3‑compatible API), provisioned as a separate infrastructure‑as‑code stack outside the netcup cluster, with deletion protection on every locked bucket (Gate 31).
 All versions and deployment artifacts are pinned. OCI Helm charts should be pinned by digest where supported.
 A healthy rerun must report changed equals zero for host and bootstrap automation and must not restart k3s, Cilium, CoreDNS, kube‑vip, or storage services.
 No workflow may hand‑patch a GitOps‑owned object. Emergency changes require an incident record and immediate reconciliation into Git.
@@ -187,10 +194,10 @@ Empty task list, ignored failure, mutation during verification, or success again
 GATE 8
 Backup foundation
 End state
-Wasabi — not Hetzner — is the configured backup destination, with versioning, encryption and provider‑enforced immutability via S3 Object Lock. Separate write and restore identities exist. Exact bucket architecture, credential mechanism and Object Lock activation are specified in Gates 18–21.
+Backblaze B2 — not Hetzner — is the configured backup destination, with versioning, encryption and provider‑enforced immutability via Object Lock. Separate write and restore identities exist. Exact bucket architecture, credential mechanism and Object Lock activation are specified in Gates 18–21.
 
 Acceptance evidence
-Create protected test object; deny early deletion and retention reduction; list with restore identity; download and verify; record Wasabi account/bucket/region.
+Create protected test object; deny early deletion and retention reduction; list with restore identity; download and verify; record B2 account/bucket/region.
 
 Stop condition
 Cluster‑local‑only backup, administrator can silently remove retention, shared runtime credential, or any Hetzner dependency.
@@ -198,13 +205,13 @@ Cluster‑local‑only backup, administrator can silently remove retention, shar
 GATE 9
 etcd recovery
 End state
-Hourly local and off‑cluster snapshots are explicit, retention is explicit, and a snapshot restores successfully in isolation with protected server token and encryption material. The off‑cluster path uses k3s's native S3‑compatible snapshot target pointed at Wasabi — proof is still required against the exact pinned k3s version, not assumed from protocol compatibility alone — see Gate 17, veridex-etcd-backup in Gate 18.
+Hourly local and off‑cluster snapshots are explicit, retention is explicit, and a snapshot restores successfully in isolation with protected server token and encryption material. The off‑cluster path uses k3s's native S3‑compatible snapshot target pointed at Backblaze B2 — proof is still required against the exact pinned k3s version, not assumed from protocol compatibility alone — see Gate 17, veridex-etcd-backup in Gate 18.
 
 Acceptance evidence
 Observe two scheduled cycles; verify local and remote retention; download; isolated restore; API query of restored objects.
 
 Stop condition
-Only filename/checksum proof, missing token, untested restore, ambiguous RPO, or unproven Wasabi behavior for the pinned k3s version.
+Only filename/checksum proof, missing token, untested restore, ambiguous RPO, or unproven Backblaze B2 behavior for the pinned k3s version.
 
 GATE 10
 Argo CD handover
@@ -292,28 +299,28 @@ Stop condition
 Untested runbook, combined unverifiable 30‑minute claim, missing business‑level integrity checks, or reliance on original nodes.
 
 Part C — new this revision
-Wasabi backup architecture, gates 17–31
-These close the gaps found while implementing Gate 8 and Gate 13. Wasabi is a first‑party S3‑compatible endpoint — most of the protocol risk that existed under GCS is gone — but "back up to Wasabi" is still not one implementation, and Wasabi's own operational quirks (minimum storage duration, request‑rate behavior) are still unproven for this stack.
+Backblaze B2 backup architecture, gates 17–31
+These close the gaps found while implementing Gate 8 and Gate 13. B2 exposes a first‑party S3‑compatible API — most of the protocol risk that existed under GCS is gone — but "back up to B2" is still not one implementation, and B2's own operational characteristics (egress allowance during a full restore, request‑rate behavior, and the S3 features its API deliberately omits) are still unproven for this stack.
 
 GATE 17
-Per‑producer Wasabi (S3) compatibility matrix
-Wasabi implements the S3 API directly — it is not a cross‑cloud interoperability workaround like GCS's XML interop layer — so every producer below already has an officially documented S3‑compatible path. That lowers risk; it does not remove the requirement to test each exact pinned version before trusting it.
+Per‑producer Backblaze B2 (S3) compatibility matrix
+B2 implements an S3‑compatible API directly — it is not a cross‑cloud interoperability workaround like GCS's XML interop layer — so every producer below already has an officially documented S3‑compatible path, and B2 accepts both path‑style and virtual‑hosted addressing. That lowers risk; it does not remove the requirement to test each exact pinned version before trusting it. The endpoint has the form s3.<region>.backblazeb2.com and accepts HTTPS only; record the exact region‑qualified endpoint each producer is configured with.
 
-Producer	Preferred Wasabi path	Required proof
-CloudNativePG	Barman Cloud plugin, generic S3‑compatible object store (endpointURL + access/secret key)	Base backup, WAL archive and point‑in‑time restore
-Velero	AWS provider plugin, configured with the Wasabi endpoint and region	Namespace and volume restore
+Producer	Preferred Backblaze B2 path	Required proof
+CloudNativePG	Barman Cloud plugin, generic S3‑compatible object store (endpointURL + application key id/secret as access/secret key)	Base backup, WAL archive and point‑in‑time restore
+Velero	AWS provider plugin, configured with the B2 S3‑compatible endpoint and region	Namespace and volume restore
 MinIO backup	MinIO's native server‑side bucket replication to an S3‑compatible remote, or a tested mirror tool	Versions, metadata, retention and checksums restored
 Longhorn	Native S3‑compatible backupstore — Longhorn's standard, documented backup‑target type	Incremental backup, list, delete under lifecycle rules and complete restore
 k3s etcd	Native S3‑compatible snapshot target (--etcd-s3-endpoint, access/secret key)	Scheduled upload, listing, pruning and isolated restore
-Audit exporter	S3‑compatible client against the Wasabi endpoint	Immutable object retrieved and verified
+Audit exporter	S3‑compatible client against the B2 endpoint	Immutable object retrieved and verified
 Stop condition
-Any row declared compatible without a version‑pinned test. Community reports of friction between Longhorn and non‑AWS S3‑compatible backends exist (path‑style vs virtual‑hosted addressing, UI display bugs) — verify against the exact pinned Longhorn release rather than assuming "S3‑compatible" is uniform across vendors. Do not quietly fall back to MinIO as the only backup if any producer's path fails.
+Any row declared compatible without a version‑pinned test. Community reports of friction between Longhorn and non‑AWS S3‑compatible backends exist (addressing style, UI display bugs) — verify against the exact pinned Longhorn release rather than assuming "S3‑compatible" is uniform across vendors. B2's S3‑compatible API does not implement object ACLs, IAM roles, bucket policies, object tagging or browser POST uploads: any producer or tool that silently depends on one of those is a failed row, not a warning. Do not quietly fall back to MinIO as the only backup if any producer's path fails.
 
-References: Wasabi S3 API reference · Longhorn — setting an S3‑compatible backup target · k3s etcd‑snapshot CLI (S3 options) · CloudNativePG Barman Cloud plugin — object store providers
+References: Backblaze B2 S3‑Compatible API documentation · Longhorn — setting an S3‑compatible backup target · k3s etcd‑snapshot CLI (S3 options) · CloudNativePG Barman Cloud plugin — object store providers
 
 GATE 18
-Wasabi bucket architecture
-Exact buckets, not a shared bucket with prefixes — prefix separation does not provide the same administrative boundary. Separate buckets where retention, IAM policy, lifecycle, legal hold or blast radius differs. Bucket names are global within Wasabi, same constraint as S3.
+Backblaze B2 bucket architecture
+Exact buckets, not a shared bucket with prefixes — prefix separation does not provide the same administrative boundary. Separate buckets where retention, key scope, lifecycle, legal hold or blast radius differs. B2 bucket names are globally unique across all B2 accounts, the same constraint as S3, so the names below may need an account‑specific suffix if taken; record the names actually created.
 
 Bucket	Data	Retention type
 veridex-etcd-backup	k3s etcd snapshots	Operational DR retention
@@ -323,17 +330,21 @@ veridex-longhorn-backup	Selected PVC backups	Workload‑specific retention
 veridex-recovery-keys	SOPS age and other recovery material	Restricted dual‑control retention
 veridex-audit-worm	Audit and compliance evidence	Locked compliance retention
 For each bucket, define
-Wasabi account (dedicated backup account, not shared with any application account) · Wasabi region
+B2 account (dedicated backup account, not shared with any application account) · B2 region and its exact s3.<region>.backblazeb2.com endpoint
 Versioning policy (required for Object Lock) · Retention duration · Whether Object Lock Compliance mode is required
-Lifecycle transitions and deletion · Encryption model (SSE)
+Lifecycle rules for hiding and deleting file versions · Encryption model (SSE)
 Logging and alerts · Writer, verifier and restore identities · Monthly cost ceiling
-Wasabi has no storage‑class tiering — it is flat‑rate hot storage, which simplifies the "storage class" decision GCS required but does not remove one Wasabi‑specific cost rule: objects deleted before 90 days still incur the minimum‑storage‑duration charge. veridex-etcd-backup (hourly snapshots, 48 kept) and veridex-cnpg-backup (WAL) both churn well inside that window — factor the minimum‑duration charge into the monthly cost ceiling for those two buckets rather than treating per‑GB rate as the whole estimate, and confirm whether pruning old snapshots on schedule is cheaper than a longer on‑Wasabi retention window.
+B2 has no storage‑class tiering — it is flat‑rate hot storage, which simplifies the "storage class" decision GCS required — and it bills per byte‑hour with no minimum storage duration, so Wasabi's 90‑day early‑deletion penalty does not apply here. veridex-etcd-backup (hourly snapshots, 48 kept) and veridex-cnpg-backup (WAL) churn constantly and are therefore cheap to prune aggressively on B2; prune on schedule rather than buying a longer retention window to dodge a minimum‑duration charge that does not exist.
+
+The cost risk moves to egress instead. B2 includes free egress up to 3× average monthly storage, then charges per GB beyond it. Routine operation stays far inside that allowance because backups are write‑mostly; a full restore is the opposite — it downloads most of what is stored, in a short window, potentially across several buckets at once. Estimate the egress of a complete Gate 29 drill against the 3× allowance, record what it would cost if it exceeds it, and state whether a drill is rate‑limited or staged to stay inside the allowance. A restore that is financially discouraged is a restore that does not get practised. Also record which B2 API call classes each producer generates, since transaction pricing differs by class and a chatty backup client can cost more than the bytes it stores.
 
 GATE 19
 Object Lock (Compliance mode) activation
-Wasabi implements S3 Object Lock: a Compliance‑mode default retention period cannot be removed or shortened by anyone, including the account root user — this is irreversible. Object Lock is activated in two phases, never in one step, and it must be enabled at bucket creation — unlike ordinary settings, it cannot be added to an existing bucket retroactively. If any of the six Gate 18 buckets were already created without Object Lock while the plan still named GCS, they must be recreated, not converted.
+Backblaze B2 implements Object Lock in two modes. Governance‑mode retention can be modified or overridden by a client whose application key carries the capability to do so. Compliance‑mode retention cannot be removed by any user — its date can be extended, never shortened — so committing to a Compliance period is irreversible in the only direction that matters.
 
-Create the bucket with Object Lock enabled (versioning turns on automatically) and either no default retention or a
+Unlike Wasabi and S3, B2 does not require Object Lock at bucket creation: it can be enabled when the bucket is created, on an existing bucket, or as a one‑time b2_update_bucket operation. The previous revision's "recreate the bucket, do not convert it" requirement was a Wasabi constraint and is withdrawn. The two‑phase activation below is kept anyway, and for a different reason: it protects against locking in the wrong retention period, which no provider can undo.
+
+Enable Object Lock on the bucket (versioning is required and turns on with it) with either no default retention or a
 Governance‑mode
 default retention only.
 Run upload, restore, denial and lifecycle tests.
@@ -341,45 +352,46 @@ Obtain documented approval of the retention period.
 Set the default retention mode to
 Compliance
 with the approved period.
-Verify the policy cannot be reduced, removed, or bypassed — even by the account root user.
+Verify the policy cannot be reduced, removed, or bypassed — including by the master application key.
 Store the lock evidence.
-Decide separately between bucket‑level default retention, per‑object retention overrides, Legal Hold flags (indefinite, no expiry, independent of the retention period), and object versioning — they solve different problems and are not interchangeable.
+Decide separately between bucket‑level default retention, per‑object retention overrides, Legal Hold flags (indefinite, no expiry, independent of the retention period), and file versioning — they solve different problems and are not interchangeable.
 
 Stop condition
-A bucket locked before step 2 or 3 is complete; Object Lock enabled after bucket creation instead of at creation; or a retention mechanism chosen without recording which problem it solves.
+A bucket locked before step 2 or 3 is complete; a Compliance period set without recorded approval; or a retention mechanism chosen without recording which problem it solves.
 
-Reference: Wasabi — Immutability: Compliance and Object Locking
+Reference: Backblaze B2 — Object Lock documentation
 
 GATE 20
-Wasabi account and access isolation
-A different provider than Hetzner is not sufficient protection if one compromised administrator can delete the cluster and its backups — and Wasabi's account/root‑key model is close enough to AWS's that the same root‑key risk applies directly. Required:
+Backblaze B2 account and access isolation
+A different provider than Hetzner is not sufficient protection if one compromised administrator can delete the cluster and its backups. B2's master application key is the root‑equivalent — it carries every capability, reaches every bucket, has no prefix restriction and no expiry — so the same root‑key risk applies directly, under a different name. Required:
 
-A dedicated Wasabi account (or sub‑account) separate from any account used for other workloads, with separate billing and recovery contacts.
-MFA on console login for privileged human identities; no routine use of root account keys by any automation; enable MFA Delete on versioned/locked buckets where supported.
-Wasabi IAM policies (AWS‑IAM‑compatible policy JSON) scoping every identity to explicit bucket actions — no policy grants s3:DeleteBucket or retention/Object‑Lock modification to a backup writer.
-Backup writers without bucket deletion or retention‑policy modification.
-Restore identities disabled or unused except during drills.
-Bucket access logging exported to an independently protected destination outside the Wasabi account.
+A dedicated B2 account separate from any account used for other workloads, with separate billing and recovery contacts.
+MFA on console login for privileged human identities; no routine use of the master application key by any automation.
+Every identity is a restricted application key carrying an explicit capability set, scoped to one bucket (and a name prefix where it helps) — B2 has no IAM policy documents, no IAM roles, no bucket policies and no STS, so the capability list on the key IS the policy and must be enumerated and reviewed as one.
+Backup writers hold writeFiles but not deleteFiles, and hold no bucket‑management capability that would let them delete a bucket or alter its Object Lock or retention configuration.
+Restore identities hold readFiles only, and are unused except during drills.
+Bucket and access logging exported to an independently protected destination outside the B2 account.
 Recovery access proven without the production cluster.
-Alerts for IAM, lifecycle, retention and bucket configuration changes.
+Alerts for application‑key creation, lifecycle, retention and bucket configuration changes.
 Stop condition
-Any human or workload identity holding both write and delete/retention‑modification rights on a locked bucket, or any automation using the account's root access key.
+Any human or workload identity holding both write and delete/retention‑modification capability on a locked bucket, or any automation using the account's master application key.
 
-Reference: Wasabi — IAM and STS support
+Reference: Backblaze B2 — Application Keys documentation
 
 GATE 21
-Wasabi access‑key scoping and lifecycle
-The credential question this gate existed to answer under GCS — how does a non‑GKE k3s cluster authenticate without Workload Identity Federation — is moot under Wasabi: there is no federation concept, GKE or otherwise. Every producer authenticates with a plain HMAC access‑key/secret‑key pair, the same mechanism regardless of where the workload runs. What remains is disciplined key handling, not protocol selection:
+Backblaze B2 application‑key scoping and lifecycle
+The credential question this gate existed to answer under GCS — how does a non‑GKE k3s cluster authenticate without Workload Identity Federation — is moot under B2: there is no federation concept, GKE or otherwise. Every producer authenticates with an application key id and secret, presented to the S3‑compatible API as an access‑key/secret‑key pair, the same mechanism regardless of where the workload runs. What remains is disciplined key handling, not protocol selection:
 
-Every producer authenticates with a scoped access‑key/secret‑key pair tied to a dedicated Wasabi sub‑user or policy‑restricted key — never the account root keys.
-One key pair per producer/bucket pairing wherever Wasabi's IAM policy model allows it, so a compromised key exposes only its own bucket.
-Keys are encrypted through SOPS in Git and never committed in plaintext — the same class of failure as the MINIO_KMS_SECRET_KEY incident in Gate 22, and this gate exists so it does not recur for Wasabi keys.
-Keys are rotated on a defined schedule and immediately on suspected exposure.
-CloudNativePG is configured with plain s3Credentials and an explicit endpointURL pointed at Wasabi — never a googleCredentials block, which does not apply to a non‑Google endpoint.
+Every producer authenticates with its own restricted application key — never the master application key.
+One key per producer/bucket pairing, restricted to that bucket (and a name prefix where the producer writes under one), so a compromised key exposes only its own bucket.
+Each key's capability set is the minimum that producer actually needs, and is recorded alongside the key in the secret register. A writer that never prunes does not get deleteFiles.
+Keys are encrypted through SOPS in Git and never committed in plaintext — the same class of failure as the MINIO_KMS_SECRET_KEY incident in Gate 22, and this gate exists so it does not recur for B2 keys.
+Keys are rotated on a defined schedule and immediately on suspected exposure. B2 application keys accept a native expiry (validDurationSeconds, under 1000 days) — set it, so an un‑rotated key fails closed on its own rather than living until someone notices.
+CloudNativePG is configured with plain s3Credentials and an explicit endpointURL pointed at the B2 region endpoint — never a googleCredentials block, which does not apply to a non‑Google endpoint.
 Stop condition
-Any automated workload using a Wasabi root account key, or any access key committed in plaintext anywhere in the tree.
+Any automated workload using the master application key, any key without a bucket restriction, or any application key committed in plaintext anywhere in the tree.
 
-Reference: Wasabi — generating an S3 API key
+Reference: Backblaze B2 — Application Keys documentation
 
 GATE 22
 KMS key incident and rotation
@@ -422,13 +434,13 @@ What happens when differently sized disks are used.
 Monitoring for offline drives, healing backlog and write quorum.
 GATE 25
 MinIO backup semantics
-"Mirror to Wasabi" needs a precise policy — a plain mc mirror --remove would be dangerous for an immutable backup, since it can propagate malicious or accidental deletion. Because Wasabi is fully S3‑compatible, MinIO's native server‑side bucket replication can target it directly; prefer that over a client‑side mirror script where available, since it handles versioning and delete markers more faithfully. Answer explicitly:
+"Mirror to B2" needs a precise policy — a plain mc mirror --remove would be dangerous for an immutable backup, since it can propagate malicious or accidental deletion. Because B2 exposes an S3‑compatible API, MinIO's native server‑side bucket replication can target it directly; prefer that over a client‑side mirror script where available, since it handles versioning and delete markers more faithfully. Confirm against the pinned MinIO release that its replication path works against B2 specifically, given that B2's API omits object tagging and ACLs, which some replication implementations set as a matter of course. Answer explicitly:
 
 Are all object versions preserved? Are delete markers copied?
 Are legal holds and retention metadata preserved or reconstructed?
 Are bucket policies, users, groups and service accounts backed up? Are lifecycle rules backed up?
 Is server‑side encryption metadata recoverable?
-Does deleting from MinIO propagate deletion to Wasabi?
+Does deleting from MinIO propagate deletion to B2?
 Is replication continuous or scheduled? What is the maximum replication lag?
 How are failed objects retried? How is completeness reconciled?
 Stop condition
@@ -438,11 +450,11 @@ GATE 26
 Longhorn's exact storage scope
 Gate 12 improves Longhorn's role but still needs a final workload assignment:
 
-StorageClass	Replicas	Intended workloads	Wasabi backup
+StorageClass	Replicas	Intended workloads	Backblaze B2 backup
 longhorn-critical	3	Selected critical PVCs where three storage nodes exist	Required
 longhorn-standard	2	Ordinary persistent services	Required according to data classification
 longhorn-disposable	1	Reproducible cache or scratch data	None
-minio-local	1 (local)	MinIO only; not provisioned by Longhorn	MinIO‑specific Wasabi protection
+minio-local	1 (local)	MinIO only; not provisioned by Longhorn	MinIO‑specific B2 protection
 Stop condition
 The plan must resolve whether three nodes actually have suitable Longhorn capacity before longhorn-critical is used — the two large RS 2000 agent disks alone cannot provide three node‑level replicas.
 
@@ -450,7 +462,7 @@ GATE 27
 Longhorn and database double protection
 CloudNativePG replication, Longhorn replication and WAL archiving are three separate protection mechanisms. The plan must decide whether PostgreSQL uses local/single‑replica storage plus CNPG replication, or Longhorn‑replicated volumes plus CNPG replication. Using both can increase write latency and rebuild traffic — it may still be acceptable, but only with measured latency, failure and recovery evidence.
 
-Reference: CloudNativePG Barman Cloud plugin — object store providers — Wasabi and other S3‑compatible object stores for WAL archiving.
+Reference: CloudNativePG Barman Cloud plugin — object store providers — Backblaze B2 and other S3‑compatible object stores for WAL archiving.
 
 GATE 28
 Backup consistency coordination
@@ -481,17 +493,17 @@ Measure actual RTO and RPO.
 Gap closure sequencing: step 12 above is Gate 35's exit check — this is where the tenant isolation model declared at Gate 15 (via Gate 35) actually gets exercised against a cross‑tenant read/write. Gate 35 is not closed until this step passes against that named mechanism, not against a generic "isolation held" observation.
 
 GATE 30
-Network policy for Wasabi egress
-The Defined network policy rollout (P0–P6, below) needs explicit Wasabi handling, folded into the same namespace‑by‑namespace promotion — not a bulk exception:
+Network policy for Backblaze B2 egress
+The Defined network policy rollout (P0–P6, below) needs explicit B2 handling, folded into the same namespace‑by‑namespace promotion — not a bulk exception:
 
-Egress DNS to CoreDNS · HTTPS egress to the Wasabi regional S3 endpoint(s) each producer uses.
+Egress DNS to CoreDNS · HTTPS egress to the s3.<region>.backblazeb2.com endpoint(s) each producer uses.
 Cilium FQDN policy behavior and DNS TTL handling · certificate validation · proxy behavior, if used.
 Denial of arbitrary external storage destinations.
 Backup testing while policy enforcement is active · alerting on repeated denied backup flows.
-Tests during IP changes behind Wasabi's endpoints — do not hard‑code current Wasabi IP addresses; policy by FQDN, not by address.
+Tests during IP changes behind B2's endpoints — do not hard‑code current B2 IP addresses; policy by FQDN, not by address. Note that a bucket addressed virtual‑hosted style resolves under a different name than the bare region endpoint; whichever addressing style each producer uses is what the policy must actually allow.
 GATE 31
-Recovery of Wasabi configuration itself
-GitOps should declare or reference bucket names, regions, retention duration, lifecycle rules, Wasabi IAM policies, sub‑user and access‑key configuration, and monitoring/budget alerts — but GitOps must not be able to destroy locked backup buckets casually. Wasabi provisioning is a separate infrastructure‑as‑code stack with:
+Recovery of Backblaze B2 configuration itself
+GitOps should declare or reference bucket names, regions, retention duration, lifecycle rules, application‑key capability sets and restrictions, and monitoring/budget alerts — but GitOps must not be able to destroy locked backup buckets casually. B2 provisioning is a separate infrastructure‑as‑code stack with:
 
 Deletion protection · Explicit destructive‑change approval.
 State stored outside the netcup cluster · State backup · Provider version pinning.
@@ -499,7 +511,7 @@ Plan review · Import and recovery instructions.
 Stop condition
 Any locked bucket reachable by a destructive apply from the same GitOps root app that manages cluster workloads.
 
-Terraform's AWS provider, pointed at Wasabi's S3 endpoint, is the typical way to express this stack — it does not require a Wasabi‑specific provider.
+The mechanism for this stack is an open choice this gate must record before it can close. Backblaze publishes an official Terraform provider (Backblaze/b2) covering buckets and application keys including capabilities, bucket restrictions and key expiry; whether it can express Object Lock default retention is not confirmed here and must be verified rather than assumed. This platform has not adopted Terraform, so naming a provider does not settle the question — the gate needs a decision on what actually holds this state (and where that state is stored and backed up), not an assumption inherited from the previous revision.
 
 Four‑instance MinIO policy
 Placement fundamentals below; enforceable scheduling rules are Gate 23, capacity thresholds are Gate 24, and backup semantics are Gate 25.
@@ -538,7 +550,7 @@ Express ingress‑controller to backend flows explicitly by namespace and worklo
 Express Prometheus scraping and log shipping explicitly. Monitoring must not become a broad namespace‑to‑namespace allow.
 Declare CNPG replication, operator, backup and object‑store egress; NATS routes and clients; Temporal frontend, matching, history, worker and database paths; MinIO client and administrative paths.
 External egress uses approved destinations where technically stable. DNS‑based policy requires an explicit Cilium FQDN policy design and failure testing.
-Wasabi egress — DNS, HTTPS to the Wasabi regional S3 endpoint, FQDN policy and TTL handling, certificate validation, and denial of arbitrary external storage destinations — is declared per namespace under the same promotion sequence, never as a bulk exception (Gate 30).
+Backblaze B2 egress — DNS, HTTPS to the B2 regional S3 endpoint, FQDN policy and TTL handling, certificate validation, and denial of arbitrary external storage destinations — is declared per namespace under the same promotion sequence, never as a bulk exception (Gate 30).
 Every policy bundle includes tests for intended access and at least one denied same‑namespace, cross‑namespace and external destination.
 Emergency rollback is a Git revert with Argo reconciliation. Break‑glass deletion is audited and followed immediately by a Git correction.
 Namespace rollout order
@@ -548,7 +560,7 @@ Wave	Namespaces or services	Reason
 1	Dedicated test namespace	Proves harness, flow capture, rollback and negative tests without production impact.
 2	Stateless frontend and viewer surfaces	Limited dependencies and easy user‑visible validation.
 3	Auth and API services	Introduces identity, database, audit and API dependencies.
-4	File manager and ingestion	Adds MinIO, malware scanning, queues, OCR and long‑running transfers, and first exercises Wasabi egress rules.
+4	File manager and ingestion	Adds MinIO, malware scanning, queues, OCR and long‑running transfers, and first exercises Backblaze B2 egress rules.
 5	Temporal workers and NATS clients	Adds asynchronous and redelivery paths.
 6	Data‑plane namespaces	CNPG, NATS, Temporal, MinIO and Longhorn only after component‑specific failure testing.
 7	Cluster services	Argo CD, monitoring, ingress, cert‑manager and kube‑system last, using narrowly reviewed component policies.
@@ -559,9 +571,9 @@ Verification automation	Read cluster state and create only approved ephemeral te
 Argo repository	Read only approved repository and revision.	Push, merge, tag creation and access to unrelated repositories.
 Argo controller	Only declared destinations and required resource kinds.	Unbounded cluster administration unless separately justified and monitored.
 Runtime workload	Only its API, queue, database schema, bucket/prefix and metrics needs.	Backup deletion, policy mutation and cross‑tenant access.
-Wasabi backup writer	Create backup objects and required multipart operations, per bucket.	Bucket deletion, retention‑policy modification and protected‑generation deletion (Gate 20).
-Wasabi restore operator	Read protected backup generations during approved recovery.	Routine application use; stays disabled outside drills (Gate 20).
-k3s / Longhorn Wasabi client	Only a scoped Wasabi access‑key/secret‑key pair issued for that component (Gate 21).	Wasabi root account keys; unrotated or shared static keys.
+B2 backup writer	Create backup objects and required multipart operations, per bucket (writeFiles, no deleteFiles).	Bucket deletion, Object Lock/retention modification and protected‑generation deletion (Gate 20).
+B2 restore operator	Read protected backup generations during approved recovery (readFiles only).	Routine application use; stays disabled outside drills (Gate 20).
+k3s / Longhorn B2 client	Only a bucket‑restricted application key issued for that component, with an explicit capability set and expiry (Gate 21).	The master application key; unrotated, unexpiring or shared keys.
 Break glass	Time‑bound emergency administration with MFA and audit.	Unattended workflows and normal daily use.
 Recovery objectives and proof
 There is no single combined RTO/RPO figure for this platform. The former single target of a complete rebuild within 30 minutes and no more than one hour of loss is replaced by subsystem objectives, each proven independently. Initial values remain proposed until a drill measures them; measured results govern the accepted service objective.
@@ -577,9 +589,9 @@ Application service	Derived from dependencies	Recovery authorization to successf
 Workflow ownership
 Owner	Owns	Does not own
 Human approved destructive runbook	OS reinstall, hard‑power failover drills, clean rebuild and restoration drills.	Routine convergence.
-Ansible	Host state, firewall, k3s, kube‑vip, Cilium/CoreDNS bootstrap, Argo bootstrap and read‑only verification.	GitOps application manifests after handover; Wasabi infrastructure.
-Argo CD	Cluster services, policy, storage controllers, data services and applications declared in Git.	Host OS, firewall, k3s formation, destructive drills, and any destructive action against locked Wasabi buckets (Gate 31).
-Wasabi infrastructure‑as‑code stack	Bucket creation, retention, lifecycle, IAM policy, monitoring — reviewed and plan‑gated (Gate 31).	Cluster workloads; cannot be triggered by the cluster's own GitOps root app.
+Ansible	Host state, firewall, k3s, kube‑vip, Cilium/CoreDNS bootstrap, Argo bootstrap and read‑only verification.	GitOps application manifests after handover; Backblaze B2 infrastructure.
+Argo CD	Cluster services, policy, storage controllers, data services and applications declared in Git.	Host OS, firewall, k3s formation, destructive drills, and any destructive action against locked Backblaze B2 buckets (Gate 31).
+Backblaze B2 infrastructure‑as‑code stack	Bucket creation, retention, lifecycle, application‑key capabilities and restrictions, monitoring — reviewed and plan‑gated (Gate 31).	Cluster workloads; cannot be triggered by the cluster's own GitOps root app.
 CI	Schema, policy, provider‑drift, namespace ownership, pinning and security lint.	Direct production mutation.
 Operators	Review decisions, authorize promotions, manage break glass and approve recovery evidence.	Undocumented manual drift.
 Part D — Gap closure: network policy and namespace articulation
@@ -633,7 +645,7 @@ End state
 The plan states, once and explicitly, how tenant isolation — already exercised in Gate 29's drill — maps onto the namespace structure, so that drill has a concrete, named boundary to test against. Decided no later than Gate 15, since Gate 15's auth smoke test and audit events are the first place tenant identity is actually exercised and its acceptance evidence cannot mean anything if the isolation mechanism is still undeclared. If namespace‑per‑tenant is the confirmed model, a new tenant namespace is folded into Gate 32's namespace map and given its own P0–P6 promotion, not a bulk exception. A new tenant‑provisioning workflow is out of scope unless the confirmed model requires one — that would be a separate future gate.
 
 Acceptance evidence
-docs/architecture/tenant-isolation-model.md states which model is implemented — namespace‑per‑tenant, or shared‑namespace with isolation enforced at the application/database layer — and names the exact enforcement mechanism (for example PostgreSQL row‑level security, per‑tenant schema, or per‑tenant Wasabi bucket prefix); names one specific, testable mechanism, not "isolation is maintained"; Gate 29's step 12 ("Verify audit history and tenant isolation") carries a cross‑reference to this document's named mechanism once this gate closes; Gate 29's step 12, re‑run, actually exercises the named mechanism — the drill attempts a cross‑tenant read/write against the stated boundary.
+docs/architecture/tenant-isolation-model.md states which model is implemented — namespace‑per‑tenant, or shared‑namespace with isolation enforced at the application/database layer — and names the exact enforcement mechanism (for example PostgreSQL row‑level security, per‑tenant schema, or per‑tenant B2 bucket prefix); names one specific, testable mechanism, not "isolation is maintained"; Gate 29's step 12 ("Verify audit history and tenant isolation") carries a cross‑reference to this document's named mechanism once this gate closes; Gate 29's step 12, re‑run, actually exercises the named mechanism — the drill attempts a cross‑tenant read/write against the stated boundary.
 
 Stop condition
 The isolation document names no specific, testable mechanism, or Gate 29's re‑run does not actually exercise the named boundary.
@@ -652,16 +664,16 @@ Not yet specified as full gates. Each needs an explicit owner and deadline befor
 4	Pod Security Admission or equivalent workload hardening.	TBD	TBD
 5	Resource requests, limits, PriorityClasses and eviction behavior.	TBD	TBD
 6	Node maintenance and safe‑drain procedures.	TBD	TBD
-7	Certificate, Wasabi access‑key and encryption‑key rotation.	TBD	TBD
+7	Certificate, B2 application‑key and encryption‑key rotation.	TBD	TBD
 8	Time synchronization alerts.	TBD	TBD
 9	DNS failure testing.	TBD	TBD
-10	Wasabi outage and request‑throttling behavior; regional/availability assumptions.	TBD	TBD
-11	Backup‑cost alerts, including Wasabi's minimum‑storage‑duration policy on frequently rotated objects (etcd snapshots, WAL).	TBD	TBD
+10	Backblaze B2 outage and request‑throttling behavior; regional/availability assumptions.	TBD	TBD
+11	Backup‑cost alerts, including B2 egress against the 3× free allowance during a full restore, and per‑class transaction charges on chatty producers.	TBD	TBD
 12	Quarterly recovery‑test schedule.	TBD	TBD
 13	Evidence retention and independent review.	TBD	TBD
 14	Explicit owner and deadline assigned for every unresolved item in this backlog.	TBD	TBD
 Immediate implementation backlog
-Prove each producer's actual path to Wasabi against its exact pinned version (Gate 17) — every path is a native S3‑compatible integration, so the remaining risk is Wasabi‑specific behavior under this stack (multipart limits, request‑rate throttling during a full restore, minimum‑storage‑duration billing), not protocol incompatibility.
+Prove each producer's actual path to Backblaze B2 against its exact pinned version (Gate 17) — every path is a native S3‑compatible integration, so the remaining risk is B2‑specific behavior under this stack (multipart limits, request‑rate throttling during a full restore, restore egress against the 3× free allowance, and the S3 features B2's API omits), not protocol incompatibility.
 Close the MINIO_KMS_SECRET_KEY incident end to end (Gate 22) before MinIO is approved for production.
 Resolve the §6 conflict below (SOPS + age vs. SealedSecrets and Longhorn) before Gate 13 or Gate 24 close.
 Commit outstanding documentation and group‑variable corrections in a focused commit.
@@ -670,14 +682,14 @@ Implement Longhorn host prerequisites and prove idempotence; resolve node‑coun
 Implement verify‑cluster.yml with cluster identity and negative‑test coverage.
 Bootstrap CoreDNS after Cilium and complete the full connectivity test.
 Run the controlled kube‑vip hard‑failure test.
-Stand up the dedicated Wasabi account and the six buckets in Gate 18, each created with Object Lock enabled from the start (Governance‑mode or no default retention), before running Gate 19's Compliance‑mode activation sequence. If any bucket was already provisioned under the earlier GCS plan, recreate it — Object Lock cannot be added retroactively.
+Stand up the dedicated Backblaze B2 account and the six buckets in Gate 18, with Object Lock enabled and either no default retention or Governance mode, before running Gate 19's Compliance‑mode activation sequence. Unlike the earlier GCS and Wasabi plans, a bucket that already exists without Object Lock can have it enabled in place — recreation is not required.
 Choose the four MinIO nodes and storage paths; document why two control‑plane nodes are or are not storage eligible.
 Create the policy inventory schema, Hubble evidence procedure, positive/negative test harness, GitOps rollback procedure and namespace promotion record.
 Deploy baseline observability before Longhorn, MinIO or application policy enforcement.
 Assign an owner and deadline to every item in the operational hardening backlog (Part E).
 Execute each gate in order and stop on the first unmet dependency.
 Final acceptance rule
-The Veridex platform is production ready only when Gates 0 through 35 have dated PASS evidence for the same pinned release and target cluster. A later change to node topology, storage layout, CNI, DNS, policy model, secret mechanism, backup provider, Wasabi bucket architecture or data‑service quorum invalidates the affected gate and every dependent gate until they are rerun.
+The Veridex platform is production ready only when Gates 0 through 35 have dated PASS evidence for the same pinned release and target cluster. A later change to node topology, storage layout, CNI, DNS, policy model, secret mechanism, backup provider, Backblaze B2 bucket architecture or data‑service quorum invalidates the affected gate and every dependent gate until they are rerun.
 
 Reference basis
 K3s documentation: Networking Services; Server Configuration; etcd Snapshot and Restore.
@@ -685,11 +697,11 @@ Cilium 1.20.1 documentation: kube‑proxy replacement; Helm installation; connec
 Longhorn 1.12.1 documentation: installation requirements, node and disk configuration, replicas, backups and recovery.
 MinIO documentation for the exact selected release: distributed deployment, erasure coding, healing, site replication or batch replication, lifecycle, versioning and object locking.
 Argo CD documentation for the pinned release: AppProjects, repository credentials, controller permissions, sync waves and health checks.
-Wasabi S3 API reference.
-Wasabi — Immutability: Compliance and Object Locking.
-Wasabi — IAM and STS support.
-Wasabi — generating an S3 API key.
+Backblaze B2 S3‑Compatible API documentation.
+Backblaze B2 — Object Lock (governance and compliance modes).
+Backblaze B2 — Application Keys, capabilities and restrictions.
+Backblaze B2 — Cloud Storage pricing (per byte‑hour storage, egress allowance, transaction classes).
 Longhorn — setting an S3‑compatible backup target.
 k3s etcd‑snapshot CLI reference — S3‑compatible snapshot target options.
 CloudNativePG Barman Cloud plugin — object store providers — generic S3‑compatible endpoint support.
-Veridex AI — cluster production end‑state plan · Revision 3 (consolidated) · Gates 0–35 · backup destination: Wasabi · supersedes the 37‑item stage list · amended 13 September 2026 with Gates 32–35 (network policy and namespace articulation)
+Veridex AI — cluster production end‑state plan · Revision 3 (consolidated) · Gates 0–35 · backup destination: Backblaze B2 · supersedes the 37‑item stage list · amended 13 September 2026 with Gates 32–35 (network policy and namespace articulation) · amended 14 September 2026, backup destination moved from Wasabi to Backblaze B2

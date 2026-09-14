@@ -66,8 +66,8 @@ closes.
   also covers producers that do not exist until Gates 9, 12, 13 and 14, so it
   cannot simply move ahead of Gate 8 whole. Reached next, after Gate 7.
 - **Gate 9 → Gates 17 and 18.** Gate 9's stop condition includes "unproven
-  Wasabi behavior for the pinned k3s version" (Gate 17's k3s etcd row) and it
-  uses `veridex-etcd-backup` from Gate 18.
+  Backblaze B2 behavior for the pinned k3s version" (Gate 17's k3s etcd row)
+  and it uses `veridex-etcd-backup` from Gate 18.
 - **Gate 12 → Gate 26.** Gate 12 defers "final tiering and node feasibility" to
   Gate 26, whose stop condition must be resolved "before longhorn-critical is
   used".

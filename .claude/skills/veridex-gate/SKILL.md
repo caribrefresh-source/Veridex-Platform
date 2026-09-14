@@ -131,7 +131,7 @@ current gate.
 
 **Invalidation (plan's final acceptance rule).** A later change to node
 topology, storage layout, CNI, DNS, policy model, secret mechanism, backup
-provider, Wasabi bucket architecture or data-service quorum invalidates the
+provider, Backblaze B2 bucket architecture or data-service quorum invalidates the
 affected gate and every dependent gate. `reopen` cascades: it lists every gate
 that depends on the reopened one (numerically later, or via an explicit
 cross-reference) and reopens each.

@@ -1,0 +1,402 @@
+gate: 7
+check: G07-C4
+captured_utc: 2026-09-14T21:06:20Z
+repo_commit: 64d80e624252a71345d1c6bdc179297b085e73e9
+plan_commit: 64d80e624252a71345d1c6bdc179297b085e73e9
+plan_sha256: a32ea3fbfc2c69aeb06346ad7d251e9df14e54c5302259b739be5df871665a0c
+target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API server https://10.2.0.100:6443 (private VIP); hosts veridex-server-1/2/3, veridex-agent-1/2
+captured_by: agent
+command: ansible-playbook -i inventory/production/hosts.yml playbooks/verify-cluster.yml (full run, all 5 hosts, immediately after every negative test below and after reverting the two temporary edits)
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: Confirms changed=0 on every host both before and after the negative-test sequence -- the negative tests (variable overrides and two reverted file edits) left no residual state, consistent with this playbook containing no mutating task.
+--- unedited output ---
+=== c3-healthy-rerun === 2026-09-14T21:06:20Z
+repo_commit: 64d80e624252a71345d1c6bdc179297b085e73e9
+[WARNING]: Ansible is being run in a world writable directory (/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible), ignoring it as an ansible.cfg source. For more information see https://docs.ansible.com/ansible/devel/reference_appendices/config.html#cfg-in-world-writable-dir
+
+PLAY [Verify cluster health] ***************************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [veridex-server-1]
+ok: [veridex-server-3]
+ok: [veridex-server-2]
+ok: [veridex-agent-1]
+ok: [veridex-agent-2]
+
+TASK [verify-cluster : Load variable defaults owned by the roles this gate verifies] ***
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../host-prereqs/defaults/main.yml)
+ok: [veridex-server-2] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../host-prereqs/defaults/main.yml)
+ok: [veridex-server-3] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../host-prereqs/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../firewall/defaults/main.yml)
+ok: [veridex-server-2] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../firewall/defaults/main.yml)
+ok: [veridex-server-2] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../k3s-server/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../k3s-server/defaults/main.yml)
+ok: [veridex-server-3] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../firewall/defaults/main.yml)
+ok: [veridex-agent-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../host-prereqs/defaults/main.yml)
+ok: [veridex-server-2] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../cilium/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../cilium/defaults/main.yml)
+ok: [veridex-server-3] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../k3s-server/defaults/main.yml)
+ok: [veridex-server-2] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../coredns/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../coredns/defaults/main.yml)
+ok: [veridex-agent-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../firewall/defaults/main.yml)
+ok: [veridex-agent-2] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../host-prereqs/defaults/main.yml)
+ok: [veridex-server-3] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../cilium/defaults/main.yml)
+ok: [veridex-agent-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../k3s-server/defaults/main.yml)
+ok: [veridex-server-3] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../coredns/defaults/main.yml)
+ok: [veridex-agent-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../cilium/defaults/main.yml)
+ok: [veridex-agent-2] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../firewall/defaults/main.yml)
+ok: [veridex-agent-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../coredns/defaults/main.yml)
+ok: [veridex-agent-2] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../k3s-server/defaults/main.yml)
+ok: [veridex-agent-2] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../cilium/defaults/main.yml)
+ok: [veridex-agent-2] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../coredns/defaults/main.yml)
+
+TASK [verify-cluster : Identify the bootstrap server] **************************
+ok: [veridex-server-1]
+ok: [veridex-server-2]
+ok: [veridex-server-3]
+ok: [veridex-agent-1]
+ok: [veridex-agent-2]
+
+TASK [verify-cluster : Read the live kube-system namespace UID] ****************
+skipping: [veridex-server-2]
+skipping: [veridex-server-3]
+skipping: [veridex-agent-1]
+skipping: [veridex-agent-2]
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Assert the live cluster matches the recorded target identity] ***
+skipping: [veridex-server-2]
+ok: [veridex-server-1]
+skipping: [veridex-server-3]
+skipping: [veridex-agent-1]
+skipping: [veridex-agent-2]
+
+TASK [verify-cluster : Gate 3 -- read lsmod] ***********************************
+ok: [veridex-server-1]
+ok: [veridex-agent-1]
+ok: [veridex-server-2]
+ok: [veridex-agent-2]
+ok: [veridex-server-3]
+
+TASK [verify-cluster : Gate 3 -- assert every required kernel module is loaded (Cilium + Longhorn preflight)] ***
+ok: [veridex-server-1] => (item=overlay)
+ok: [veridex-server-1] => (item=br_netfilter)
+ok: [veridex-server-2] => (item=overlay)
+ok: [veridex-server-1] => (item=vxlan)
+ok: [veridex-server-1] => (item=iscsi_tcp)
+ok: [veridex-server-2] => (item=br_netfilter)
+ok: [veridex-server-2] => (item=vxlan)
+ok: [veridex-server-3] => (item=overlay)
+ok: [veridex-server-2] => (item=iscsi_tcp)
+ok: [veridex-server-3] => (item=br_netfilter)
+ok: [veridex-agent-1] => (item=overlay)
+ok: [veridex-server-3] => (item=vxlan)
+ok: [veridex-server-3] => (item=iscsi_tcp)
+ok: [veridex-agent-1] => (item=br_netfilter)
+ok: [veridex-agent-1] => (item=vxlan)
+ok: [veridex-agent-1] => (item=iscsi_tcp)
+ok: [veridex-agent-2] => (item=overlay)
+ok: [veridex-agent-2] => (item=br_netfilter)
+ok: [veridex-agent-2] => (item=vxlan)
+ok: [veridex-agent-2] => (item=iscsi_tcp)
+
+TASK [verify-cluster : Gate 3 -- read effective sysctl values] *****************
+ok: [veridex-agent-1] => (item={'key': 'net.ipv4.ip_forward', 'value': 1})
+ok: [veridex-server-2] => (item={'key': 'net.ipv4.ip_forward', 'value': 1})
+ok: [veridex-server-1] => (item={'key': 'net.ipv4.ip_forward', 'value': 1})
+ok: [veridex-agent-2] => (item={'key': 'net.ipv4.ip_forward', 'value': 1})
+ok: [veridex-server-3] => (item={'key': 'net.ipv4.ip_forward', 'value': 1})
+ok: [veridex-agent-2] => (item={'key': 'net.bridge.bridge-nf-call-iptables', 'value': 1})
+ok: [veridex-server-1] => (item={'key': 'net.bridge.bridge-nf-call-iptables', 'value': 1})
+ok: [veridex-server-3] => (item={'key': 'net.bridge.bridge-nf-call-iptables', 'value': 1})
+ok: [veridex-agent-1] => (item={'key': 'net.bridge.bridge-nf-call-iptables', 'value': 1})
+ok: [veridex-server-2] => (item={'key': 'net.bridge.bridge-nf-call-iptables', 'value': 1})
+ok: [veridex-server-1] => (item={'key': 'net.bridge.bridge-nf-call-ip6tables', 'value': 1})
+ok: [veridex-agent-2] => (item={'key': 'net.bridge.bridge-nf-call-ip6tables', 'value': 1})
+ok: [veridex-server-2] => (item={'key': 'net.bridge.bridge-nf-call-ip6tables', 'value': 1})
+ok: [veridex-server-3] => (item={'key': 'net.bridge.bridge-nf-call-ip6tables', 'value': 1})
+ok: [veridex-agent-1] => (item={'key': 'net.bridge.bridge-nf-call-ip6tables', 'value': 1})
+
+TASK [verify-cluster : Gate 3 -- assert every required sysctl has the intended value (Cilium preflight)] ***
+ok: [veridex-server-1] => (item=net.ipv4.ip_forward)
+ok: [veridex-server-1] => (item=net.bridge.bridge-nf-call-iptables)
+ok: [veridex-server-1] => (item=net.bridge.bridge-nf-call-ip6tables)
+ok: [veridex-server-2] => (item=net.ipv4.ip_forward)
+ok: [veridex-server-2] => (item=net.bridge.bridge-nf-call-iptables)
+ok: [veridex-server-2] => (item=net.bridge.bridge-nf-call-ip6tables)
+ok: [veridex-server-3] => (item=net.ipv4.ip_forward)
+ok: [veridex-server-3] => (item=net.bridge.bridge-nf-call-iptables)
+ok: [veridex-server-3] => (item=net.bridge.bridge-nf-call-ip6tables)
+ok: [veridex-agent-1] => (item=net.ipv4.ip_forward)
+ok: [veridex-agent-1] => (item=net.bridge.bridge-nf-call-iptables)
+ok: [veridex-agent-1] => (item=net.bridge.bridge-nf-call-ip6tables)
+ok: [veridex-agent-2] => (item=net.ipv4.ip_forward)
+ok: [veridex-agent-2] => (item=net.bridge.bridge-nf-call-iptables)
+ok: [veridex-agent-2] => (item=net.bridge.bridge-nf-call-ip6tables)
+
+TASK [verify-cluster : Gate 3 -- read systemd unit states (iscsid, nftables, chrony)] ***
+ok: [veridex-agent-1] => (item=iscsid)
+ok: [veridex-server-2] => (item=iscsid)
+ok: [veridex-server-1] => (item=iscsid)
+ok: [veridex-server-3] => (item=iscsid)
+ok: [veridex-agent-2] => (item=iscsid)
+ok: [veridex-agent-1] => (item=nftables)
+ok: [veridex-server-1] => (item=nftables)
+ok: [veridex-server-2] => (item=nftables)
+ok: [veridex-agent-2] => (item=nftables)
+ok: [veridex-server-3] => (item=nftables)
+ok: [veridex-agent-1] => (item=chrony)
+ok: [veridex-server-1] => (item=chrony)
+ok: [veridex-agent-2] => (item=chrony)
+ok: [veridex-server-2] => (item=chrony)
+ok: [veridex-server-3] => (item=chrony)
+
+TASK [verify-cluster : Gate 3 -- assert every required systemd unit is active] ***
+ok: [veridex-server-1] => (item=iscsid)
+ok: [veridex-server-2] => (item=iscsid)
+ok: [veridex-server-1] => (item=nftables)
+ok: [veridex-server-1] => (item=chrony)
+ok: [veridex-server-3] => (item=iscsid)
+ok: [veridex-server-2] => (item=nftables)
+ok: [veridex-server-2] => (item=chrony)
+ok: [veridex-server-3] => (item=nftables)
+ok: [veridex-agent-1] => (item=iscsid)
+ok: [veridex-server-3] => (item=chrony)
+ok: [veridex-agent-1] => (item=nftables)
+ok: [veridex-agent-2] => (item=iscsid)
+ok: [veridex-agent-1] => (item=chrony)
+ok: [veridex-agent-2] => (item=nftables)
+ok: [veridex-agent-2] => (item=chrony)
+
+TASK [verify-cluster : Gate 3 -- confirm nfs-common is installed (Longhorn RWX preflight)] ***
+ok: [veridex-server-2]
+ok: [veridex-server-1]
+ok: [veridex-agent-1]
+ok: [veridex-server-3]
+ok: [veridex-agent-2]
+
+TASK [verify-cluster : Gate 3 -- read the active nftables ruleset] *************
+ok: [veridex-agent-1]
+ok: [veridex-server-1]
+ok: [veridex-server-2]
+ok: [veridex-agent-2]
+ok: [veridex-server-3]
+
+TASK [verify-cluster : Gate 3 -- assert the firewall default-drops and admits the trusted/pod networks and SSH] ***
+ok: [veridex-server-1] => (item=10.2.0.0/16)
+ok: [veridex-server-2] => (item=10.2.0.0/16)
+ok: [veridex-server-1] => (item=10.44.0.0/16)
+ok: [veridex-server-2] => (item=10.44.0.0/16)
+ok: [veridex-server-3] => (item=10.2.0.0/16)
+ok: [veridex-agent-1] => (item=10.2.0.0/16)
+ok: [veridex-server-3] => (item=10.44.0.0/16)
+ok: [veridex-agent-1] => (item=10.44.0.0/16)
+ok: [veridex-agent-2] => (item=10.2.0.0/16)
+ok: [veridex-agent-2] => (item=10.44.0.0/16)
+
+TASK [verify-cluster : Gate 3 -- assert the pod-network rule stays scoped to the API port, not a blanket accept] ***
+ok: [veridex-server-1]
+ok: [veridex-server-2]
+ok: [veridex-server-3]
+ok: [veridex-agent-1]
+ok: [veridex-agent-2]
+
+TASK [verify-cluster : Gate 4 -- read this node's own served API certificate] ***
+skipping: [veridex-agent-1]
+skipping: [veridex-agent-2]
+ok: [veridex-server-1]
+ok: [veridex-server-2]
+ok: [veridex-server-3]
+
+TASK [verify-cluster : Gate 4 -- assert every configured TLS SAN is present on this node's served certificate] ***
+ok: [veridex-server-1] => (item=10.2.0.100)
+ok: [veridex-server-1] => (item=127.0.0.1)
+ok: [veridex-server-2] => (item=10.2.0.100)
+ok: [veridex-server-1] => (item=localhost)
+ok: [veridex-server-1] => (item=api.veridexeai.com)
+ok: [veridex-server-3] => (item=10.2.0.100)
+skipping: [veridex-agent-1] => (item=10.2.0.100) 
+ok: [veridex-server-2] => (item=127.0.0.1)
+skipping: [veridex-agent-1] => (item=127.0.0.1) 
+skipping: [veridex-agent-1] => (item=localhost) 
+skipping: [veridex-agent-1] => (item=api.veridexeai.com) 
+ok: [veridex-server-2] => (item=localhost)
+ok: [veridex-server-2] => (item=api.veridexeai.com)
+ok: [veridex-server-3] => (item=127.0.0.1)
+skipping: [veridex-agent-2] => (item=10.2.0.100) 
+skipping: [veridex-agent-1]
+skipping: [veridex-agent-2] => (item=127.0.0.1) 
+ok: [veridex-server-3] => (item=localhost)
+skipping: [veridex-agent-2] => (item=localhost) 
+skipping: [veridex-agent-2] => (item=api.veridexeai.com) 
+skipping: [veridex-agent-2]
+ok: [veridex-server-3] => (item=api.veridexeai.com)
+
+TASK [verify-cluster : Gate 4 -- confirm secrets-encryption is configured on this node] ***
+skipping: [veridex-agent-1]
+skipping: [veridex-agent-2]
+ok: [veridex-server-1]
+ok: [veridex-server-3]
+ok: [veridex-server-2]
+
+TASK [verify-cluster : Gate 4 -- confirm the AES-CBC encryption-provider prefix protects existing etcd data] ***
+skipping: [veridex-server-2]
+skipping: [veridex-server-3]
+skipping: [veridex-agent-1]
+skipping: [veridex-agent-2]
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 4 -- read the etcd member list] ********************
+skipping: [veridex-server-2]
+skipping: [veridex-server-3]
+skipping: [veridex-agent-1]
+skipping: [veridex-agent-2]
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 4 -- assert every control-plane node is a non-learner etcd voter] ***
+skipping: [veridex-server-2]
+ok: [veridex-server-1]
+skipping: [veridex-server-3]
+skipping: [veridex-agent-1]
+skipping: [veridex-agent-2]
+
+TASK [verify-cluster : Gate 4 -- read node identity] ***************************
+skipping: [veridex-server-2]
+skipping: [veridex-server-3]
+skipping: [veridex-agent-1]
+skipping: [veridex-agent-2]
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 4 -- assert the node count matches the inventory] ***
+skipping: [veridex-server-2]
+ok: [veridex-server-1]
+skipping: [veridex-server-3]
+skipping: [veridex-agent-1]
+skipping: [veridex-agent-2]
+
+TASK [verify-cluster : Gate 4 -- assert every node reports condition Ready=True] ***
+ok: [veridex-server-1] => (item=veridex-agent-1)
+skipping: [veridex-server-2]
+ok: [veridex-server-1] => (item=veridex-agent-2)
+skipping: [veridex-server-3]
+ok: [veridex-server-1] => (item=veridex-server-1)
+skipping: [veridex-agent-1]
+ok: [veridex-server-1] => (item=veridex-server-2)
+ok: [veridex-server-1] => (item=veridex-server-3)
+skipping: [veridex-agent-2]
+
+TASK [verify-cluster : Gate 4 -- check audit log freshness] ********************
+skipping: [veridex-agent-1]
+skipping: [veridex-agent-2]
+ok: [veridex-server-1]
+ok: [veridex-server-2]
+ok: [veridex-server-3]
+
+TASK [verify-cluster : Gate 4 -- assert the audit log exists, is non-empty and was written recently] ***
+ok: [veridex-server-1]
+ok: [veridex-server-2]
+skipping: [veridex-agent-1]
+ok: [veridex-server-3]
+skipping: [veridex-agent-2]
+
+TASK [verify-cluster : Gate 5 -- read the kube-vip control-plane lease holder] ***
+skipping: [veridex-server-2]
+skipping: [veridex-server-3]
+skipping: [veridex-agent-1]
+skipping: [veridex-agent-2]
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 5 -- assert the VIP lease has exactly one holder, and it is a known control-plane node] ***
+ok: [veridex-server-1]
+skipping: [veridex-server-2]
+skipping: [veridex-server-3]
+skipping: [veridex-agent-1]
+skipping: [veridex-agent-2]
+
+TASK [verify-cluster : Gate 5 -- confirm the API answers through the VIP] ******
+skipping: [veridex-server-2]
+skipping: [veridex-server-3]
+skipping: [veridex-agent-1]
+skipping: [veridex-agent-2]
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 6 -- read cilium status] ***************************
+skipping: [veridex-server-2]
+skipping: [veridex-server-3]
+skipping: [veridex-agent-1]
+skipping: [veridex-agent-2]
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 6 -- assert cilium reports healthy] ****************
+ok: [veridex-server-1]
+skipping: [veridex-server-2]
+skipping: [veridex-server-3]
+skipping: [veridex-agent-1]
+skipping: [veridex-agent-2]
+
+TASK [verify-cluster : Gate 6 -- read the cilium-config ConfigMap] *************
+skipping: [veridex-server-2]
+skipping: [veridex-server-3]
+skipping: [veridex-agent-1]
+skipping: [veridex-agent-2]
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 6 -- assert the intended Cilium settings are live] ***
+skipping: [veridex-server-2]
+ok: [veridex-server-1]
+skipping: [veridex-server-3]
+skipping: [veridex-agent-1]
+skipping: [veridex-agent-2]
+
+TASK [verify-cluster : Gate 6 -- read the CoreDNS Deployment] ******************
+skipping: [veridex-server-2]
+skipping: [veridex-server-3]
+skipping: [veridex-agent-1]
+skipping: [veridex-agent-2]
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 6 -- assert CoreDNS meets the intended replica count and is Ready] ***
+ok: [veridex-server-1]
+skipping: [veridex-server-2]
+skipping: [veridex-server-3]
+skipping: [veridex-agent-1]
+skipping: [veridex-agent-2]
+
+TASK [verify-cluster : Gate 6 -- read the CoreDNS Service ClusterIP] ***********
+skipping: [veridex-server-2]
+skipping: [veridex-server-3]
+skipping: [veridex-agent-1]
+skipping: [veridex-agent-2]
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 6 -- assert the Service holds the address kubelet already expects] ***
+ok: [veridex-server-1]
+skipping: [veridex-server-2]
+skipping: [veridex-server-3]
+skipping: [veridex-agent-1]
+skipping: [veridex-agent-2]
+
+TASK [verify-cluster : Gate 6 -- read CoreDNS pod-to-node spread] **************
+skipping: [veridex-server-2]
+skipping: [veridex-server-3]
+skipping: [veridex-agent-1]
+skipping: [veridex-agent-2]
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 6 -- assert CoreDNS pods are spread across distinct nodes] ***
+ok: [veridex-server-1]
+skipping: [veridex-server-2]
+skipping: [veridex-server-3]
+skipping: [veridex-agent-1]
+skipping: [veridex-agent-2]
+
+PLAY RECAP *********************************************************************
+veridex-agent-1            : ok=13   changed=0    unreachable=0    failed=0    skipped=26   rescued=0    ignored=0   
+veridex-agent-2            : ok=13   changed=0    unreachable=0    failed=0    skipped=26   rescued=0    ignored=0   
+veridex-server-1           : ok=39   changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+veridex-server-2           : ok=18   changed=0    unreachable=0    failed=0    skipped=21   rescued=0    ignored=0   
+veridex-server-3           : ok=18   changed=0    unreachable=0    failed=0    skipped=21   rescued=0    ignored=0   
+
+EXIT_STATUS=0

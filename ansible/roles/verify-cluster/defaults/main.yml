@@ -1,0 +1,17 @@
+---
+# verify-cluster role default variables
+#
+# Gate 7 (Verification automation). Read-only assertions only -- nothing in
+# this role or its tasks may create, modify or delete a cluster object,
+# install a package, or write a file on the target hosts. Every command here
+# is a read; every failure is `ansible.builtin.assert`, which fails the play
+# (non-zero exit) by default with no `ignore_errors` anywhere in this role.
+
+# Gate 4's audit logging is proven read-only here by freshness, not by
+# triggering and finding a specific event (that proof, done once at Gate 4's
+# own closure, is a valid one-time test; repeating it on every verify run
+# would mean this playbook itself generates the very audit traffic it is
+# supposed to be observing). Control-plane API traffic (leader election,
+# node heartbeats, kubelet lease renewals) is continuous, so a healthy audit
+# pipeline always has an event well inside this window.
+verify_cluster_audit_freshness_seconds: 300

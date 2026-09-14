@@ -1,0 +1,118 @@
+Gap Closure Plan — Network Policy & Namespace Articulation
+
+Closes the four gaps flagged in the review of the current plan's #network-policy, #identity, and Gate 29/30 content: unresolved namespace naming, the Wave 5/Wave 6 NATS-Temporal overlap, thin per-namespace Kubernetes RBAC, and an undeclared tenant-to-namespace model. Four phases, numbered D1–D10 / EG1–EG10 cumulatively across the plan.
+
+Phase 1 — Concrete namespace enumeration and manifest mapping
+
+Objective Every role named in the Namespace rollout order table (dedicated test, stateless frontend/viewer, auth/API, file manager/ingestion, Temporal workers/NATS clients, data-plane, cluster services) resolves to an exact, version-controlled namespace name that NetworkPolicy manifests, RBAC bindings, and the P0–P6 promotion table can reference unambiguously.
+
+Scope
+
+In-Scope: assign a canonical namespace name for each of the 7 rollout waves; record the mapping in one source-of-truth document; update the plan's own Namespace rollout order table to show the resolved names alongside the existing role descriptions.
+Out-of-Scope: creating the namespaces in the live cluster (that happens inside each wave's own P0–P6 promotion); the tenant model (Phase 4).
+
+Processes Activated
+
+Namespace-naming convention — owner: GitOps repo / CI lint (existing CI "schema, policy, provider-drift, namespace ownership" row in the Identity table, extended) — drift detection: CI rejects any manifest that targets a namespace name not present in D1.
+
+Deliverables
+
+D1. docs/architecture/namespace-map.md — wave → namespace name → owning workload(s) → rationale
+D2. manifests/namespaces/*.yaml — one Namespace object per resolved name, labeled with wave and role
+D3. Plan edit: Namespace rollout order table gets a "Namespace" column showing the resolved names
+
+Technical Detail Resource table: one Namespace object per wave, labels veridex.io/wave, veridex.io/role. No SQL/API contracts apply.
+
+Exit Gate
+
+EG1. Every wave shows an exact namespace name — Method: review D1 against D3 — Result: PASS/FAIL
+EG2. CI lint rejects a manifest targeting an unlisted namespace — Method: submit a deliberately-wrong test manifest — Result: PASS/FAIL
+EG3. No namespace name is claimed by two waves, and every workload named elsewhere in the plan (CNPG, NATS, Temporal, MinIO, Longhorn, Argo CD, monitoring, ingress, cert-manager) maps to exactly one wave — Method: cross-reference D1 against the full plan — Result: PASS/FAIL
+
+Rollback Git revert of D2/D3. Nothing in this phase is enforced against running workloads, so there is no data-loss surface — this phase is naming and documentation only.
+
+Phase 2 — Resolve the Wave 5 / Wave 6 NATS and Temporal overlap
+
+Objective The Namespace rollout order table states one unambiguous promotion sequence for NATS and Temporal, with no namespace appearing in two waves' scope without an explicit, stated reason.
+
+Scope
+
+In-Scope: determine whether "Temporal workers and NATS clients" (Wave 5) and the NATS/Temporal backing infrastructure inside "Data-plane namespaces" (Wave 6) are the same namespace listed twice in error, or a deliberate client-side/backing-infrastructure split across two distinct namespaces — then rewrite the table to say which, explicitly.
+Out-of-Scope: re-sequencing any other wave; reopening Wave 6's CNPG/MinIO/Longhorn membership.
+
+Processes Activated None new — this corrects an entry inside the already-live P0–P6 promotion process.
+
+Deliverables
+
+D4. docs/architecture/wave5-wave6-resolution.md — states which interpretation is correct and why
+D5. Plan edit: Namespace rollout order table rewritten to reflect the resolution (merge Wave 5 into Wave 6, or rename both to make the client/infrastructure split explicit)
+
+Technical Detail N/A — sequencing and documentation correction, no new infrastructure.
+
+Exit Gate
+
+EG4. The rewritten table contains no namespace listed under two waves without an explicit note explaining the split — Method: review D5 against D1 — Result: PASS/FAIL
+EG5. D4's decision matches the actual Argo CD application definitions for NATS/Temporal — Method: cross-check D4 against Gate 10's repository manifests — Result: PASS/FAIL
+
+Rollback Git revert of D4/D5. No cluster state depends on this phase.
+
+Phase 3 — Namespace-scoped Kubernetes RBAC
+
+Objective Every application namespace resolved in Phase 1 has a least-privilege Role/RoleBinding pair for its service accounts, consistent with the Identity and credential policy table's "Runtime workload" row, and admission control blocks any Role/ClusterRole granting privilege beyond what that namespace's workload needs.
+
+Scope
+
+In-Scope: one Role per namespace scoped to the exact API resources/verbs that namespace's workload uses; one ServiceAccount per workload (no shared default ServiceAccount); an admission policy blocking wildcard verbs, cluster-admin bindings, or cross-namespace secret reads from an application namespace.
+Out-of-Scope: break-glass RBAC (Identity table's "Break glass" row already covers this); Argo CD's own RBAC (Gate 10 already covers this).
+
+Processes Activated
+
+Namespace RBAC admission check — owner: CI / admission controller (Kyverno or OPA) — drift detection: CI rejects any Role/RoleBinding manifest granting wildcard verbs or cross-namespace secret access; a scheduled cluster scan flags any live RBAC object that has drifted from its committed manifest.
+
+Deliverables
+
+D6. manifests/rbac/<namespace>/role.yaml + rolebinding.yaml — one pair per namespace from Phase 1
+D7. policy/admission/rbac-guard.yaml — the admission rule blocking wildcard verbs, cluster-admin binding, and cross-namespace secret access from application namespaces
+D8. docs/evidence/rbac-least-privilege-audit.md — dated audit listing, per namespace, exactly which verbs/resources are granted and why
+
+Technical Detail Resource tables: one Role per namespace, listing only the verbs (get/list/watch/create/update/delete as applicable) against resources that namespace's own workload touches — no cluster-wide Roles for application workloads. Rationale: this makes the plan's existing "Runtime workload" minimum-privilege principle enforceable rather than descriptive.
+
+Exit Gate
+
+EG6. Every application namespace has a Role granting only the resources/verbs its workload uses — Method: review D6 against each workload's actual API calls — Result: PASS/FAIL
+EG7. Admission controller rejects a deliberately over-broad test Role (wildcard verb, or cross-namespace secret read) — Method: submit the test manifest — Result: PASS/FAIL
+EG8. No live ServiceAccount in an application namespace holds bindings beyond its committed Role — Method: cluster RBAC drift scan — Result: PASS/FAIL
+
+Rollback Git revert of D6/D7 through Argo reconciliation. Removing an over-permissive live binding, if one is found, is itself a security fix and touches no application data.
+
+Phase 4 — Tenant-to-namespace model
+
+Objective The plan states, once and explicitly, how tenant isolation — already exercised in Gate 29's drill — maps onto the namespace structure, so that drill has a concrete, named boundary to test against.
+
+Scope
+
+In-Scope: document which isolation model is actually implemented — namespace-per-tenant, or shared-namespace with isolation enforced at the application/database layer — and name the exact enforcement mechanism (e.g., Postgres row-level security, per-tenant schema, per-tenant Wasabi bucket prefix); if namespace-per-tenant, fold that into Phase 1's namespace map, since a new tenant namespace needs its own P0–P6 promotion, not a bulk exception.
+Out-of-Scope: building a new tenant-provisioning workflow if the current model doesn't require one — that would be a separate future gate.
+
+Processes Activated None new if shared-namespace. If namespace-per-tenant: "tenant namespace provisioning" becomes a registry process, owner to be assigned once the model is confirmed.
+
+Deliverables
+
+D9. docs/architecture/tenant-isolation-model.md — states the model, names the enforcement mechanism, cross-references Gate 29
+D10. Plan edit: Gate 29's acceptance evidence gets a cross-reference note tying "tenant isolation" to D9's named mechanism
+
+Technical Detail Whichever mechanism is confirmed (row-level security policy, per-tenant prefix, or per-tenant namespace) is recorded in D9 at the resource level once the model is confirmed — not assumed here.
+
+Exit Gate
+
+EG9. D9 names one specific, testable isolation mechanism — not "isolation is maintained" — Method: review D9 — Result: PASS/FAIL
+EG10. Gate 29's tenant-isolation step, re-run, actually exercises the mechanism D9 names — Method: observe the drill attempt a cross-tenant read/write against D9's stated boundary — Result: PASS/FAIL
+
+Rollback Git revert of D9/D10. No infrastructure change unless the confirmed model requires new namespaces, in which case rollback follows Phase 1's namespace-manifest path.
+
+Ledger continuation
+Phase	D-range	EG-range
+1 — Namespace enumeration	D1–D3	EG1–EG3
+2 — Wave 5/6 resolution	D4–D5	EG4–EG5
+3 — Namespace RBAC	D6–D8	EG6–EG8
+4 — Tenant model	D9–D10	EG9–EG10

@@ -1,5 +1,13 @@
 ---
+# Gate 7 (Verification automation): read-only assertions for Gates 3-6.
+# Runs against every inventory host -- Gate 3's checks are per-host; Gates
+# 4-6's cluster-singleton reads are gated to the bootstrap server inside the
+# role. any_errors_fatal means one failed assertion, on any host, stops the
+# whole run rather than letting the play continue and report a partial pass.
 - name: Verify cluster health
-  hosts: k3s_servers[0]
-  gather_facts: false
-  tasks: []
+  hosts: all
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  roles:
+    - verify-cluster

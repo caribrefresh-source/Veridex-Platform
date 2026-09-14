@@ -1,0 +1,552 @@
+gate: 7
+check: G07-C3
+captured_utc: 2026-09-14T21:02:31Z to 2026-09-14T21:06:06Z
+repo_commit: 64d80e624252a71345d1c6bdc179297b085e73e9
+plan_commit: 64d80e624252a71345d1c6bdc179297b085e73e9
+plan_sha256: a32ea3fbfc2c69aeb06346ad7d251e9df14e54c5302259b739be5df871665a0c
+target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API server https://10.2.0.100:6443 (private VIP); hosts veridex-server-1/2/3, veridex-agent-1/2
+captured_by: agent
+command: Nine sub-tests, one per critical category across Gates 3-6: each a targeted -e variable override or, for the two checks with no variable to override (gate3 systemd unit list, gate5 kube-vip lease name), a temporary edit to roles/verify-cluster/tasks/main.yml reverted immediately afterwards and confirmed identical. Exact command in each sub-test section below.
+exit_status: 2 (every sub-test)
+proof_class: live
+result: PASS
+limitations: Covers one representative check from each critical category of Gate 3 (kernel modules, sysctls, firewall ruleset, systemd units), Gate 4 (certificate SAN, audit-log freshness), Gate 5 (kube-vip lease) and Gate 6 (Cilium config, CoreDNS replicas) -- 9 of this role's ~17 individual assertions. Not exhaustive of every assertion; disclosed as a representative cross-gate sample, valid because every check uses the same ansible.builtin.assert primitive and the same fail-closed semantics.
+--- unedited output ---
+
+=== sub-test: c2-neg-gate3-modules (exit 2) ===
+=== c2-neg-gate3-modules === 2026-09-14T21:02:31Z
+repo_commit: 64d80e624252a71345d1c6bdc179297b085e73e9
+[WARNING]: Ansible is being run in a world writable directory (/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible), ignoring it as an ansible.cfg source. For more information see https://docs.ansible.com/ansible/devel/reference_appendices/config.html#cfg-in-world-writable-dir
+
+PLAY [Verify cluster health] ***************************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Load variable defaults owned by the roles this gate verifies] ***
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../host-prereqs/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../firewall/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../k3s-server/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../cilium/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../coredns/defaults/main.yml)
+
+TASK [verify-cluster : Identify the bootstrap server] **************************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Read the live kube-system namespace UID] ****************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Assert the live cluster matches the recorded target identity] ***
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 3 -- read lsmod] ***********************************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 3 -- assert every required kernel module is loaded (Cilium + Longhorn preflight)] ***
+ok: [veridex-server-1] => (item=overlay)
+ok: [veridex-server-1] => (item=br_netfilter)
+ok: [veridex-server-1] => (item=vxlan)
+ok: [veridex-server-1] => (item=iscsi_tcp)
+[ERROR]: Task failed: Action failed: Required module not loaded on veridex-server-1: nonexistent_module_xyz
+Origin: /mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/tasks/main.yml:83:3
+
+81   tags: [gate3]
+82
+83 - name: "Gate 3 -- assert every required kernel module is loaded (Cilium + Longhorn preflight)"
+     ^ column 3
+
+failed: [veridex-server-1] (item=nonexistent_module_xyz) => {"ansible_loop_var": "item", "assertion": "(item + ' ') in _g3_lsmod.stdout", "changed": false, "evaluated_to": false, "item": "nonexistent_module_xyz", "msg": "Required module not loaded on veridex-server-1: nonexistent_module_xyz"}
+
+PLAY RECAP *********************************************************************
+veridex-server-1           : ok=6    changed=0    unreachable=0    failed=1    skipped=0    rescued=0    ignored=0   
+
+EXIT_STATUS=2
+
+=== sub-test: c2-neg-gate3-sysctl (exit 2) ===
+=== c2-neg-gate3-sysctl === 2026-09-14T21:02:45Z
+repo_commit: 64d80e624252a71345d1c6bdc179297b085e73e9
+[WARNING]: Ansible is being run in a world writable directory (/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible), ignoring it as an ansible.cfg source. For more information see https://docs.ansible.com/ansible/devel/reference_appendices/config.html#cfg-in-world-writable-dir
+
+PLAY [Verify cluster health] ***************************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Load variable defaults owned by the roles this gate verifies] ***
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../host-prereqs/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../firewall/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../k3s-server/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../cilium/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../coredns/defaults/main.yml)
+
+TASK [verify-cluster : Identify the bootstrap server] **************************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Read the live kube-system namespace UID] ****************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Assert the live cluster matches the recorded target identity] ***
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 3 -- read lsmod] ***********************************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 3 -- assert every required kernel module is loaded (Cilium + Longhorn preflight)] ***
+ok: [veridex-server-1] => (item=overlay)
+ok: [veridex-server-1] => (item=br_netfilter)
+ok: [veridex-server-1] => (item=vxlan)
+ok: [veridex-server-1] => (item=iscsi_tcp)
+
+TASK [verify-cluster : Gate 3 -- read effective sysctl values] *****************
+ok: [veridex-server-1] => (item={'key': 'net.ipv4.ip_forward', 'value': 1})
+ok: [veridex-server-1] => (item={'key': 'net.bridge.bridge-nf-call-iptables', 'value': 1})
+ok: [veridex-server-1] => (item={'key': 'net.bridge.bridge-nf-call-ip6tables', 'value': 0})
+
+TASK [verify-cluster : Gate 3 -- assert every required sysctl has the intended value (Cilium preflight)] ***
+ok: [veridex-server-1] => (item=net.ipv4.ip_forward)
+ok: [veridex-server-1] => (item=net.bridge.bridge-nf-call-iptables)
+[ERROR]: Task failed: Action failed: net.bridge.bridge-nf-call-ip6tables is 1 on veridex-server-1, expected 0
+Origin: /mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/tasks/main.yml:100:3
+
+ 98   tags: [gate3]
+ 99
+100 - name: "Gate 3 -- assert every required sysctl has the intended value (Cilium preflight)"
+      ^ column 3
+
+failed: [veridex-server-1] (item=net.bridge.bridge-nf-call-ip6tables) => {"ansible_loop_var": "result", "assertion": "result.stdout | trim == (result.item.value | string)", "changed": false, "evaluated_to": false, "msg": "net.bridge.bridge-nf-call-ip6tables is 1 on veridex-server-1, expected 0", "result": {"ansible_loop_var": "item", "changed": false, "changed_when_result": false, "cmd": ["sysctl", "-n", "net.bridge.bridge-nf-call-ip6tables"], "delta": "0:00:00.003805", "end": "2026-09-14 23:03:13.028011", "failed": false, "item": {"key": "net.bridge.bridge-nf-call-ip6tables", "value": 0}, "msg": "", "rc": 0, "start": "2026-09-14 23:03:13.024206", "stderr": "", "stderr_lines": [], "stdout": "1", "stdout_lines": ["1"]}}
+
+PLAY RECAP *********************************************************************
+veridex-server-1           : ok=8    changed=0    unreachable=0    failed=1    skipped=0    rescued=0    ignored=0   
+
+EXIT_STATUS=2
+
+=== sub-test: c2-neg-gate3-firewall (exit 2) ===
+=== c2-neg-gate3-firewall === 2026-09-14T21:03:12Z
+repo_commit: 64d80e624252a71345d1c6bdc179297b085e73e9
+[WARNING]: Ansible is being run in a world writable directory (/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible), ignoring it as an ansible.cfg source. For more information see https://docs.ansible.com/ansible/devel/reference_appendices/config.html#cfg-in-world-writable-dir
+
+PLAY [Verify cluster health] ***************************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Load variable defaults owned by the roles this gate verifies] ***
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../host-prereqs/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../firewall/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../k3s-server/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../cilium/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../coredns/defaults/main.yml)
+
+TASK [verify-cluster : Identify the bootstrap server] **************************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Read the live kube-system namespace UID] ****************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Assert the live cluster matches the recorded target identity] ***
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 3 -- read lsmod] ***********************************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 3 -- assert every required kernel module is loaded (Cilium + Longhorn preflight)] ***
+ok: [veridex-server-1] => (item=overlay)
+ok: [veridex-server-1] => (item=br_netfilter)
+ok: [veridex-server-1] => (item=vxlan)
+ok: [veridex-server-1] => (item=iscsi_tcp)
+
+TASK [verify-cluster : Gate 3 -- read effective sysctl values] *****************
+ok: [veridex-server-1] => (item={'key': 'net.ipv4.ip_forward', 'value': 1})
+ok: [veridex-server-1] => (item={'key': 'net.bridge.bridge-nf-call-iptables', 'value': 1})
+ok: [veridex-server-1] => (item={'key': 'net.bridge.bridge-nf-call-ip6tables', 'value': 1})
+
+TASK [verify-cluster : Gate 3 -- assert every required sysctl has the intended value (Cilium preflight)] ***
+ok: [veridex-server-1] => (item=net.ipv4.ip_forward)
+ok: [veridex-server-1] => (item=net.bridge.bridge-nf-call-iptables)
+ok: [veridex-server-1] => (item=net.bridge.bridge-nf-call-ip6tables)
+
+TASK [verify-cluster : Gate 3 -- read systemd unit states (iscsid, nftables, chrony)] ***
+ok: [veridex-server-1] => (item=iscsid)
+ok: [veridex-server-1] => (item=nftables)
+ok: [veridex-server-1] => (item=chrony)
+
+TASK [verify-cluster : Gate 3 -- assert every required systemd unit is active] ***
+ok: [veridex-server-1] => (item=iscsid)
+ok: [veridex-server-1] => (item=nftables)
+ok: [veridex-server-1] => (item=chrony)
+
+TASK [verify-cluster : Gate 3 -- confirm nfs-common is installed (Longhorn RWX preflight)] ***
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 3 -- read the active nftables ruleset] *************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 3 -- assert the firewall default-drops and admits the trusted/pod networks and SSH] ***
+ok: [veridex-server-1] => (item=10.2.0.0/16)
+[ERROR]: Task failed: Action failed: Active ruleset on veridex-server-1 is missing the drop policy, the '192.0.2.0/24' accept, or the SSH accept.
+Origin: /mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/tasks/main.yml:155:3
+
+153   tags: [gate3]
+154
+155 - name: "Gate 3 -- assert the firewall default-drops and admits the trusted/pod networks and SSH"
+      ^ column 3
+
+failed: [veridex-server-1] (item=192.0.2.0/24) => {"ansible_loop_var": "item", "assertion": "item in _g3_nft.stdout", "changed": false, "evaluated_to": false, "item": "192.0.2.0/24", "msg": "Active ruleset on veridex-server-1 is missing the drop policy, the '192.0.2.0/24' accept, or the SSH accept."}
+ok: [veridex-server-1] => (item=10.44.0.0/16)
+
+PLAY RECAP *********************************************************************
+veridex-server-1           : ok=13   changed=0    unreachable=0    failed=1    skipped=0    rescued=0    ignored=0   
+
+EXIT_STATUS=2
+
+=== sub-test: c2-neg-gate3-systemd (exit 2) ===
+=== c2-neg-gate3-systemd === 2026-09-14T21:05:25Z
+repo_commit: 64d80e624252a71345d1c6bdc179297b085e73e9
+[WARNING]: Ansible is being run in a world writable directory (/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible), ignoring it as an ansible.cfg source. For more information see https://docs.ansible.com/ansible/devel/reference_appendices/config.html#cfg-in-world-writable-dir
+
+PLAY [Verify cluster health] ***************************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Load variable defaults owned by the roles this gate verifies] ***
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../host-prereqs/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../firewall/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../k3s-server/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../cilium/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../coredns/defaults/main.yml)
+
+TASK [verify-cluster : Identify the bootstrap server] **************************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Read the live kube-system namespace UID] ****************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Assert the live cluster matches the recorded target identity] ***
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 3 -- read lsmod] ***********************************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 3 -- assert every required kernel module is loaded (Cilium + Longhorn preflight)] ***
+ok: [veridex-server-1] => (item=overlay)
+ok: [veridex-server-1] => (item=br_netfilter)
+ok: [veridex-server-1] => (item=vxlan)
+ok: [veridex-server-1] => (item=iscsi_tcp)
+
+TASK [verify-cluster : Gate 3 -- read effective sysctl values] *****************
+ok: [veridex-server-1] => (item={'key': 'net.ipv4.ip_forward', 'value': 1})
+ok: [veridex-server-1] => (item={'key': 'net.bridge.bridge-nf-call-iptables', 'value': 1})
+ok: [veridex-server-1] => (item={'key': 'net.bridge.bridge-nf-call-ip6tables', 'value': 1})
+
+TASK [verify-cluster : Gate 3 -- assert every required sysctl has the intended value (Cilium preflight)] ***
+ok: [veridex-server-1] => (item=net.ipv4.ip_forward)
+ok: [veridex-server-1] => (item=net.bridge.bridge-nf-call-iptables)
+ok: [veridex-server-1] => (item=net.bridge.bridge-nf-call-ip6tables)
+
+TASK [verify-cluster : Gate 3 -- read systemd unit states (iscsid, nftables, chrony)] ***
+ok: [veridex-server-1] => (item=iscsid)
+ok: [veridex-server-1] => (item=nftables)
+ok: [veridex-server-1] => (item=chrony)
+ok: [veridex-server-1] => (item=veridex-gate7-negative-test-bogus-unit)
+
+TASK [verify-cluster : Gate 3 -- assert every required systemd unit is active] ***
+ok: [veridex-server-1] => (item=iscsid)
+ok: [veridex-server-1] => (item=nftables)
+ok: [veridex-server-1] => (item=chrony)
+[ERROR]: Task failed: Action failed: veridex-gate7-negative-test-bogus-unit is inactive on veridex-server-1, expected active
+Origin: /mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/tasks/main.yml:127:3
+
+125   tags: [gate3]
+126
+127 - name: "Gate 3 -- assert every required systemd unit is active"
+      ^ column 3
+
+failed: [veridex-server-1] (item=veridex-gate7-negative-test-bogus-unit) => {"ansible_loop_var": "result", "assertion": "result.stdout | trim == 'active'", "changed": false, "evaluated_to": false, "msg": "veridex-gate7-negative-test-bogus-unit is inactive on veridex-server-1, expected active", "result": {"ansible_loop_var": "item", "changed": false, "changed_when_result": false, "cmd": ["systemctl", "is-active", "veridex-gate7-negative-test-bogus-unit"], "delta": "0:00:00.007799", "end": "2026-09-14 23:06:07.264479", "failed": false, "failed_when_result": false, "failed_when_suppressed_exception": "(traceback unavailable)", "item": "veridex-gate7-negative-test-bogus-unit", "msg": "The command exited with a non-zero return code.", "rc": 4, "start": "2026-09-14 23:06:07.256680", "stderr": "", "stderr_lines": [], "stdout": "inactive", "stdout_lines": ["inactive"]}}
+
+PLAY RECAP *********************************************************************
+veridex-server-1           : ok=10   changed=0    unreachable=0    failed=1    skipped=0    rescued=0    ignored=0   
+
+EXIT_STATUS=2
+
+=== sub-test: c2-neg-gate4-certsan (exit 2) ===
+=== c2-neg-gate4-certsan === 2026-09-14T21:03:57Z
+repo_commit: 64d80e624252a71345d1c6bdc179297b085e73e9
+[WARNING]: Ansible is being run in a world writable directory (/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible), ignoring it as an ansible.cfg source. For more information see https://docs.ansible.com/ansible/devel/reference_appendices/config.html#cfg-in-world-writable-dir
+
+PLAY [Verify cluster health] ***************************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Load variable defaults owned by the roles this gate verifies] ***
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../host-prereqs/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../firewall/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../k3s-server/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../cilium/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../coredns/defaults/main.yml)
+
+TASK [verify-cluster : Identify the bootstrap server] **************************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Read the live kube-system namespace UID] ****************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Assert the live cluster matches the recorded target identity] ***
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 4 -- read this node's own served API certificate] ***
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 4 -- assert every configured TLS SAN is present on this node's served certificate] ***
+ok: [veridex-server-1] => (item=10.2.0.100)
+ok: [veridex-server-1] => (item=127.0.0.1)
+ok: [veridex-server-1] => (item=localhost)
+ok: [veridex-server-1] => (item=api.veridexeai.com)
+[ERROR]: Task failed: Action failed: veridex-server-1's served certificate does not include bogus.invalid.example.
+Origin: /mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/tasks/main.yml:191:3
+
+189   tags: [gate4]
+190
+191 - name: "Gate 4 -- assert every configured TLS SAN is present on this node's served certificate"
+      ^ column 3
+
+failed: [veridex-server-1] (item=bogus.invalid.example) => {"ansible_loop_var": "item", "assertion": "item | string in _g4_cert.stdout", "changed": false, "evaluated_to": false, "item": "bogus.invalid.example", "msg": "veridex-server-1's served certificate does not include bogus.invalid.example."}
+
+PLAY RECAP *********************************************************************
+veridex-server-1           : ok=6    changed=0    unreachable=0    failed=1    skipped=0    rescued=0    ignored=0   
+
+EXIT_STATUS=2
+
+=== sub-test: c2-neg-gate4-audit (exit 2) ===
+=== c2-neg-gate4-audit === 2026-09-14T21:04:11Z
+repo_commit: 64d80e624252a71345d1c6bdc179297b085e73e9
+[WARNING]: Ansible is being run in a world writable directory (/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible), ignoring it as an ansible.cfg source. For more information see https://docs.ansible.com/ansible/devel/reference_appendices/config.html#cfg-in-world-writable-dir
+
+PLAY [Verify cluster health] ***************************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Load variable defaults owned by the roles this gate verifies] ***
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../host-prereqs/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../firewall/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../k3s-server/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../cilium/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../coredns/defaults/main.yml)
+
+TASK [verify-cluster : Identify the bootstrap server] **************************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Read the live kube-system namespace UID] ****************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Assert the live cluster matches the recorded target identity] ***
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 4 -- read this node's own served API certificate] ***
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 4 -- assert every configured TLS SAN is present on this node's served certificate] ***
+ok: [veridex-server-1] => (item=10.2.0.100)
+ok: [veridex-server-1] => (item=127.0.0.1)
+ok: [veridex-server-1] => (item=localhost)
+ok: [veridex-server-1] => (item=api.veridexeai.com)
+
+TASK [verify-cluster : Gate 4 -- confirm secrets-encryption is configured on this node] ***
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 4 -- confirm the AES-CBC encryption-provider prefix protects existing etcd data] ***
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 4 -- read the etcd member list] ********************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 4 -- assert every control-plane node is a non-learner etcd voter] ***
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 4 -- read node identity] ***************************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 4 -- assert the node count matches the inventory] ***
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 4 -- assert every node reports condition Ready=True] ***
+ok: [veridex-server-1] => (item=veridex-agent-1)
+ok: [veridex-server-1] => (item=veridex-agent-2)
+ok: [veridex-server-1] => (item=veridex-server-1)
+ok: [veridex-server-1] => (item=veridex-server-2)
+ok: [veridex-server-1] => (item=veridex-server-3)
+
+TASK [verify-cluster : Gate 4 -- check audit log freshness] ********************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 4 -- assert the audit log exists, is non-empty and was written recently] ***
+[ERROR]: Task failed: Action failed: /var/log/kubernetes/audit/audit.log on veridex-server-1 is missing, empty, or has not been written to in the last -3600s.
+Origin: /mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/tasks/main.yml:301:3
+
+299   tags: [gate4]
+300
+301 - name: "Gate 4 -- assert the audit log exists, is non-empty and was written recently"
+      ^ column 3
+
+fatal: [veridex-server-1]: FAILED! => {"assertion": "(ansible_facts['date_time']['epoch'] | int) - (_g4_audit_stat.stat.mtime | int) < (verify_cluster_audit_freshness_seconds | int)", "changed": false, "evaluated_to": false, "msg": "/var/log/kubernetes/audit/audit.log on veridex-server-1 is missing, empty, or has not been written to in the last -3600s."}
+
+PLAY RECAP *********************************************************************
+veridex-server-1           : ok=15   changed=0    unreachable=0    failed=1    skipped=0    rescued=0    ignored=0   
+
+EXIT_STATUS=2
+
+=== sub-test: c2-neg-gate5-lease (exit 2) ===
+=== c2-neg-gate5-lease === 2026-09-14T21:06:06Z
+repo_commit: 64d80e624252a71345d1c6bdc179297b085e73e9
+[WARNING]: Ansible is being run in a world writable directory (/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible), ignoring it as an ansible.cfg source. For more information see https://docs.ansible.com/ansible/devel/reference_appendices/config.html#cfg-in-world-writable-dir
+
+PLAY [Verify cluster health] ***************************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Load variable defaults owned by the roles this gate verifies] ***
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../host-prereqs/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../firewall/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../k3s-server/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../cilium/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../coredns/defaults/main.yml)
+
+TASK [verify-cluster : Identify the bootstrap server] **************************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Read the live kube-system namespace UID] ****************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Assert the live cluster matches the recorded target identity] ***
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 5 -- read the kube-vip control-plane lease holder] ***
+[ERROR]: Task failed: Module failed: The command exited with a non-zero return code.
+Origin: /mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/tasks/main.yml:328:3
+
+326 # currently in a healthy, single-holder state.
+327
+328 - name: "Gate 5 -- read the kube-vip control-plane lease holder"
+      ^ column 3
+
+fatal: [veridex-server-1]: FAILED! => {"changed": false, "changed_when_result": false, "cmd": ["k3s", "kubectl", "-n", "kube-system", "get", "lease", "plndr-cp-lock-NEGATIVE-TEST-BOGUS", "-o", "jsonpath={.spec.holderIdentity}"], "delta": "0:00:00.126573", "end": "2026-09-14 23:06:21.400794", "msg": "The command exited with a non-zero return code.", "rc": 1, "start": "2026-09-14 23:06:21.274221", "stderr": "Error from server (NotFound): leases.coordination.k8s.io \"plndr-cp-lock-NEGATIVE-TEST-BOGUS\" not found", "stderr_lines": ["Error from server (NotFound): leases.coordination.k8s.io \"plndr-cp-lock-NEGATIVE-TEST-BOGUS\" not found"], "stdout": "", "stdout_lines": []}
+
+PLAY RECAP *********************************************************************
+veridex-server-1           : ok=5    changed=0    unreachable=0    failed=1    skipped=0    rescued=0    ignored=0   
+
+EXIT_STATUS=2
+
+=== sub-test: c2-neg-gate6-ciliumconfig (exit 2) ===
+=== c2-neg-gate6-ciliumconfig === 2026-09-14T21:04:44Z
+repo_commit: 64d80e624252a71345d1c6bdc179297b085e73e9
+[WARNING]: Ansible is being run in a world writable directory (/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible), ignoring it as an ansible.cfg source. For more information see https://docs.ansible.com/ansible/devel/reference_appendices/config.html#cfg-in-world-writable-dir
+
+PLAY [Verify cluster health] ***************************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Load variable defaults owned by the roles this gate verifies] ***
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../host-prereqs/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../firewall/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../k3s-server/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../cilium/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../coredns/defaults/main.yml)
+
+TASK [verify-cluster : Identify the bootstrap server] **************************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Read the live kube-system namespace UID] ****************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Assert the live cluster matches the recorded target identity] ***
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 6 -- read cilium status] ***************************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 6 -- assert cilium reports healthy] ****************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 6 -- read the cilium-config ConfigMap] *************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 6 -- assert the intended Cilium settings are live] ***
+[ERROR]: Task failed: Action failed: cilium-config does not match intended settings: enable-wireguard:true kube-proxy-replacement:true routing-mode:tunnel tunnel-protocol:vxlan 
+Origin: /mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/tasks/main.yml:398:3
+
+396   tags: [gate6]
+397
+398 - name: "Gate 6 -- assert the intended Cilium settings are live"
+      ^ column 3
+
+fatal: [veridex-server-1]: FAILED! => {"assertion": "('kube-proxy-replacement:true' in _g6_config.stdout) == (cilium_kube_proxy_replacement | bool)", "changed": false, "evaluated_to": false, "msg": "cilium-config does not match intended settings: enable-wireguard:true kube-proxy-replacement:true routing-mode:tunnel tunnel-protocol:vxlan "}
+
+PLAY RECAP *********************************************************************
+veridex-server-1           : ok=8    changed=0    unreachable=0    failed=1    skipped=0    rescued=0    ignored=0   
+
+EXIT_STATUS=2
+
+=== sub-test: c2-neg-gate6-corednsreplicas (exit 2) ===
+=== c2-neg-gate6-corednsreplicas === 2026-09-14T21:05:03Z
+repo_commit: 64d80e624252a71345d1c6bdc179297b085e73e9
+[WARNING]: Ansible is being run in a world writable directory (/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible), ignoring it as an ansible.cfg source. For more information see https://docs.ansible.com/ansible/devel/reference_appendices/config.html#cfg-in-world-writable-dir
+
+PLAY [Verify cluster health] ***************************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Load variable defaults owned by the roles this gate verifies] ***
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../host-prereqs/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../firewall/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../k3s-server/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../cilium/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../coredns/defaults/main.yml)
+
+TASK [verify-cluster : Identify the bootstrap server] **************************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Read the live kube-system namespace UID] ****************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Assert the live cluster matches the recorded target identity] ***
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 6 -- read cilium status] ***************************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 6 -- assert cilium reports healthy] ****************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 6 -- read the cilium-config ConfigMap] *************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 6 -- assert the intended Cilium settings are live] ***
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 6 -- read the CoreDNS Deployment] ******************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Gate 6 -- assert CoreDNS meets the intended replica count and is Ready] ***
+[ERROR]: Task failed: Action failed: CoreDNS readyReplicas below the intended 99.
+Origin: /mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/tasks/main.yml:418:3
+
+416   tags: [gate6]
+417
+418 - name: "Gate 6 -- assert CoreDNS meets the intended replica count and is Ready"
+      ^ column 3
+
+fatal: [veridex-server-1]: FAILED! => {"assertion": "(_g6_coredns_deploy.stdout | from_json).status.readyReplicas | default(0) >= (coredns_replicas | int)", "changed": false, "evaluated_to": false, "msg": "CoreDNS readyReplicas below the intended 99."}
+
+PLAY RECAP *********************************************************************
+veridex-server-1           : ok=10   changed=0    unreachable=0    failed=1    skipped=0    rescued=0    ignored=0   
+
+EXIT_STATUS=2
+
+=== revert confirmation for the two temporary edits (roles/verify-cluster/tasks/main.yml) ===
+reverted main.yml
+revert confirmed identical

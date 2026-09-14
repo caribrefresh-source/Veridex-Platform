@@ -108,6 +108,17 @@ kubevip_vip: "10.2.0.100"
 k3s_api_vip: "{{ kubevip_vip }}"
 api_port: 6443
 
+# Gate 7 (verify-cluster.yml): the one value that lets a read-only run tell
+# this cluster apart from any other API endpoint it might accidentally reach.
+# kube-system's namespace UID is immutable for the life of the cluster and
+# never changes on a routine rebuild of any single node -- captured live at
+# Gate 4's closure (docs/evidence/gates/gate-04/closure.md) and unchanged
+# through Gates 5-6. If this cluster is ever rebuilt from scratch (new etcd,
+# not just a node replaced), this value changes and must be updated here --
+# verify-cluster.yml fails closed against the old value rather than silently
+# passing against a different cluster.
+verify_cluster_expected_kube_system_uid: "d7d8a462-c503-49ed-a1e0-899f372f9465"
+
 # =============================================================================
 # K3s
 # =============================================================================

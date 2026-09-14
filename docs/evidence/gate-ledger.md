@@ -9,8 +9,15 @@ Plan: `docs/Engineering Documents/Initial Stages Plan.txt`
 
 ## Position
 
-Last deliverable **D33**, last exit-gate check **EG37** (Gate 6, closed
-2026-09-14). The next closed gate starts at **D34** and **EG38**.
+Last deliverable **D37**, last exit-gate check **EG41** (Gate 7, closed
+2026-09-14). The next closed gate starts at **D38** and **EG42**.
+
+The plan blob advanced from `4ebc8de` to `64d80e6` at Gate 7's closure (the
+Gates 32-35 amendment, Part D; hardening backlog renumbered to Part E). Gates
+0-6's rows name the earlier blob and remain valid against the newer one: the
+amendment adds gates and cross-references only and changes no decision recorded
+for Gates 0-31. A differing plan commit between rows is therefore expected here
+and is not the release/cluster mismatch `audit all` looks for.
 
 Evidence recorded before Revision 3 lives in `docs/evidence/legacy/`. It is not
 closure evidence; `docs/evidence/legacy/README.md` maps it to Revision 3 gates.
@@ -26,6 +33,7 @@ closure evidence; `docs/evidence/legacy/README.md` maps it to Revision 3 gates.
 | 4 | k3s control plane | D25–D28 | EG20–EG24 | 2026-09-14 | `4ebc8de` | `ccf4041` | kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://10.2.0.100:6443 | `docs/evidence/gates/gate-04/closure.md` |
 | 5 | kube‑vip failure behavior | D29–D29 | EG25–EG31 | 2026-09-14 | `4ebc8de` | `9f50972` | kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://10.2.0.100:6443 | `docs/evidence/gates/gate-05/closure.md` |
 | 6 | Cilium and cluster DNS | D30–D33 | EG32–EG37 | 2026-09-14 | `4ebc8de` | `8bf4f56` | kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://10.2.0.100:6443 | `docs/evidence/gates/gate-06/closure.md` |
+| 7 | Verification automation | D34–D37 | EG38–EG41 | 2026-09-14 | `64d80e6` | `64d80e6` | kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://10.2.0.100:6443 | `docs/evidence/gates/gate-07/closure.md` |
 
 ## Reopen log
 
@@ -44,6 +52,14 @@ Found by reading every cross-reference in the plan (commit `4ebc8de`). Each is a
 forward reference a lower gate depends on, so strict numeric order deadlocks.
 Not yet decided — each needs an Ordering decisions row before the lower gate
 can close. Remove an entry here only when its decision row is appended.
+
+**This list has not been re-derived against plan commit `64d80e6`.** That
+amendment (Gates 32-35) adds cross-references of the same shape — Gate 32 must
+resolve namespace names before the Wave 1 rollout at Gate 11, Gate 34 rides
+along from Wave 1, Gate 35 must be decided by Gate 15, and Gate 29's step 12 is
+Gate 35's exit check — none of which are enumerated below. None involve Gates
+0-7, so none blocked Gate 7's closure; the re-derivation is owed before Gate 11
+closes.
 
 - **Gate 8 → Gates 18–21.** Gate 8: "Exact bucket architecture, credential
   mechanism and Object Lock activation are specified in Gates 18–21." Gate 21

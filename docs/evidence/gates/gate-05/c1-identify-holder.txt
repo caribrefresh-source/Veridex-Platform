@@ -1,0 +1,20 @@
+gate: 5
+check: G05-C1
+captured_utc: 2026-09-14T10:24:14Z
+repo_commit: 9f50972a8ce6cda6fc53bb2439ce8669d1a98282
+plan_commit: 4ebc8def34df78a0bc6b29e42656986ef987f4c9
+plan_sha256: 42eaac5e61d177430ce8e331767d2137b3f9b2bd197e13945b84f7c5e8cd79c7
+target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API server https://10.2.0.100:6443 (private VIP); hosts veridex-server-1/2/3 (control-plane,etcd)
+captured_by: agent
+command: ssh root@server-1 'k3s kubectl get lease -n kube-system plndr-cp-lock -o jsonpath={.spec.holderIdentity}; ip neigh show 10.2.0.100'
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: Confirms the kube-vip leader lease and the live ARP entry agree on the same holder before the drill.
+--- unedited output ---
+holder identity (lease): veridex-server-3
+ARP for 10.2.0.100: lladdr 26:44:f8:59:8c:68 REACHABLE
+(matches veridex-server-3's recorded vLAN MAC, docs/evidence/legacy/gate-0-preflight.md)
+Baseline cluster state: all 5 nodes Ready, all 3 etcd endpoints healthy
+(see docs/evidence/gates/gate-04/c1-node-identity.txt and c2-etcd-member-list.txt,
+captured minutes earlier in the same session, unchanged at drill start).

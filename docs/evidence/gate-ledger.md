@@ -9,8 +9,8 @@ Plan: `docs/Engineering Documents/Initial Stages Plan.txt`
 
 ## Position
 
-Last deliverable **D28**, last exit-gate check **EG24** (Gate 4, closed
-2026-09-14). The next closed gate starts at **D29** and **EG25**.
+Last deliverable **D29**, last exit-gate check **EG31** (Gate 5, closed
+2026-09-14). The next closed gate starts at **D30** and **EG32**.
 
 Evidence recorded before Revision 3 lives in `docs/evidence/legacy/`. It is not
 closure evidence; `docs/evidence/legacy/README.md` maps it to Revision 3 gates.
@@ -24,6 +24,7 @@ closure evidence; `docs/evidence/legacy/README.md` maps it to Revision 3 gates.
 | 2 | Private network | D21–D21 | EG10–EG13 | 2026-09-14 | `4ebc8de` | `5cb1beb` | hosts veridex-server-1/2/3, veridex-agent-1/2 @ `5cb1beb` (SSH host-key fingerprints in `ansible/files/known_hosts`) | `docs/evidence/gates/gate-02/closure.md` |
 | 3 | Host prerequisites and firewall | D22–D24 | EG14–EG19 | 2026-09-14 | `4ebc8de` | `a194cf6` | hosts veridex-server-1/2/3, veridex-agent-1/2 @ `a194cf6` (SSH host-key fingerprints in `ansible/files/known_hosts`) | `docs/evidence/gates/gate-03/closure.md` |
 | 4 | k3s control plane | D25–D28 | EG20–EG24 | 2026-09-14 | `4ebc8de` | `ccf4041` | kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://10.2.0.100:6443 | `docs/evidence/gates/gate-04/closure.md` |
+| 5 | kube‑vip failure behavior | D29–D29 | EG25–EG31 | 2026-09-14 | `4ebc8de` | `9f50972` | kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://10.2.0.100:6443 | `docs/evidence/gates/gate-05/closure.md` |
 
 ## Reopen log
 

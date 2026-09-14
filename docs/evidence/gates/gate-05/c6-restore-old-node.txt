@@ -1,0 +1,17 @@
+gate: 5
+check: G05-C6
+captured_utc: 2026-09-14T10:24:14Z
+repo_commit: 9f50972a8ce6cda6fc53bb2439ce8669d1a98282
+plan_commit: 4ebc8def34df78a0bc6b29e42656986ef987f4c9
+plan_sha256: 42eaac5e61d177430ce8e331767d2137b3f9b2bd197e13945b84f7c5e8cd79c7
+target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API server https://10.2.0.100:6443 (private VIP); hosts veridex-server-1/2/3 (control-plane,etcd)
+captured_by: agent
+command: Operator powered veridex-server-3 back on (netcup control panel); ssh root@server-1 polled 'k3s kubectl get node veridex-server-3' Ready condition until True
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: Node-level Ready recovery only; does not separately drain/cordon-test scheduling back onto the node, since no workload exists yet to schedule (Longhorn/CNPG/etc. are later gates).
+--- unedited output ---
+Operator confirmation (this session's transcript): "sever powered on"
+First poll after confirmation: veridex-server-3 Ready condition = True (already recovered
+by the time of the first check -- k3s/kubelet/kube-vip all rejoined without further action)

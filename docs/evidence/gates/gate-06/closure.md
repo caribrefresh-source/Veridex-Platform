@@ -5,7 +5,7 @@
 | **Verdict** | **PASS** |
 | **Closed (UTC)** | 2026-09-14T14:47:10Z |
 | **Plan** | `docs/Engineering Documents/Initial Stages Plan.txt` @ `4ebc8def34df78a0bc6b29e42656986ef987f4c9`, sha256 `42eaac5e61d177430ce8e331767d2137b3f9b2bd197e13945b84f7c5e8cd79c7` (blob in Git) |
-| **Tested repo commit** | `4971cbca9a52ce3946d345c944dfdbc20bc27e4b` (branch `feat/gate-06-cilium-dns`) |
+| **Tested repo commit** | `8bf4f56a3fc23958611f1e8e741d1a1ef462e770` (branch `feat/gate-06-cilium-dns`) |
 | **Target identity** | `kube-system` namespace UID `d7d8a462-c503-49ed-a1e0-899f372f9465`; API server `https://10.2.0.100:6443` (private VIP); hosts `veridex-server-1/2/3`, `veridex-agent-1/2` |
 | **High-risk** | Yes — host firewall change on all five production nodes (CLAUDE.md §12 trigger: Cilium/networking) |
 | **Verifier independence** | Tier 1 — one independent adversarial review (separate context, given only the diff and the Gate 6 plan text). Found 10 issues; the seven real, addressable ones were fixed and reverified live. No Tier 2 review obtained; continuing the pattern accepted at Gates 0-4. |
@@ -38,9 +38,9 @@
 
 | ID | Artifact | Commit |
 |---|---|---|
-| D30 | `ansible/roles/coredns/` — Deployment (2 replicas, topology spread, hardened securityContext), Service (fixed ClusterIP), ConfigMap, RBAC, PodDisruptionBudget | `4971cbc` |
+| D30 | `ansible/roles/coredns/` — Deployment (2 replicas, topology spread, hardened securityContext), Service (fixed ClusterIP), ConfigMap, RBAC, PodDisruptionBudget | `4971cbc`, `8bf4f56` |
 | D31 | `ansible/playbooks/install-coredns.yml` | `4971cbc` |
-| D32 | `ansible/roles/firewall/{defaults,tasks}/main.yml`, `templates/nftables.conf.j2` — pod-CIDR trust scoped to the API port; assertions over every trusted entry; a real post-reload connectivity check | `4971cbc` |
+| D32 | `ansible/roles/firewall/{defaults,tasks}/main.yml`, `templates/nftables.conf.j2` — pod-CIDR trust scoped to the API port; assertions over every trusted entry; a real post-reload connectivity check | `8bf4f56` |
 | D33 | `docs/evidence/gates/gate-06/closure.md` — this record | (evidence commit follows) |
 
 ## 5. Technical detail
@@ -93,7 +93,7 @@ One iteration (cap 11).
 
 | Iteration | Source | Findings | Fix commits |
 |---|---|---|---|
-| 1 | Independent review (Tier 1, separate context, given the diff and Gate 6 plan text) | 10 findings: (high) pod-CIDR firewall rule was a blanket accept, not scoped to the port actually needed; (medium) the firewall's own post-apply assertion only checked index 0 of the trusted-network list and never proved a live connection still worked; (medium) no PodDisruptionBudget for CoreDNS; (medium) the disposable DNS test pod had no block/rescue/always, so a failed assertion left it running forever and blocked a future rerun; (medium) an undisclosed dependency on the host not exposing a systemd-resolved loopback stub; (low) `runAsNonRoot` not enforced explicitly; (low) unpinned registry choice (Docker Hub vs. a mirror) and unverified digest, matching an existing repo-wide convention; (low) RBAC grants `pods: list/watch` unused by the configured `pods insecure` mode, inherited verbatim from upstream, not introduced here | `4971cbc` (fixed all seven addressable findings: scoped the firewall rule to the API port and added an assertion plus a real fresh-connection check; added a PodDisruptionBudget; wrapped the test pod in block/rescue/always with pre-emptive cleanup; added a standing resolvConf-loopback assertion; enforced `runAsNonRoot`/`runAsUser` at the image's verified actual UID; not fixed, disclosed: registry/digest choice and the inherited RBAC scope, both pre-existing patterns or upstream-inherited, not regressions) |
+| 1 | Independent review (Tier 1, separate context, given the diff and Gate 6 plan text) | 10 findings: (high) pod-CIDR firewall rule was a blanket accept, not scoped to the port actually needed; (medium) the firewall's own post-apply assertion only checked index 0 of the trusted-network list and never proved a live connection still worked; (medium) no PodDisruptionBudget for CoreDNS; (medium) the disposable DNS test pod had no block/rescue/always, so a failed assertion left it running forever and blocked a future rerun; (medium) an undisclosed dependency on the host not exposing a systemd-resolved loopback stub; (low) `runAsNonRoot` not enforced explicitly; (low) unpinned registry choice (Docker Hub vs. a mirror) and unverified digest, matching an existing repo-wide convention; (low) RBAC grants `pods: list/watch` unused by the configured `pods insecure` mode, inherited verbatim from upstream, not introduced here | `8bf4f56` (fixed all seven addressable findings: scoped the firewall rule to the API port and added an assertion plus a real fresh-connection check; added a PodDisruptionBudget; wrapped the test pod in block/rescue/always with pre-emptive cleanup; added a standing resolvConf-loopback assertion; enforced `runAsNonRoot`/`runAsUser` at the image's verified actual UID; not fixed, disclosed: registry/digest choice and the inherited RBAC scope, both pre-existing patterns or upstream-inherited, not regressions) |
 
 **Attacks attempted:** the review's brief explicitly asked it to find ways the firewall change could be broader than necessary, ways the topology spread/toleration could silently reduce effective replica count, ways the disposable test pod could leak or block a future run, and whether the image pin and Corefile forward target had undisclosed dependencies. It found the firewall over-broadening (real, fixed), the test-pod cleanup gap (real, fixed), and the resolv.conf dependency (real, disclosed and now asserted). It found the topology-spread/toleration design was correct as built (the real gap there was the separately-identified missing PDB, not the constraint itself).
 
@@ -101,7 +101,7 @@ One iteration (cap 11).
 
 ### 7.3 IIR attestation
 
-- **Immutable:** every fix is committed on `feat/gate-06-cilium-dns` (`4971cbc`).
+- **Immutable:** every fix is committed on `feat/gate-06-cilium-dns` (`4971cbc`, `8bf4f56`).
 - **Idempotent:** a fleet-wide rerun of `prepare-hosts.yml` and a rerun of `install-coredns.yml`, both after the hardening fixes, report `changed=0`, `failed=0` on every node — `c6-iir-rerun.txt`. No k3s, Cilium, CoreDNS, kube-vip or storage service was restarted.
 - **Repeatable:** the firewall change, applied fleet-wide via the existing `serial: 1` rollout, reached the same scoped-rule state on all five nodes; CoreDNS, applied once from the bootstrap server, is a standard k3s AddOn mechanism identical to `roles/kubevip`'s already-proven pattern. Reproducibility from a bare/reinstalled node is not proven here (same gap disclosed at every gate since Gate 1).
 

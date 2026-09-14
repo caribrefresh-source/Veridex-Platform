@@ -25,7 +25,7 @@ closure evidence; `docs/evidence/legacy/README.md` maps it to Revision 3 gates.
 | 3 | Host prerequisites and firewall | D22–D24 | EG14–EG19 | 2026-09-14 | `4ebc8de` | `a194cf6` | hosts veridex-server-1/2/3, veridex-agent-1/2 @ `a194cf6` (SSH host-key fingerprints in `ansible/files/known_hosts`) | `docs/evidence/gates/gate-03/closure.md` |
 | 4 | k3s control plane | D25–D28 | EG20–EG24 | 2026-09-14 | `4ebc8de` | `ccf4041` | kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://10.2.0.100:6443 | `docs/evidence/gates/gate-04/closure.md` |
 | 5 | kube‑vip failure behavior | D29–D29 | EG25–EG31 | 2026-09-14 | `4ebc8de` | `9f50972` | kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://10.2.0.100:6443 | `docs/evidence/gates/gate-05/closure.md` |
-| 6 | Cilium and cluster DNS | D30–D33 | EG32–EG37 | 2026-09-14 | `4ebc8de` | `4971cbc` | kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://10.2.0.100:6443 | `docs/evidence/gates/gate-06/closure.md` |
+| 6 | Cilium and cluster DNS | D30–D33 | EG32–EG37 | 2026-09-14 | `4ebc8de` | `8bf4f56` | kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://10.2.0.100:6443 | `docs/evidence/gates/gate-06/closure.md` |
 
 ## Reopen log
 

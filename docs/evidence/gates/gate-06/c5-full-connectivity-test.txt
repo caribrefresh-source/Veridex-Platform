@@ -1,7 +1,7 @@
 gate: 6
 check: G06-C5
 captured_utc: 2026-09-14T14:39:21Z
-repo_commit: 4971cbca9a52ce3946d345c944dfdbc20bc27e4b
+repo_commit: 8bf4f56a3fc23958611f1e8e741d1a1ef462e770
 plan_commit: 4ebc8def34df78a0bc6b29e42656986ef987f4c9
 plan_sha256: 42eaac5e61d177430ce8e331767d2137b3f9b2bd197e13945b84f7c5e8cd79c7
 target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API server https://10.2.0.100:6443 (private VIP); hosts veridex-server-1/2/3, veridex-agent-1/2

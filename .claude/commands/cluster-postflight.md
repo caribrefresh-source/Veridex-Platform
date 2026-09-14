@@ -32,7 +32,7 @@ Pass: All certificates `Ready=True`. No `False`.
 kubectl get ingressroute -A
 kubectl get ingress -A
 ```
-Pass: All IngressRoutes present. Verify argocd.entrepeai.com and hubble.entrepeai.com resolve.
+Pass: All IngressRoutes present. Verify the Argo CD and Hubble hostnames under veridexeai.com resolve (created at Gates 10 and 15).
 
 ## 6. Network Policies Active
 ```

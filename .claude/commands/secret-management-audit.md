@@ -1,6 +1,6 @@
 # secret-management-audit
 
-Audit secret management across the K3s-HA platform — SOPS, ESO, SealedSecrets.
+Audit secret management across the Veridex platform — SOPS, ESO, SealedSecrets.
 
 ## 1. No Plaintext Secrets in Git
 ```

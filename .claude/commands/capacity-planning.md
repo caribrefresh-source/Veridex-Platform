@@ -1,6 +1,6 @@
 # capacity-planning
 
-Assess resource utilization and capacity headroom for the K3s-HA cluster.
+Assess resource utilization and capacity headroom for the Veridex netcup cluster.
 
 ## 1. Node Resource Utilization
 ```

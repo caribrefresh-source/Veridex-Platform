@@ -1,13 +1,13 @@
 # cost-optimization
 
-Identify resource waste and cost optimization opportunities on Hetzner Cloud.
+Identify resource waste and cost optimization opportunities on the Veridex netcup cluster.
 
 ## 1. Idle / Over-provisioned Nodes
 ```
 kubectl top nodes 2>/dev/null
 ```
 Compute: If any node is < 20% CPU and < 30% memory for > 7 days, it may be over-provisioned.
-Hetzner pricing: CPX11 (€3.85/mo) → CPX21 (€5.83/mo) → CPX31 (€10.57/mo) etc.
+netcup pricing: use the current price list for the RS 1000 G12 and RS 2000 G12 servers in the inventory (prices are not recorded in this repo).
 
 ## 2. Pods with No Resource Requests
 ```
@@ -29,7 +29,7 @@ Review: Very low CPU pods may be candidates for scale-to-zero (KEDA) or consolid
 kubectl exec -n data-plane deployment/dip-minio -- df -h /data 2>/dev/null | tail -1
 kubectl get pvc -n data-plane -o custom-columns='NAME:.metadata.name,CAPACITY:.spec.resources.requests.storage'
 ```
-MinIO is 30Gi PVC. Hetzner volumes: €0.048/GB/month = €1.44/mo per 30Gi.
+MinIO is planned on direct local storage (plan Gates 13 and 23-24); its size and storage cost are not decided yet.
 Review: Is 30Gi appropriately sized? Check actual usage vs capacity.
 
 ## 5. KEDA Scale-to-Zero Verification
@@ -45,10 +45,10 @@ Cost impact: scaling to 0 for ~16 hours/day and weekends = ~60% compute savings 
 kubectl get pods -A -o json | \
   jq '[.items[] | .spec.containers[].image] | group_by(.) | map({image: .[0], count: length}) | sort_by(.count) | reverse | .[0:10]'
 ```
-Identify: Commonly used base images. Consider a local image registry (Harbor) to reduce Hetzner egress on pulls.
+Identify: Commonly used base images. Consider a local image registry (Harbor) to reduce registry egress on pulls.
 
 ## 7. External Egress
-Hetzner: 20TB free egress/month, then €1/TB.
+netcup traffic allowance: check the current terms for the servers in the inventory (not recorded in this repo).
 ```
 # Estimate via Hubble (if available)
 hubble observe --verdict FORWARDED --to-world --last 1000 --output json 2>/dev/null | \
@@ -69,9 +69,7 @@ print(f'External flows sampled: {count}')
 
 ## 8. MinIO vs S3 Trade-off
 Planned: self-hosted MinIO on direct local storage (`minio-local`, plan Gate 26), never Longhorn. Not yet deployed.
-Alternative: Hetzner Object Storage (S3-compatible, €0.0059/GB/month).
-Cost at 30GB: MinIO = €1.44/mo (volume) + node compute. Hetzner S3 = €0.18/mo.
-Recommendation: For WAL archive only, Hetzner Object Storage is cheaper. For documents, evaluate latency.
+Off-cluster copies: backups and archives go to Wasabi (plan Gates 17-21); for WAL and etcd snapshots, include Wasabi's minimum-storage-duration charge (plan Gate 18).
 
 ## Report
 Node utilization summary, waste candidates, KEDA scale-to-zero confirmation, storage cost comparison.

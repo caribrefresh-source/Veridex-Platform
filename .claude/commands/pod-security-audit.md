@@ -1,6 +1,6 @@
 # pod-security-audit
 
-Audit pod security contexts across the K3s-HA cluster.
+Audit pod security contexts across the Veridex netcup cluster.
 
 ## 1. Privileged Containers
 ```

@@ -1,6 +1,6 @@
 # node-health
 
-Detailed per-node health assessment for the K3s-HA cluster.
+Detailed per-node health assessment for the Veridex netcup cluster.
 
 ## 1. Node Status + Conditions
 ```
@@ -22,7 +22,7 @@ Pass: CPU < 80%, Memory < 85% per node. Flag nodes over threshold.
 
 ## 4. Disk Usage on Nodes (via pod exec or Ansible)
 ```
-ansible all -i ansible/inventory/hcloud.yml -m shell -a "df -h / /var/lib/rancher"
+ansible all -i ansible/inventory/production/hosts.yml -m shell -a "df -h / /var/lib/rancher"
 ```
 Pass: Root < 80%, rancher data dir < 80%.
 

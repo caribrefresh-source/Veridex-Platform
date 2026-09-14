@@ -125,7 +125,7 @@ k3s_tls_san:
   - "{{ kubevip_vip }}"
   - 127.0.0.1
   - localhost
-  # - veridex-api.entrepeai.com   # set the real DNS name before Gate 5
+  # - api.veridexeai.com   # add at Gate 4; resolved privately, no public record
 
 # Pod and Service CIDRs deliberately differ from the Hetzner cluster's
 # 10.42.0.0/16 / 10.43.0.0/16. Overlapping them would permanently rule out

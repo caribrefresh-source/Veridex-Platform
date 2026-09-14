@@ -1,6 +1,6 @@
 # argocd-sync-validation
 
-Validate ArgoCD GitOps state for the caribrefresh-source/k3s-ha repository.
+Validate ArgoCD GitOps state for the caribrefresh-source/Veridex-Platform repository.
 
 ## 1. All Applications Health
 ```

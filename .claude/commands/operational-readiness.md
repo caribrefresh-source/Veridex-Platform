@@ -59,10 +59,11 @@ Pass: VictoriaMetrics, Loki Running. Fluent Bit DESIRED==READY.
 
 ## Ingress Gate
 ```
-curl -sk https://argocd.entrepeai.com/healthz | head -5
+# ARGOCD_HOST / HUBBLE_HOST: platform hostnames under veridexeai.com (created at Gates 10 and 15)
+curl -sk "https://$ARGOCD_HOST/healthz" | head -5
 kubectl get ingressroute -A --no-headers | wc -l
 ```
-Pass: argocd.entrepeai.com returns 200 OK. All IngressRoutes present.
+Pass: the Argo CD host returns 200 OK. All IngressRoutes present.
 
 ## Final Score
 Pass criteria (all must pass for READY):

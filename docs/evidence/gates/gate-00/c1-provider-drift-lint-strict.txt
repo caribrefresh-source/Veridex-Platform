@@ -1,0 +1,26 @@
+gate: 0
+check: G00-C1
+captured_utc: 2026-09-14T00:57:32Z
+repo_commit: 82a1dd4bb406aadd6091e6ec756c41ac7426add4
+plan_commit: 4ebc8def34df78a0bc6b29e42656986ef987f4c9
+plan_sha256: 42eaac5e61d177430ce8e331767d2137b3f9b2bd197e13945b84f7c5e8cd79c7
+target_identity: repository https://github.com/caribrefresh-source/Veridex-Platform.git at commit 82a1dd4bb406aadd6091e6ec756c41ac7426add4
+captured_by: agent
+command: python3 scripts/lint-provider-drift.py --strict
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: Same scan with warnings treated as failures.
+interpreter: Python 3.11.9
+--- unedited output ---
+HISTORICAL: docs/evidence/legacy/README.md:18: 'K3s-HA'
+        names the Hetzner K3s-HA cluster, its kube context or its repository -- target the netcup cluster; label history
+HISTORICAL: docs/evidence/legacy/gate-5-control-plane.md:23: 'cloud-provider=external'
+        requires a CCM to clear node.cloudprovider.kubernetes.io/uninitialized; netcup has none, so nodes would never schedule
+HISTORICAL: docs/evidence/legacy/gate-5-control-plane.md:24: 'cloud-provider=external'
+        requires a CCM to clear node.cloudprovider.kubernetes.io/uninitialized; netcup has none, so nodes would never schedule
+SUPPRESSED: scripts/lint-secret-register.py:200: 'k3s-ha' -- rejects old-cluster secret destinations
+
+scanned 288 tracked text files
+errors: 0   warnings: 0   historical: 3   suppressed: 1
+No blocking provider drift.

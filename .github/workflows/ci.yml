@@ -17,6 +17,7 @@ jobs:
   provider-drift:
     name: Provider drift (no Hetzner assumptions)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -35,12 +36,21 @@ jobs:
       # Run --strict once the pod/service CIDR decision is settled, so the
       # derived values (CoreDNS ClusterIP, Cilium's API ClusterIP fallback)
       # cannot be left pointing at the old service CIDR.
+      #
+      # PyYAML lets the lint scan YAML values after unescaping, so an escape
+      # sequence cannot hide a provider value.
+      - name: Install pinned lint dependencies
+        run: |
+          pip install --disable-pip-version-check \
+            -r scripts/requirements-lint.txt
+
       - name: Lint for Hetzner provider drift
         run: python3 scripts/lint-provider-drift.py
 
   namespace-rules:
     name: Namespace declarations
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -61,6 +71,7 @@ jobs:
   yaml-lint:
     name: YAML lint
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -78,6 +89,7 @@ jobs:
   ansible-syntax:
     name: Ansible syntax check
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     # ansible.cfg lives in ansible/, but these steps run from the repo root,
     # and Ansible only reads a cfg from the current directory. Its roles_path
     # therefore never applies and roles resolve to playbooks/roles, which does
@@ -111,3 +123,49 @@ jobs:
             ansible-playbook -i ansible/inventory/production/hosts.yml \
               "$p" --syntax-check
           done
+
+  inventory-schema:
+    name: Inventory schema (five netcup nodes)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install pinned lint dependencies
+        run: |
+          pip install --disable-pip-version-check \
+            -r scripts/requirements-lint.txt
+
+      # Parsing proves nothing about identity. This fails on a sixth host, a
+      # duplicated address or MAC, a second bootstrap server, a node outside
+      # the vLAN register, or hosts declared in any other inventory.
+      - name: Validate inventory against schemas/inventory.schema.json
+        run: python3 scripts/validate-inventory.py
+
+  secret-register:
+    name: Secret register (names only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install pinned lint dependencies
+        run: |
+          pip install --disable-pip-version-check \
+            -r scripts/requirements-lint.txt
+
+      # Every secret the repo reads must say where its value is held, and no
+      # destination may be Hetzner. Prints names and file:line only, never
+      # values, and fails on a literal assignment or a private key block.
+      - name: Check every consumed secret has a registered destination
+        run: python3 scripts/lint-secret-register.py

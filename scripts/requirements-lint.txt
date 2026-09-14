@@ -1,0 +1,13 @@
+# Pinned dependencies for the repository lint scripts in scripts/.
+#
+# Consumed by CI and by anyone running the scripts locally, so both check with
+# the same parser and the same JSON Schema implementation. Transitive
+# dependencies are pinned as well, so a new upstream release cannot change what
+# CI runs between two commits. Verified with Python 3.11 on 2026-09-13.
+pyyaml==6.0.2
+jsonschema==4.26.0
+attrs==26.1.0
+jsonschema-specifications==2025.9.1
+referencing==0.37.0
+rpds-py==0.30.0
+typing-extensions==4.14.1

@@ -1,0 +1,19 @@
+gate: 0
+check: G00-IIR
+captured_utc: 2026-09-14T00:57:35Z
+repo_commit: 82a1dd4bb406aadd6091e6ec756c41ac7426add4
+plan_commit: 4ebc8def34df78a0bc6b29e42656986ef987f4c9
+plan_sha256: 42eaac5e61d177430ce8e331767d2137b3f9b2bd197e13945b84f7c5e8cd79c7
+target_identity: repository https://github.com/caribrefresh-source/Veridex-Platform.git at commit 82a1dd4bb406aadd6091e6ec756c41ac7426add4
+captured_by: agent
+command: second run of every lint above, compared with the first
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: Shows the checks are deterministic and read-only on this commit; repeatability on a clean runner is shown by c4.
+interpreter: Python 3.11.9
+--- unedited output ---
+identical: python3 scripts/lint-provider-drift.py (exit 0)
+identical: python3 scripts/lint-provider-drift.py --strict (exit 0)
+identical: python3 scripts/lint-secret-register.py (exit 0)
+identical: python3 scripts/validate-inventory.py (exit 0)

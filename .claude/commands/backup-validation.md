@@ -1,6 +1,6 @@
 # backup-validation
 
-Validate all backup systems across K3s-HA cluster.
+Validate all backup systems across the Veridex netcup cluster.
 
 ## 1. CNPG PostgreSQL Backups
 ```
@@ -37,7 +37,7 @@ Pass: Last Vaultwarden backup job Completed within 24h.
 
 ## 5. etcd Snapshot
 ```
-ansible servers -i ansible/inventory/hcloud.yml -m shell -a \
+ansible k3s_servers -i ansible/inventory/production/hosts.yml -m shell -a \
   "ls -lh /var/lib/rancher/k3s/server/db/snapshots/" --limit 1 2>/dev/null | tail -5
 ```
 Pass: Snapshot file exists, modified within last 24h (K3s default: every 12h).

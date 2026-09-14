@@ -1,6 +1,6 @@
 # cilium-health
 
-Full Cilium CNI health check for the K3s-HA cluster.
+Full Cilium CNI health check for the Veridex netcup cluster.
 
 ## 1. Cilium Agent Status
 ```

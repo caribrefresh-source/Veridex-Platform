@@ -1,6 +1,6 @@
 # incident-triage
 
-Rapid incident triage playbook for K3s-HA cluster issues.
+Rapid incident triage playbook for Veridex netcup cluster issues.
 
 ## Step 1: Scope Assessment (< 2 min)
 ```

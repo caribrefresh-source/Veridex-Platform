@@ -19,7 +19,7 @@ Role assignment (decided from measured capacity, see conversation 2026-09-12)
                  The heavy data plane: Longhorn replicas, CNPG primaries,
                  MinIO shards. The 512 GiB disks belong where replicas live.
 
-Naming mirrors the Hetzner convention (k3s-ha-server-N / k3s-ha-agent-N) so
+Naming mirrors the reference cluster's convention (server-N / agent-N) so
 the inventory grouping by hostname prefix ports unchanged.
 
 Safety

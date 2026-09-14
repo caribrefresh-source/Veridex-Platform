@@ -1,0 +1,63 @@
+---
+# ssh-hardening role tasks
+#
+# Applies the drop-in, validates it before reloading, then forces a brand
+# new SSH connection (dropping any multiplexed ControlPersist socket) and
+# confirms it still authenticates as root before moving on -- so a mistake
+# here fails loudly on the first node instead of silently locking out the
+# fleet.
+
+- name: Render the veridex SSH hardening drop-in
+  ansible.builtin.template:
+    src: 99-veridex-hardening.conf.j2
+    dest: /etc/ssh/sshd_config.d/99-veridex-hardening.conf
+    owner: root
+    group: root
+    mode: "0644"
+  register: _sshd_dropin
+
+- name: Validate sshd configuration before reloading
+  ansible.builtin.command:
+    cmd: sshd -t
+  changed_when: false
+
+- name: Reload sshd to apply the drop-in
+  ansible.builtin.systemd:
+    name: ssh
+    state: reloaded
+  when: _sshd_dropin.changed
+
+- name: Force a brand-new SSH connection (drop any multiplexed socket)
+  ansible.builtin.meta: reset_connection
+  when: _sshd_dropin.changed
+
+- name: Confirm key-only access still works over a fresh connection
+  ansible.builtin.command:
+    cmd: whoami
+  register: _post_reload_whoami
+  changed_when: false
+
+- name: Assert the fresh connection actually authenticated as root
+  ansible.builtin.assert:
+    that:
+      - _post_reload_whoami.stdout == "root"
+    fail_msg: >-
+      Fresh SSH connection after reloading sshd did not authenticate as root
+      on {{ inventory_hostname }} -- STOP, do not proceed to other nodes.
+    quiet: true
+
+- name: Read sshd's effective configuration
+  ansible.builtin.command:
+    cmd: sshd -T
+  register: _sshd_effective
+  changed_when: false
+
+- name: Assert the hardened values are actually effective
+  ansible.builtin.assert:
+    that:
+      - "'permitrootlogin prohibit-password' in _sshd_effective.stdout"
+      - "'passwordauthentication no' in _sshd_effective.stdout"
+    fail_msg: >-
+      sshd -T on {{ inventory_hostname }} does not report the hardened
+      values. Got: {{ _sshd_effective.stdout }}
+    quiet: true

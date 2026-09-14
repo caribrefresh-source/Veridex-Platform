@@ -1,0 +1,51 @@
+---
+# ssh-access role tasks
+#
+# Gate 1 G01-C5: administrative access must be recoverable. Verified live
+# 2026-09-13: /root/.ssh/authorized_keys on every node held exactly one key
+# -- the one netcup's provisioning API installed at image time -- with no
+# fallback if it were lost. This role makes admin_ssh_public_keys in the
+# inventory (ansible/inventory/production/group_vars/all.yml) the sole,
+# version-controlled source of truth for root's authorized_keys, and refuses
+# to run unless a break-glass key is present alongside the primary one.
+
+- name: Assert at least two admin keys are registered (primary + break-glass)
+  ansible.builtin.assert:
+    that:
+      - admin_ssh_public_keys is defined
+      - admin_ssh_public_keys | length >= 2
+    fail_msg: >-
+      admin_ssh_public_keys must list the primary operator key and at least
+      one break-glass key -- a single key here is exactly the unrecoverable
+      state this role exists to close (Gate 1 G01-C5).
+    quiet: true
+
+- name: Ensure /root/.ssh exists with correct permissions
+  ansible.builtin.file:
+    path: /root/.ssh
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Render authorized_keys as the exact, version-controlled key list
+  ansible.builtin.copy:
+    dest: /root/.ssh/authorized_keys
+    owner: root
+    group: root
+    mode: "0600"
+    content: "{{ admin_ssh_public_keys | map('trim') | join('\n') }}\n"
+
+- name: Read back authorized_keys
+  ansible.builtin.command:
+    cmd: cat /root/.ssh/authorized_keys
+  register: _authorized_keys
+  changed_when: false
+
+- name: Assert every managed key is present verbatim after write
+  ansible.builtin.assert:
+    that:
+      - item in _authorized_keys.stdout
+    fail_msg: "Key not found in authorized_keys after write: {{ item }}"
+    quiet: true
+  loop: "{{ admin_ssh_public_keys }}"

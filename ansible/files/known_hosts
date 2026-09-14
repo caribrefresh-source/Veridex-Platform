@@ -1,0 +1,25 @@
+# Recorded host-key baseline for Gate 1 (G01-C4: host keys match recorded
+# fingerprints). Committed and version-controlled instead of relying on each
+# operator's own ~/.ssh/known_hosts, which is per-machine and not
+# reproducible.
+#
+# Captured via `ssh-keyscan -t ed25519` 2026-09-13 from this operator
+# session over each node's public IP. No independent out-of-band source
+# (e.g. netcup's provisioning email) was available to this session to cross
+# check against, so this capture is trust-on-first-use, not independently
+# verified -- disclosed here rather than presented as confirmed. If a node
+# is ever reinstalled, its line here must be re-captured deliberately, not
+# silently overwritten by a passing connection.
+#
+# SHA256 fingerprints at capture time (for human comparison, not consumed by
+# Ansible/ssh):
+#   veridex-server-1 (152.53.177.26): SHA256:WYa/X7IYxO18A32FT/uKIhVLk3AeSOfkdJ8TiposhEI
+#   veridex-server-2 (152.53.140.210): SHA256:oT0EwO+rMqiKx85QT72+1w0+/0U95//45OKkpwZJG0o
+#   veridex-server-3 (152.53.142.131): SHA256:ZKdeTrOJVVSSoxC3n/E4yltUyVmDr6QR61dhDdgT7zQ
+#   veridex-agent-1 (159.195.197.136): SHA256:tiGYnRKWY5eW81/YCs4lKDxo9rBMxTrzPpGQes3J9cg
+#   veridex-agent-2 (159.195.197.40): SHA256:MazHL7ITGXiCT39lsAy3yseD4mZArNZt889SI1jd44Y
+152.53.177.26 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKTi+64sPNZu5CrIvSWShoWlMPvbKZJIJ88dH5UX44qJ
+152.53.140.210 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHyaf5djwks5cbzlKr9/AiPaMXE5fVali3g8gxFtBEci
+152.53.142.131 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIO9pIy9q9CSH8/nhineKkH8uSrQxTkKuENMt/+mt/B6p
+159.195.197.136 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGEwtFbO3y/VygSc4cfq8hV2RnwlQM5Tn3Iq5VpeRMx+
+159.195.197.40 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDMmuscxcK2NMzsg1npgcwvE2ndJ8IDZjvewjrkgHPcI

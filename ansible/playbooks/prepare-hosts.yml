@@ -4,4 +4,9 @@
   become: true
   roles:
     - common
+    - chrony
+    # ssh-access before ssh-hardening: the break-glass key must already be
+    # installed before root login is tightened, not after.
+    - ssh-access
+    - ssh-hardening
     - firewall

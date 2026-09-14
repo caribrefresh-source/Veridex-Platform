@@ -322,3 +322,20 @@ longhorn_data_locality: "best-effort"
 #
 # Preflight: `longhornctl check preflight` validates node prerequisites and
 # is the natural gate before installing the chart.
+
+# =============================================================================
+# SSH access (Gate 1)
+# =============================================================================
+# Administrative SSH public keys authorized for root on every node. Managed
+# declaratively by roles/ssh-access (full-file render, not an append), so
+# this list -- not whatever happens to already be in
+# /root/.ssh/authorized_keys -- is the single source of truth. Public keys
+# only; the matching private keys are never committed (docs/security/secret-register.yml).
+#
+# Verified live 2026-09-13: only the first key below was present, installed
+# by netcup's provisioning API at image time. A single key with no fallback
+# is the unrecoverable state Gate 1 G01-C5 requires closing -- the second
+# (break-glass) key exists only for that purpose and is not used routinely.
+admin_ssh_public_keys:
+  - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBA7DycmfVL0xn6PmaeNRF9WMbxj6TEwTsT4wnRjc2JQ veridex-netcup-prod 2026-09-12"
+  - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICkVHpa5QDvDNtnuypS2JjSik58cRomRqU6EQ/ci8ljD veridex-breakglass-20260913"

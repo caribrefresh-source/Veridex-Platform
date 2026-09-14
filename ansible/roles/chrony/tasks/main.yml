@@ -1,0 +1,50 @@
+---
+# chrony role tasks
+#
+# Gate 1 (Operating systems and access) requires time synchronization to be
+# healthy; Gate 4's embedded etcd needs bounded clock skew across all three
+# voters. Verified live 2026-09-13: `chronyc` was absent -- command not
+# found -- on all five nodes; nothing installed or configured an NTP client
+# before this role.
+
+- name: Install chrony
+  ansible.builtin.apt:
+    name: chrony
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Render pinned chrony configuration
+  ansible.builtin.template:
+    src: chrony.conf.j2
+    dest: /etc/chrony/chrony.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart chrony
+
+- name: Ensure chrony is enabled and running
+  ansible.builtin.systemd:
+    name: chrony
+    enabled: true
+    state: started
+
+- name: Flush handlers so a config change is applied before verification
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for chrony to reach a synchronized source (bounded, not a sleep)
+  ansible.builtin.command:
+    cmd: "chronyc waitsync {{ chrony_waitsync_max_tries }} {{ chrony_max_offset_seconds }}"
+  register: _chrony_waitsync
+  changed_when: false
+  failed_when: false
+
+- name: Assert chrony reports a synchronized source
+  ansible.builtin.assert:
+    that:
+      - _chrony_waitsync.rc == 0
+    fail_msg: >-
+      chrony did not reach a synchronized time source within the wait budget
+      on {{ inventory_hostname }}. rc={{ _chrony_waitsync.rc }}:
+      {{ _chrony_waitsync.stdout }} {{ _chrony_waitsync.stderr }}
+    quiet: true

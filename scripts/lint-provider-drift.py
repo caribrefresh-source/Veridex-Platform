@@ -26,14 +26,17 @@ manifest that uses it. So this scans every file Git tracks.
 
 What it does NOT flag
 ---------------------
-Prose that names Hetzner, outside .claude/. The rules match provider-specific
-values and old-cluster identity, not the word, so explaining why netcup differs
-never fails the build. Inside .claude/ -- agent and operator instructions --
-the word itself is an error: an instruction there is a dependency.
+Prose that names the old provider, outside agent instruction files. The rules
+match provider-specific values and old-cluster identity, not the word, so
+explaining why netcup differs never fails the build. Agent instruction files --
+anything under a .claude/ directory, and files named CLAUDE.md, AGENTS.md or
+GEMINI.md -- are different: the provider's name itself is an error there, and
+nothing in them is skipped as a comment, because an agent follows every line.
 
-Comment-only lines are skipped in code and configuration: lines starting with
-a hash or a double slash, and a line that is entirely one HTML comment. In
-Markdown a line starting with a hash is a heading, and it is scanned.
+Elsewhere, comment-only lines are skipped in code and configuration: lines
+starting with a hash or a double slash, and a line that is entirely one HTML
+comment. In Markdown a line starting with a hash is a heading, and it is
+scanned.
 
 How text is read
 ----------------
@@ -44,18 +47,22 @@ tools may still read it as text. Backslash-newline continuations are joined.
 Each line is NFKC-normalized, dash punctuation is folded to a hyphen, dot
 look-alikes to a full stop, and invisible format characters are removed. YAML
 files are also parsed and every scalar is scanned after YAML unescaping, so an
-escape sequence cannot hide a value.
+escape sequence cannot hide a value; aliases are followed once, so a
+self-referencing document cannot hang the scan. Hostname rules are anchored to
+label boundaries so a long line scans in linear time.
 
 Labelling exceptions
 --------------------
-One line: provider-drift-ok, a colon, then a reason of at least three words, in
-any comment syntax. Every suppression is printed with its reason and counted.
+One line: provider-drift-ok, a colon, then a reason of at least three distinct
+words, in any comment syntax. Every suppression is printed with every token it
+hides -- including values found only by the YAML scan -- and counted.
 
-Historical records: a file named .provider-drift-historical, containing the
-reason, marks its directory tree historical. Findings there are reported as
-HISTORICAL and never fail the build. Markers are honoured only under docs/; a
-marker anywhere else is an ERROR, because labelling live configuration
-historical would silence this check.
+Historical records: a file named .provider-drift-historical, containing a
+reason of at least three distinct words, marks its directory tree historical.
+Findings there are reported as HISTORICAL and never fail the build. Markers are
+honoured only in the directories listed in HISTORICAL_DIRS; anywhere else a
+marker is an ERROR, because labelling live configuration or runbooks historical
+would silence this check.
 
 This file's own rule table sits between the BEGIN and END provider-drift rules
 comments; only those lines are exempt when the linter scans itself.
@@ -73,6 +80,7 @@ import re
 import subprocess
 import sys
 import unicodedata
+from collections.abc import Callable
 from pathlib import Path, PurePosixPath
 
 import yaml
@@ -82,7 +90,8 @@ RULES_BEGIN = "# BEGIN provider-drift rules"
 RULES_END = "# END provider-drift rules"
 
 HISTORICAL_MARKER = ".provider-drift-historical"
-HISTORICAL_ROOT = "docs/"
+HISTORICAL_DIRS = ("docs/evidence/legacy/",)
+AGENT_INSTRUCTION_FILES = ("CLAUDE.md", "AGENTS.md", "GEMINI.md")
 SUPPRESS = re.compile(r"provider-drift-ok:(.*)")
 COMMENT_CLOSERS = re.compile(r"(-->|\*/)\s*$")
 MIN_REASON_WORDS = 3
@@ -111,17 +120,32 @@ EXTRA_DASHES = frozenset({0x2212, 0x2043})
 DOT_LOOKALIKES = frozenset({0x3002, 0xFF61, 0xFE52, 0x2024, 0x0701, 0x0702})
 
 
+def is_agent_instructions(rel: str) -> bool:
+    """Files an AI agent or operator follows line by line."""
+    return (
+        rel.startswith(".claude/")
+        or "/.claude/" in rel
+        or PurePosixPath(rel).name in AGENT_INSTRUCTION_FILES
+    )
+
+
 # BEGIN provider-drift rules
-# (severity, pattern, explanation, path prefixes the rule is limited to or None)
+# (severity, pattern, explanation, predicate limiting the files it applies to, or None)
 # Ordered most specific first: a later rule's match that overlaps an earlier
-# match on the same line is not reported again.
-RULES: list[tuple[str, re.Pattern, str, tuple[str, ...] | None]] = [
+# match on the same line is not reported again. Hostname prefixes are anchored
+# to label boundaries and bounded, so no rule backtracks quadratically.
+HCLOUD_SUBCOMMANDS = (
+    r"(?:server-type|server|network|volume|load-balancer-type|load-balancer|context|firewall"
+    r"|image|iso|ssh-key|floating-ip|primary-ip|certificate|datacenter|location"
+    r"|placement-group|all|zone|config)"
+)
+RULES: list[tuple[str, re.Pattern, str, Callable[[str], bool] | None]] = [
     ("ERROR", re.compile(r"caribrefresh-source/k3s-ha\b", re.IGNORECASE),
      "K3s-HA repository -- the netcup platform's source of truth is "
      "caribrefresh-source/Veridex-Platform", None),
     ("ERROR", re.compile(r"\bk3s-ha-(?:server|agent)-\d+", re.IGNORECASE),
      "Hetzner node name -- netcup nodes are veridex-server-N / veridex-agent-N", None),
-    ("ERROR", re.compile(r"(?:\*|\b[a-z0-9-]+)\.entrepeai\.com\b", re.IGNORECASE),
+    ("ERROR", re.compile(r"(?:\*|(?<![a-z0-9-])[a-z0-9-]{1,253})\.entrepeai\.com\b", re.IGNORECASE),
      "entrepeai.com hostname -- resolves through Hetzner DNS to the K3s-HA "
      "cluster; platform hostnames live under veridexeai.com", None),
     ("ERROR", re.compile(r"(?<![a-z0-9])k3s-ha\b", re.IGNORECASE),
@@ -134,18 +158,23 @@ RULES: list[tuple[str, re.Pattern, str, tuple[str, ...] | None]] = [
     ("ERROR", re.compile(r"your-objectstorage\.com", re.IGNORECASE),
      "Hetzner Object Storage endpoint -- backups go to Wasabi; no Hetzner "
      "bucket may be required by production or recovery", None),
-    ("ERROR", re.compile(r"\b(?:[a-z0-9-]+\.)*(?:hetzner\.(?:com|de|cloud)|your-server\.de)\b", re.IGNORECASE),
-     "Hetzner hostname (API, DNS, nameserver, console, robot, charts) -- no "
-     "netcup dependency on it", None),
+    ("ERROR", re.compile(
+        r"(?<![a-z0-9.-])(?:[a-z0-9-]{1,63}\.){0,10}"
+        r"(?:hetzner\.(?:com|de|cloud)|your-server\.de|your-storagebox\.de)\b", re.IGNORECASE),
+     "Hetzner hostname (API, DNS, nameserver, console, robot, charts, storage "
+     "box) -- no netcup dependency on it", None),
+    ("ERROR", re.compile(r"\bhetzner\.hcloud\b", re.IGNORECASE),
+     "Hetzner Cloud Ansible collection or inventory plugin -- no netcup equivalent", None),
     ("ERROR", re.compile(r"\bhcloud-volumes\b"),
      "Hetzner StorageClass name -- does not exist on netcup", None),
     ("ERROR", re.compile(r"\bhcloud_[a-z][a-z0-9_]*"),
      "Hetzner Cloud variable or Terraform resource -- no netcup equivalent", None),
-    ("ERROR", re.compile(r"\b(?:HCLOUD|HETZNER)_[A-Z0-9_]+|hetznercloud/hcloud"),
+    ("ERROR", re.compile(
+        r"\b(?:HCLOUD|HETZNER)_[A-Z0-9_]+|hetznercloud/hcloud|\bhetzner(?:_|cloud)[a-z0-9_]*", re.IGNORECASE),
      "Hetzner credential, variable or Terraform provider -- no netcup equivalent", None),
     ("ERROR", re.compile(
-        r"\bhcloud\s+(?:server|network|volume|load-balancer|context|firewall|image|ssh-key"
-        r"|floating-ip|primary-ip|certificate|datacenter|location|placement-group)\b"),
+        r"\bhcloud(?:\s+--?[a-z][\w-]*(?:[=\s]+(?!" + HCLOUD_SUBCOMMANDS + r"\b)[^\s-]\S*)?){0,8}\s+"
+        + HCLOUD_SUBCOMMANDS + r"\b"),
      "Hetzner Cloud CLI command -- no netcup equivalent", None),
     ("ERROR", re.compile(r"\binventory/hcloud\b|plugin:\s*hcloud"),
      "Hetzner inventory -- netcup's inventory is ansible/inventory/production/hosts.yml", None),
@@ -156,9 +185,9 @@ RULES: list[tuple[str, re.Pattern, str, tuple[str, ...] | None]] = [
      "Hetzner private network (10.1.0.0/16) -- netcup uses 10.2.0.0/16", None),
     ("ERROR", re.compile(r"\b(?:nbg1|fsn1|hel1)\b|\blocation\s*[:=]\s*[\"']?(?:ash|hil|sin)\b", re.IGNORECASE),
      "Hetzner datacenter location -- netcup uses site id 1 (Nuremberg)", None),
-    ("ERROR", re.compile(r"\bHetzner\b", re.IGNORECASE),
-     "Hetzner named in agent or operator instructions -- nothing in .claude/ "
-     "may reference Hetzner; move history to docs/ under a historical marker", (".claude/",)),
+    ("ERROR", re.compile(r"hetzner", re.IGNORECASE),
+     "Hetzner named in agent instructions -- nothing an agent follows may "
+     "reference Hetzner; move history to docs/evidence/legacy/", is_agent_instructions),
 
     # Context-dependent: only drift if the cluster keeps distinct pod/service
     # CIDRs. Pending that decision these report without failing.
@@ -258,15 +287,16 @@ def suppression(line: str) -> tuple[bool, str]:
 
 
 def reason_is_real(reason: str) -> bool:
-    return len(re.findall(r"[A-Za-z0-9]+", reason)) >= MIN_REASON_WORDS
+    """At least three distinct words of two or more letters."""
+    return len({word.lower() for word in re.findall(r"[A-Za-z]{2,}", reason)}) >= MIN_REASON_WORDS
 
 
 def match_rules(text: str, rel: str) -> list[tuple[str, str, str]]:
     normalized = normalize(text)
     taken: list[tuple[int, int]] = []
     hits = []
-    for severity, pattern, why, scope in RULES:
-        if scope and not rel.startswith(scope):
+    for severity, pattern, why, applies in RULES:
+        if applies and not applies(rel):
             continue
         for match in pattern.finditer(normalized):
             start, end = match.span()
@@ -288,24 +318,29 @@ def rule_table_lines(text: str) -> set[int]:
 
 
 def scan_text(text: str, rel: str, exempt: set[int]):
+    """Return (findings, suppressions) where suppressions maps line -> (reason, tokens)."""
     findings: list[tuple[int, str, str, str]] = []
-    suppressions: list[tuple[int, str, list[str]]] = []
+    suppressions: dict[int, tuple[str, list[str]]] = {}
+    skip_comments = not is_agent_instructions(rel)
     for lineno, raw in logical_lines(text):
         if lineno in exempt:
             continue
         stripped = raw.strip()
-        if not stripped or is_comment_only(stripped, rel):
+        if not stripped or (skip_comments and is_comment_only(stripped, rel)):
             continue
+        present, reason = suppression(raw)
+        valid = present and reason_is_real(reason)
+        if valid:
+            suppressions[lineno] = (reason, [])
         hits = match_rules(raw, rel)
         if not hits:
             continue
-        present, reason = suppression(raw)
-        if present and reason_is_real(reason):
-            suppressions.append((lineno, reason, [token for _, token, _ in hits]))
+        if valid:
+            suppressions[lineno][1].extend(token for _, token, _ in hits)
             continue
         if present:
             findings.append((lineno, "ERROR", "provider-drift-ok",
-                             "suppression needs a reason of at least three words"))
+                             "suppression needs a reason of at least three distinct words"))
         for severity, token, why in hits:
             findings.append((lineno, severity, token, why))
     return findings, suppressions
@@ -315,12 +350,16 @@ def scan_yaml_values(text: str, rel: str) -> list[tuple[int, str, str, str]]:
     """Scan every YAML scalar after unescaping; invalid YAML is left to yamllint."""
     try:
         documents = [node for node in yaml.compose_all(text, Loader=yaml.SafeLoader) if node is not None]
-    except yaml.YAMLError:
+    except (yaml.YAMLError, RecursionError):
         return []
     findings = []
+    seen: set[int] = set()
     stack = list(documents)
     while stack:
         node = stack.pop()
+        if id(node) in seen:
+            continue
+        seen.add(id(node))
         if isinstance(node, yaml.ScalarNode):
             if isinstance(node.value, str):
                 for severity, token, why in match_rules(node.value, rel):
@@ -348,12 +387,12 @@ def main() -> int:
         if PurePosixPath(rel).name != HISTORICAL_MARKER:
             continue
         text, _ = read_text(root / rel, rel)
-        if not rel.startswith(HISTORICAL_ROOT):
-            print(f"ERROR: {rel}: historical marker outside {HISTORICAL_ROOT} -- "
-                  "live configuration cannot be labelled historical")
+        if not rel.startswith(HISTORICAL_DIRS):
+            print(f"ERROR: {rel}: historical marker outside {', '.join(HISTORICAL_DIRS)} -- "
+                  "live configuration and runbooks cannot be labelled historical")
             errors += 1
-        elif not (text or "").strip():
-            print(f"ERROR: {rel}: historical marker has no reason")
+        elif not reason_is_real(text or ""):
+            print(f"ERROR: {rel}: historical marker needs a reason of at least three distinct words")
             errors += 1
         else:
             historical_dirs.add(str(PurePosixPath(rel).parent))
@@ -377,11 +416,17 @@ def main() -> int:
         exempt = rule_table_lines(text) if path.resolve() == SELF else set()
         findings, suppressions = scan_text(text, rel, exempt)
         if rel.lower().endswith(YAML_SUFFIXES):
-            suppressed_lines = {lineno for lineno, _, _ in suppressions}
             seen = {(lineno, severity, token.lower()) for lineno, severity, token, _ in findings}
             for lineno, severity, token, why in scan_yaml_values(text, rel):
+                if lineno in exempt:
+                    continue
+                if lineno in suppressions:
+                    tokens = suppressions[lineno][1]
+                    if token not in tokens:
+                        tokens.append(token)
+                    continue
                 key = (lineno, severity, token.lower())
-                if lineno in exempt or lineno in suppressed_lines or key in seen:
+                if key in seen:
                     continue
                 seen.add(key)
                 findings.append((lineno, severity, token, why))
@@ -397,9 +442,10 @@ def main() -> int:
                 warns += 1
             else:
                 historical += 1
-        for lineno, reason, tokens in suppressions:
-            print(f"SUPPRESSED: {rel}:{lineno}: {', '.join(map(repr, tokens))} -- {reason}")
-            suppressed_total += 1
+        for lineno, (reason, tokens) in sorted(suppressions.items()):
+            if tokens:
+                print(f"SUPPRESSED: {rel}:{lineno}: {', '.join(map(repr, tokens))} -- {reason}")
+                suppressed_total += 1
 
     # A scan of nothing proves nothing. This happens when --root is wrong or
     # sits inside a Git repository that tracks none of its files.
@@ -414,7 +460,7 @@ def main() -> int:
     if errors or (args.strict and warns):
         print()
         print("Provider drift detected. Either fix the value for netcup, or add")
-        print("  provider-drift-ok: <a reason of at least three words>")
+        print("  provider-drift-ok: <a reason of at least three distinct words>")
         print("to the line if it is genuinely correct as written.")
         return 1
     print("No blocking provider drift.")

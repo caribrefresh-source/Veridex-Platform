@@ -1,0 +1,8 @@
+# Managed by Ansible (roles/host-prereqs). Do not edit by hand.
+#
+# Loaded at every boot so Cilium (overlay, br_netfilter, vxlan) and
+# Longhorn's V1/iSCSI engine (iscsi_tcp) have what they need without relying
+# on some other component happening to load them first.
+{% for m in host_prereq_modules %}
+{{ m }}
+{% endfor %}

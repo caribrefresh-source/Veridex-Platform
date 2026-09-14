@@ -9,8 +9,8 @@ Plan: `docs/Engineering Documents/Initial Stages Plan.txt`
 
 ## Position
 
-Last deliverable **D21**, last exit-gate check **EG13** (Gate 2, closed
-2026-09-14). The next closed gate starts at **D22** and **EG14**.
+Last deliverable **D24**, last exit-gate check **EG19** (Gate 3, closed
+2026-09-14). The next closed gate starts at **D25** and **EG20**.
 
 Evidence recorded before Revision 3 lives in `docs/evidence/legacy/`. It is not
 closure evidence; `docs/evidence/legacy/README.md` maps it to Revision 3 gates.
@@ -22,6 +22,7 @@ closure evidence; `docs/evidence/legacy/README.md` maps it to Revision 3 gates.
 | 0 | Repository and provider boundary | D1–D8 | EG1–EG4 | 2026-09-14 | `4ebc8de` | `82a1dd4` | repository `github.com/caribrefresh-source/Veridex-Platform` @ `82a1dd4` | `docs/evidence/gates/gate-00/closure.md` |
 | 1 | Operating systems and access | D9–D20 | EG5–EG9 | 2026-09-14 | `4ebc8de` | `3573063` | hosts veridex-server-1/2/3, veridex-agent-1/2 @ `3573063` (SSH host-key fingerprints in `ansible/files/known_hosts`) | `docs/evidence/gates/gate-01/closure.md` |
 | 2 | Private network | D21–D21 | EG10–EG13 | 2026-09-14 | `4ebc8de` | `5cb1beb` | hosts veridex-server-1/2/3, veridex-agent-1/2 @ `5cb1beb` (SSH host-key fingerprints in `ansible/files/known_hosts`) | `docs/evidence/gates/gate-02/closure.md` |
+| 3 | Host prerequisites and firewall | D22–D24 | EG14–EG19 | 2026-09-14 | `4ebc8de` | `a194cf6` | hosts veridex-server-1/2/3, veridex-agent-1/2 @ `a194cf6` (SSH host-key fingerprints in `ansible/files/known_hosts`) | `docs/evidence/gates/gate-03/closure.md` |
 
 ## Reopen log
 

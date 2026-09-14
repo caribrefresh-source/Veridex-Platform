@@ -36,7 +36,9 @@ nothing in them is skipped as a comment, because an agent follows every line.
 Elsewhere, comment-only lines are skipped in code and configuration: lines
 starting with a hash or a double slash, and a line that is entirely one HTML
 comment. In Markdown a line starting with a hash is a heading, and it is
-scanned.
+scanned. A comment line that ends in a backslash is not joined to the next
+line: in shell, Python and Dockerfiles a comment does not continue, so the next
+line is live and is scanned on its own.
 
 How text is read
 ----------------
@@ -90,7 +92,10 @@ RULES_BEGIN = "# BEGIN provider-drift rules"
 RULES_END = "# END provider-drift rules"
 
 HISTORICAL_MARKER = ".provider-drift-historical"
-HISTORICAL_DIRS = ("docs/evidence/legacy/",)
+# Only captured records may be labelled historical: pre-Revision-3 evidence, and
+# gate closure evidence, whose unedited command output quotes the findings it
+# records. Runbooks and configuration never qualify.
+HISTORICAL_DIRS = ("docs/evidence/legacy/", "docs/evidence/gates/")
 AGENT_INSTRUCTION_FILES = ("CLAUDE.md", "AGENTS.md", "GEMINI.md")
 SUPPRESS = re.compile(r"provider-drift-ok:(.*)")
 COMMENT_CLOSERS = re.compile(r"(-->|\*/)\s*$")
@@ -176,6 +181,15 @@ RULES: list[tuple[str, re.Pattern, str, Callable[[str], bool] | None]] = [
         r"\bhcloud(?:\s+--?[a-z][\w-]*(?:[=\s]+(?!" + HCLOUD_SUBCOMMANDS + r"\b)[^\s-]\S*)?){0,8}\s+"
         + HCLOUD_SUBCOMMANDS + r"\b"),
      "Hetzner Cloud CLI command -- no netcup equivalent", None),
+    ("ERROR", re.compile(
+        r"^\s*hcloud\s*(?:[=<>~!]=|[<>])|\b(?:from|import)\s+hcloud\b|\bpip3?\s+install\b[^\n]*\bhcloud\b"),
+     "Hetzner Cloud Python library -- no netcup equivalent", None),
+    ("ERROR", re.compile(r"\bhetzner-k3s\b", re.IGNORECASE),
+     "hetzner-k3s cluster tool -- builds clusters on Hetzner only", None),
+    ("ERROR", re.compile(r"(?:--provider[=\s]+|\bprovider\s*[:=]\s*[\"']?)hetzner\b", re.IGNORECASE),
+     "Hetzner selected as a provider -- netcup is the only compute provider", None),
+    ("ERROR", re.compile(r"\bsecretKeyRef\b[^\n]*\bname\s*:\s*[\"']?hcloud\b"),
+     "reference to the hcloud credential Secret -- no netcup equivalent", None),
     ("ERROR", re.compile(r"\binventory/hcloud\b|plugin:\s*hcloud"),
      "Hetzner inventory -- netcup's inventory is ansible/inventory/production/hosts.yml", None),
     ("ERROR", re.compile(r"cloud-provider=external"),
@@ -257,26 +271,37 @@ def normalize(line: str) -> str:
     return "".join(out)
 
 
-def logical_lines(text: str):
-    """Yield (first physical line number, line) with backslash-newline joined."""
-    lines = text.splitlines()
-    index = 0
-    while index < len(lines):
-        start = index
-        line = lines[index]
-        while line.endswith("\\") and index + 1 < len(lines):
-            index += 1
-            line = line[:-1] + lines[index]
-        yield start + 1, line
-        index += 1
-
-
 def is_comment_only(stripped: str, rel: str) -> bool:
     if stripped.startswith("<!--") and stripped.endswith("-->") and "-->" not in stripped[4:-3]:
         return True
     if rel.lower().endswith(MARKDOWN_SUFFIXES):
         return False
     return stripped.startswith(("#", "//"))
+
+
+def logical_lines(text: str, rel: str):
+    """Yield (first physical line number, line) with backslash-newline joined.
+
+    A comment-only line is never continued: in shell, Python and Dockerfiles a
+    trailing backslash inside a comment does not join the next line, so that
+    line is live code and must be scanned on its own.
+    """
+    lines = text.splitlines()
+    skip_comments = not is_agent_instructions(rel)
+    index = 0
+    while index < len(lines):
+        start = index
+        parts = [lines[index]]
+        while (
+            parts[-1].endswith("\\")
+            and index + 1 < len(lines)
+            and not (skip_comments and is_comment_only(parts[-1].strip(), rel))
+        ):
+            parts[-1] = parts[-1][:-1]
+            index += 1
+            parts.append(lines[index])
+        yield start + 1, "".join(parts)
+        index += 1
 
 
 def suppression(line: str) -> tuple[bool, str]:
@@ -322,7 +347,7 @@ def scan_text(text: str, rel: str, exempt: set[int]):
     findings: list[tuple[int, str, str, str]] = []
     suppressions: dict[int, tuple[str, list[str]]] = {}
     skip_comments = not is_agent_instructions(rel)
-    for lineno, raw in logical_lines(text):
+    for lineno, raw in logical_lines(text, rel):
         if lineno in exempt:
             continue
         stripped = raw.strip()

@@ -161,7 +161,7 @@ RULES: list[tuple[str, re.Pattern, str, Callable[[str], bool] | None]] = [
     ("ERROR", re.compile(r"load-balancer\.hetzner\.cloud", re.IGNORECASE),
      "Hetzner CCM LoadBalancer annotation -- netcup has no managed LB", None),
     ("ERROR", re.compile(r"your-objectstorage\.com", re.IGNORECASE),
-     "Hetzner Object Storage endpoint -- backups go to Wasabi; no Hetzner "
+     "Hetzner Object Storage endpoint -- backups go to Backblaze B2; no Hetzner "
      "bucket may be required by production or recovery", None),
     ("ERROR", re.compile(
         r"(?<![a-z0-9.-])(?:[a-z0-9-]{1,63}\.){0,10}"

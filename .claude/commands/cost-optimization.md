@@ -69,7 +69,7 @@ print(f'External flows sampled: {count}')
 
 ## 8. MinIO vs S3 Trade-off
 Planned: self-hosted MinIO on direct local storage (`minio-local`, plan Gate 26), never Longhorn. Not yet deployed.
-Off-cluster copies: backups and archives go to Wasabi (plan Gates 17-21); for WAL and etcd snapshots, include Wasabi's minimum-storage-duration charge (plan Gate 18).
+Off-cluster copies: backups and archives go to Backblaze B2 (plan Gates 17-21). B2 bills per byte-hour with no minimum storage duration, so frequent pruning of WAL and etcd snapshots is cheap; the cost to watch is egress during a full restore, which is free only up to 3x average monthly storage, plus per-class transaction charges (plan Gate 18).
 
 ## Report
 Node utilization summary, waste candidates, KEDA scale-to-zero confirmation, storage cost comparison.

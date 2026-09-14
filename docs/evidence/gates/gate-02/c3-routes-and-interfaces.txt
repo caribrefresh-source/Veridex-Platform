@@ -1,0 +1,146 @@
+gate: 2
+check: G02-C3
+captured_utc: 2026-09-14T03:46:35Z
+repo_commit: 5cb1bebad43f3df8ee4e3a3b1cfa2408f5434354
+plan_commit: 4ebc8def34df78a0bc6b29e42656986ef987f4c9
+plan_sha256: 42eaac5e61d177430ce8e331767d2137b3f9b2bd197e13945b84f7c5e8cd79c7
+target_identity: hosts veridex-server-1 (152.53.177.26), veridex-server-2 (152.53.140.210), veridex-server-3 (152.53.142.131), veridex-agent-1 (159.195.197.136), veridex-agent-2 (159.195.197.40); host-key fingerprints match ansible/files/known_hosts
+captured_by: agent
+command: for ip in <5 nodes>: ssh root@$ip 'ip -4 addr show eth0; ip -4 addr show eth1; ip route; ip -d link show eth1'
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: Confirms each node's own routing table is unambiguous (eth0 owns the public /22 and default route; eth1 owns exactly 10.2.0.0/16, scope link, no gateway) -- does not inspect netcup's underlying vLAN switch/hypervisor routing, which is outside this repo's control.
+--- unedited output ---
+=== veridex-server-1 (152.53.177.26) ===
+-- ip -4 addr (eth0, eth1) --
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP group default qlen 1000
+    altname enp0s3
+    altname ens3
+    inet 152.53.177.26/22 brd 152.53.179.255 scope global eth0
+       valid_lft forever preferred_lft forever
+3: eth1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP group default qlen 1000
+    altname enp0s4
+    altname ens4
+    inet 10.2.1.10/16 brd 10.2.255.255 scope global eth1
+       valid_lft forever preferred_lft forever
+-- ip route --
+default via 152.53.176.1 dev eth0 proto static 
+10.2.0.0/16 dev eth1 proto kernel scope link src 10.2.1.10 
+10.44.0.0/24 via 10.44.0.67 dev cilium_host proto kernel src 10.44.0.67 
+10.44.0.67 dev cilium_host proto kernel scope link 
+10.44.1.0/24 via 10.44.0.67 dev cilium_host proto kernel src 10.44.0.67 mtu 1355 
+10.44.2.0/24 via 10.44.0.67 dev cilium_host proto kernel src 10.44.0.67 mtu 1355 
+10.44.3.0/24 via 10.44.0.67 dev cilium_host proto kernel src 10.44.0.67 mtu 1355 
+10.44.4.0/24 via 10.44.0.67 dev cilium_host proto kernel src 10.44.0.67 mtu 1355 
+152.53.176.0/22 dev eth0 proto kernel scope link src 152.53.177.26 
+-- eth1 mtu --
+mtu 1500
+mtu 68
+mtu 65535
+=== veridex-server-2 (152.53.140.210) ===
+-- ip -4 addr (eth0, eth1) --
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP group default qlen 1000
+    altname enp0s3
+    altname ens3
+    inet 152.53.140.210/22 brd 152.53.143.255 scope global eth0
+       valid_lft forever preferred_lft forever
+3: eth1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP group default qlen 1000
+    altname enp0s4
+    altname ens4
+    inet 10.2.1.11/16 brd 10.2.255.255 scope global eth1
+       valid_lft forever preferred_lft forever
+    inet 10.2.0.100/32 scope global deprecated eth1
+       valid_lft forever preferred_lft forever
+-- ip route --
+default via 152.53.140.1 dev eth0 proto static 
+10.2.0.0/16 dev eth1 proto kernel scope link src 10.2.1.11 
+10.44.0.0/24 via 10.44.2.41 dev cilium_host proto kernel src 10.44.2.41 mtu 1355 
+10.44.1.0/24 via 10.44.2.41 dev cilium_host proto kernel src 10.44.2.41 mtu 1355 
+10.44.2.0/24 via 10.44.2.41 dev cilium_host proto kernel src 10.44.2.41 
+10.44.2.41 dev cilium_host proto kernel scope link 
+10.44.3.0/24 via 10.44.2.41 dev cilium_host proto kernel src 10.44.2.41 mtu 1355 
+10.44.4.0/24 via 10.44.2.41 dev cilium_host proto kernel src 10.44.2.41 mtu 1355 
+152.53.140.0/22 dev eth0 proto kernel scope link src 152.53.140.210 
+-- eth1 mtu --
+mtu 1500
+mtu 68
+mtu 65535
+=== veridex-server-3 (152.53.142.131) ===
+-- ip -4 addr (eth0, eth1) --
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP group default qlen 1000
+    altname enp0s3
+    altname ens3
+    inet 152.53.142.131/22 brd 152.53.143.255 scope global eth0
+       valid_lft forever preferred_lft forever
+3: eth1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP group default qlen 1000
+    altname enp0s4
+    altname ens4
+    inet 10.2.1.12/16 brd 10.2.255.255 scope global eth1
+       valid_lft forever preferred_lft forever
+-- ip route --
+default via 152.53.140.1 dev eth0 proto static 
+10.2.0.0/16 dev eth1 proto kernel scope link src 10.2.1.12 
+10.44.0.0/24 via 10.44.1.210 dev cilium_host proto kernel src 10.44.1.210 mtu 1355 
+10.44.1.0/24 via 10.44.1.210 dev cilium_host proto kernel src 10.44.1.210 
+10.44.1.210 dev cilium_host proto kernel scope link 
+10.44.2.0/24 via 10.44.1.210 dev cilium_host proto kernel src 10.44.1.210 mtu 1355 
+10.44.3.0/24 via 10.44.1.210 dev cilium_host proto kernel src 10.44.1.210 mtu 1355 
+10.44.4.0/24 via 10.44.1.210 dev cilium_host proto kernel src 10.44.1.210 mtu 1355 
+152.53.140.0/22 dev eth0 proto kernel scope link src 152.53.142.131 
+-- eth1 mtu --
+mtu 1500
+mtu 68
+mtu 65535
+=== veridex-agent-1 (159.195.197.136) ===
+-- ip -4 addr (eth0, eth1) --
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP group default qlen 1000
+    altname enp0s3
+    altname ens3
+    inet 159.195.197.136/22 brd 159.195.199.255 scope global eth0
+       valid_lft forever preferred_lft forever
+3: eth1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP group default qlen 1000
+    altname enp0s4
+    altname ens4
+    inet 10.2.1.100/16 brd 10.2.255.255 scope global eth1
+       valid_lft forever preferred_lft forever
+-- ip route --
+default via 159.195.196.1 dev eth0 proto static 
+10.2.0.0/16 dev eth1 proto kernel scope link src 10.2.1.100 
+10.44.0.0/24 via 10.44.4.103 dev cilium_host proto kernel src 10.44.4.103 mtu 1355 
+10.44.1.0/24 via 10.44.4.103 dev cilium_host proto kernel src 10.44.4.103 mtu 1355 
+10.44.2.0/24 via 10.44.4.103 dev cilium_host proto kernel src 10.44.4.103 mtu 1355 
+10.44.3.0/24 via 10.44.4.103 dev cilium_host proto kernel src 10.44.4.103 mtu 1355 
+10.44.4.0/24 via 10.44.4.103 dev cilium_host proto kernel src 10.44.4.103 
+10.44.4.103 dev cilium_host proto kernel scope link 
+159.195.196.0/22 dev eth0 proto kernel scope link src 159.195.197.136 
+-- eth1 mtu --
+mtu 1500
+mtu 68
+mtu 65535
+=== veridex-agent-2 (159.195.197.40) ===
+-- ip -4 addr (eth0, eth1) --
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP group default qlen 1000
+    altname enp0s3
+    altname ens3
+    inet 159.195.197.40/22 brd 159.195.199.255 scope global eth0
+       valid_lft forever preferred_lft forever
+3: eth1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP group default qlen 1000
+    altname enp0s4
+    altname ens4
+    inet 10.2.1.101/16 brd 10.2.255.255 scope global eth1
+       valid_lft forever preferred_lft forever
+-- ip route --
+default via 159.195.196.1 dev eth0 proto static 
+10.2.0.0/16 dev eth1 proto kernel scope link src 10.2.1.101 
+10.44.0.0/24 via 10.44.3.7 dev cilium_host proto kernel src 10.44.3.7 mtu 1355 
+10.44.1.0/24 via 10.44.3.7 dev cilium_host proto kernel src 10.44.3.7 mtu 1355 
+10.44.2.0/24 via 10.44.3.7 dev cilium_host proto kernel src 10.44.3.7 mtu 1355 
+10.44.3.0/24 via 10.44.3.7 dev cilium_host proto kernel src 10.44.3.7 
+10.44.3.7 dev cilium_host proto kernel scope link 
+10.44.4.0/24 via 10.44.3.7 dev cilium_host proto kernel src 10.44.3.7 mtu 1355 
+159.195.196.0/22 dev eth0 proto kernel scope link src 159.195.197.40 
+-- eth1 mtu --
+mtu 1500
+mtu 68
+mtu 65535

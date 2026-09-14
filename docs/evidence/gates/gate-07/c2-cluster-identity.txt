@@ -1,0 +1,92 @@
+gate: 7
+check: G07-C2
+captured_utc: 2026-09-14T20:36:28Z
+repo_commit: a4d5223e1856efe45ce7f59144ae73597624f4c1
+plan_commit: uncommitted (working copy differs from HEAD 4ebc8def34df78a0bc6b29e42656986ef987f4c9 -- see closure.md Known Limitations)
+plan_sha256: a32ea3fbfc2c69aeb06346ad7d251e9df14e54c5302259b739be5df871665a0c
+target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API server https://10.2.0.100:6443 (private VIP); hosts veridex-server-1/2/3, veridex-agent-1/2
+captured_by: agent
+command: ansible-playbook ... verify-cluster.yml -e verify_cluster_expected_kube_system_uid=deadbeef-... --limit veridex-server-1 ; and the same override with --tags gate4 --limit veridex-server-1 (isolated-tag regression check)
+exit_status: 2
+proof_class: live
+result: PASS
+limitations: Two sub-tests: (1) a full run with a deliberately wrong expected cluster UID; (2) the same wrong UID with --tags gate4, to prove the identity check cannot be bypassed by the gate-isolation tag mode (this was a real gap found and fixed during this gate's hardening loop -- see closure.md 7.2). Both fail closed at the identity assert, before any other check runs.
+--- unedited output ---
+
+=== sub-test 1: full run, wrong UID ===
+=== c2-neg-identity === 2026-09-14T20:36:28Z
+repo_commit: a4d5223e1856efe45ce7f59144ae73597624f4c1
+[WARNING]: Ansible is being run in a world writable directory (/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible), ignoring it as an ansible.cfg source. For more information see https://docs.ansible.com/ansible/devel/reference_appendices/config.html#cfg-in-world-writable-dir
+
+PLAY [Verify cluster health] ***************************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Load variable defaults owned by the roles this gate verifies] ***
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../host-prereqs/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../firewall/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../k3s-server/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../cilium/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../coredns/defaults/main.yml)
+
+TASK [verify-cluster : Identify the bootstrap server] **************************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Read the live kube-system namespace UID] ****************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Assert the live cluster matches the recorded target identity] ***
+[ERROR]: Task failed: Action failed: kube-system namespace UID is d7d8a462-c503-49ed-a1e0-899f372f9465, expected deadbeef-0000-0000-0000-000000000000 (ansible/inventory/production/group_vars/all.yml). Refusing to proceed against a cluster this playbook cannot positively identify.
+Origin: /mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/tasks/main.yml:58:3
+
+56   tags: [always]
+57
+58 - name: Assert the live cluster matches the recorded target identity
+     ^ column 3
+
+fatal: [veridex-server-1]: FAILED! => {"assertion": "_kube_system_uid.stdout == verify_cluster_expected_kube_system_uid", "changed": false, "evaluated_to": false, "msg": "kube-system namespace UID is d7d8a462-c503-49ed-a1e0-899f372f9465, expected deadbeef-0000-0000-0000-000000000000 (ansible/inventory/production/group_vars/all.yml). Refusing to proceed against a cluster this playbook cannot positively identify."}
+
+PLAY RECAP *********************************************************************
+veridex-server-1           : ok=4    changed=0    unreachable=0    failed=1    skipped=0    rescued=0    ignored=0   
+
+EXIT_STATUS=2
+
+=== sub-test 2: --tags gate4, wrong UID (isolated-tag regression check) ===
+=== c2-neg-identity-isolated-gate4 === 2026-09-14T20:36:38Z
+repo_commit: a4d5223e1856efe45ce7f59144ae73597624f4c1
+[WARNING]: Ansible is being run in a world writable directory (/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible), ignoring it as an ansible.cfg source. For more information see https://docs.ansible.com/ansible/devel/reference_appendices/config.html#cfg-in-world-writable-dir
+
+PLAY [Verify cluster health] ***************************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Load variable defaults owned by the roles this gate verifies] ***
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../host-prereqs/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../firewall/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../k3s-server/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../cilium/defaults/main.yml)
+ok: [veridex-server-1] => (item=/mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/../coredns/defaults/main.yml)
+
+TASK [verify-cluster : Identify the bootstrap server] **************************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Read the live kube-system namespace UID] ****************
+ok: [veridex-server-1]
+
+TASK [verify-cluster : Assert the live cluster matches the recorded target identity] ***
+[ERROR]: Task failed: Action failed: kube-system namespace UID is d7d8a462-c503-49ed-a1e0-899f372f9465, expected deadbeef-0000-0000-0000-000000000000 (ansible/inventory/production/group_vars/all.yml). Refusing to proceed against a cluster this playbook cannot positively identify.
+Origin: /mnt/c/Users/Daniel/Documents/Veridex-Platform/ansible/roles/verify-cluster/tasks/main.yml:58:3
+
+56   tags: [always]
+57
+58 - name: Assert the live cluster matches the recorded target identity
+     ^ column 3
+
+fatal: [veridex-server-1]: FAILED! => {"assertion": "_kube_system_uid.stdout == verify_cluster_expected_kube_system_uid", "changed": false, "evaluated_to": false, "msg": "kube-system namespace UID is d7d8a462-c503-49ed-a1e0-899f372f9465, expected deadbeef-0000-0000-0000-000000000000 (ansible/inventory/production/group_vars/all.yml). Refusing to proceed against a cluster this playbook cannot positively identify."}
+
+PLAY RECAP *********************************************************************
+veridex-server-1           : ok=4    changed=0    unreachable=0    failed=1    skipped=0    rescued=0    ignored=0   
+
+EXIT_STATUS=2

@@ -5,9 +5,9 @@ Revision 3 (consolidated) · 13 September 2026 · Gate‑based structure, backup
 
 Five netcup nodes, idempotent Ansible bootstrap, Argo CD GitOps after hand‑over. No Hetzner dependency anywhere in production or disaster recovery. Backup and recovery run on Wasabi, S3‑compatible object storage. Object storage is one distributed MinIO deployment of four server pods across four failure domains. Network policy promotes namespace by namespace. Recovery objectives are measured per subsystem, never as one combined figure.
 
-32
-gates, 0–31
-15
+36
+gates, 0–35
+19
 new gates this revision
 14
 operational items still to schedule
@@ -30,6 +30,8 @@ Network policy is applied generically to every namespace.	Network policy is prom
 Recovery is summarized as one ≤30‑minute RTO and ≤1‑hour RPO.	Recovery objectives are measured separately per subsystem (Recovery objectives and proof); no combined figure is accepted (Gate 29).
 Changed this revision — backup destination
 The backup destination changes from Google Cloud Storage to Wasabi (S3‑compatible object storage). This resolves Gate 21 rather than complicating it: Wasabi has no Workload Identity concept and no GKE‑specific credential path to route around — every producer authenticates with a plain scoped access‑key/secret‑key pair, the same mechanism regardless of where it runs. Gates 17, 18, 19, 20, 21, 25, 26, 30 and 31 are rewritten below for Wasabi's terms (Object Lock instead of Bucket Lock, a Wasabi account instead of a Google Cloud project, S3 IAM policies instead of Cloud IAM). Gates 22–24 and 27–29 are backup‑destination‑agnostic and are unchanged.
+Amended 13 September 2026 — gap closure: network policy and namespace articulation
+Four gaps found in review of this document's network‑policy and identity content and of Gate 29 — unresolved namespace naming, the Wave 5/Wave 6 NATS‑Temporal overlap, thin per‑namespace Kubernetes RBAC, and an undeclared tenant‑to‑namespace model — are closed by new Gates 32–35 (Part D). This is still Revision 3; the amendment adds gates and cross‑references only and changes no decision already recorded for Gates 0–31. Source: docs/Engineering Documents/Gap Closure Plan — Network Policy.txt, whose four phases this amendment incorporates. That source document is superseded by this amendment and is retained only for provenance. Gates 32–35 follow this plan's own convention of not pre‑assigning deliverable (D) or exit‑gate (EG) numbers in gate text — the gate ledger (docs/evidence/gate-ledger.md) assigns those cumulatively, only when a gate reaches PASS, continuing from its recorded position at that time.
 
 Highest‑priority unresolved issue
 Proving each producer's actual path to Wasabi against its exact pinned version. Wasabi is a first‑party S3‑compatible endpoint, not a cross‑cloud interoperability workaround, so the protocol risk that existed under GCS mostly disappears — CloudNativePG, Longhorn and k3s etcd all have native, documented S3‑compatible backup‑target support. What is not yet proven is Wasabi‑specific behavior under this exact stack: multipart limits, request‑rate throttling during a full restore, and the minimum‑storage‑duration billing policy against buckets that churn hourly (etcd snapshots, WAL). See Gate 17.
@@ -93,6 +95,7 @@ Ordered production gates, 0–16
 15
 16
 17→31
+32→35
 GATE 0
 Repository and provider boundary
 End state
@@ -214,6 +217,8 @@ Denied‑action RBAC matrix; root app from main; Sync/Healthy; no duplicate Helm
 Stop condition
 Admin kubeconfig in workflow, writable repo key, duplicate ownership, unrestricted destinations, or manual live manifest.
 
+Gap closure sequencing: Gate 32 (namespace enumeration) runs here — once GitOps can manage manifests, every namespace name used by the rollout waves below and by Gate 11 onward must be resolved and committed before any wave begins.
+
 GATE 11
 Baseline observability
 End state
@@ -224,6 +229,8 @@ Trigger and receive node, etcd snapshot, disk, Cilium, DNS and Argo reconciliati
 
 Stop condition
 No actionable alert path, missing storage metrics, or policy rollout without flow evidence.
+
+Gap closure sequencing: Wave 1 of the namespace rollout (dedicated test namespace) opens here, once Gate 32 has resolved its name and Hubble has something to observe. Gate 34 (namespace RBAC) begins riding along at this same wave — each namespace gets its least‑privilege Role committed alongside its P2 Declare NetworkPolicy, not as a separate upfront pass.
 
 GATE 12
 Longhorn
@@ -258,6 +265,8 @@ WAL reaches external backup; database restore; NATS redelivery; Redis loss cause
 Stop condition
 Two‑instance database accepted as fully HA without risk record, durable dependency on Redis, missing WAL restore, or quorum members co‑located.
 
+Gap closure sequencing: Gate 33's Wave 5/Wave 6 decision can only be verified once NATS JetStream and Temporal have real Argo CD application definitions — that happens here. Gate 33 does not close until this gate does, and Wave 6 (data‑plane namespaces) must not be enforced until Gate 33 is fully resolved against this gate's manifests.
+
 GATE 15
 Applications
 End state
@@ -268,6 +277,8 @@ Smoke test auth, file manager, ingestion, frontend and workers; trace through NA
 
 Stop condition
 Readiness‑only evidence, bypassed ingress/auth, missing audit record, or unbounded resource regression.
+
+Gap closure sequencing: Gate 35 (tenant‑to‑namespace model) must be decided no later than here — this gate's auth smoke test and audit events are the first place tenant identity is actually exercised, and its acceptance evidence cannot mean anything if the isolation mechanism is still undeclared.
 
 GATE 16
 Recovery drill
@@ -466,6 +477,9 @@ Process it.
 Retrieve the original and derived data.
 Verify audit history and tenant isolation.
 Measure actual RTO and RPO.
+
+Gap closure sequencing: step 12 above is Gate 35's exit check — this is where the tenant isolation model declared at Gate 15 (via Gate 35) actually gets exercised against a cross‑tenant read/write. Gate 35 is not closed until this step passes against that named mechanism, not against a generic "isolation held" observation.
+
 GATE 30
 Network policy for Wasabi egress
 The Defined network policy rollout (P0–P6, below) needs explicit Wasabi handling, folded into the same namespace‑by‑namespace promotion — not a bulk exception:
@@ -528,6 +542,8 @@ Wasabi egress — DNS, HTTPS to the Wasabi regional S3 endpoint, FQDN policy and
 Every policy bundle includes tests for intended access and at least one denied same‑namespace, cross‑namespace and external destination.
 Emergency rollback is a Git revert with Argo reconciliation. Break‑glass deletion is audited and followed immediately by a Git correction.
 Namespace rollout order
+This table cannot run until Gate 32 (namespace enumeration) has resolved each row to an exact namespace name, and Wave 6 must not enforce until Gate 33 has resolved the Wave 5/Wave 6 NATS and Temporal overlap against Gate 14's manifests. Gate 34 (namespace RBAC) is not a separate wave — its Role/RoleBinding pair for a namespace is committed alongside that same namespace's P2 Declare NetworkPolicy, wave by wave, from Wave 1 through Wave 7.
+
 Wave	Namespaces or services	Reason
 1	Dedicated test namespace	Proves harness, flow capture, rollback and negative tests without production impact.
 2	Stateless frontend and viewer surfaces	Limited dependencies and easy user‑visible validation.
@@ -566,7 +582,66 @@ Argo CD	Cluster services, policy, storage controllers, data services and applica
 Wasabi infrastructure‑as‑code stack	Bucket creation, retention, lifecycle, IAM policy, monitoring — reviewed and plan‑gated (Gate 31).	Cluster workloads; cannot be triggered by the cluster's own GitOps root app.
 CI	Schema, policy, provider‑drift, namespace ownership, pinning and security lint.	Direct production mutation.
 Operators	Review decisions, authorize promotions, manage break glass and approve recovery evidence.	Undocumented manual drift.
-Part D — hardening backlog
+Part D — Gap closure: network policy and namespace articulation
+Closes four gaps found in review of this plan's network‑policy and identity content and of Gate 29: unresolved namespace naming, the Wave 5/Wave 6 NATS‑Temporal overlap, thin per‑namespace Kubernetes RBAC, and an undeclared tenant‑to‑namespace model. Gates 32–35 below do not pre‑assign deliverable (D) or exit‑gate (EG) numbers, matching every other gate in this plan — the gate ledger assigns those cumulatively, only at PASS, continuing from its recorded position at that time.
+
+GATE 32
+Namespace enumeration and manifest mapping
+End state
+Every role named in the Namespace rollout order table (dedicated test, stateless frontend/viewer, auth/API, file manager/ingestion, Temporal workers/NATS clients, data‑plane, cluster services) resolves to an exact, version‑controlled namespace name that NetworkPolicy manifests, RBAC bindings, and the P0–P6 promotion table can reference unambiguously. Creating the namespaces in the live cluster happens inside each wave's own P0–P6 promotion, not here; the tenant model is Gate 35.
+
+Acceptance evidence
+docs/architecture/namespace-map.md (wave → namespace name → owning workload(s) → rationale) covering every wave in the Namespace rollout order table; manifests/namespaces/*.yaml, one Namespace object per resolved name labeled veridex.io/wave and veridex.io/role; the Namespace rollout order table carries the resolved names once this gate closes; CI provider/policy lint (Gate 0's existing check, extended) rejects a manifest targeting a namespace name absent from the namespace map; every workload named elsewhere in this plan (CNPG, NATS, Temporal, MinIO, Longhorn, Argo CD, monitoring, ingress, cert‑manager) maps to exactly one wave.
+
+Stop condition
+Any wave without an exact namespace name, a manifest targeting an unlisted namespace passing CI, or a namespace name claimed by two waves.
+
+Rollback
+Git revert of the namespace map and Namespace manifests. Nothing here is enforced against running workloads, so there is no data‑loss surface.
+
+GATE 33
+Wave 5 / Wave 6 NATS and Temporal overlap resolution
+End state
+The Namespace rollout order table states one unambiguous promotion sequence for NATS and Temporal, with no namespace appearing in two waves' scope without an explicit, stated reason. Resolved once NATS JetStream and Temporal have real Argo CD application definitions (Gate 14).
+
+Acceptance evidence
+docs/architecture/wave5-wave6-resolution.md states whether "Temporal workers and NATS clients" (Wave 5) and the NATS/Temporal backing infrastructure inside "Data‑plane namespaces" (Wave 6) are the same namespace listed twice in error, or a deliberate client‑side/backing‑infrastructure split, and why; the Namespace rollout order table is rewritten to reflect the resolution (merge Wave 5 into Wave 6, or rename both to make the split explicit) once this gate closes; the resolution matches the actual Argo CD application definitions for NATS/Temporal (Gate 10's repository manifests).
+
+Stop condition
+The rewritten table still lists a namespace under two waves without an explicit note explaining the split, or the resolution document disagrees with the live Argo CD application definitions.
+
+Rollback
+Git revert of the resolution document and table edit. No cluster state depends on this phase.
+
+GATE 34
+Namespace‑scoped Kubernetes RBAC
+End state
+Every application namespace resolved in Gate 32 has a least‑privilege Role/RoleBinding pair for its service accounts, consistent with the Identity and credential policy table's "Runtime workload" row. Admission control blocks any Role/ClusterRole granting privilege beyond what that namespace's workload needs. Committed alongside each namespace's P2 Declare NetworkPolicy, wave by wave, from Wave 1 through Wave 7 — not as a separate upfront pass. Break‑glass RBAC (Identity table's "Break glass" row) and Argo CD's own RBAC (Gate 10) are out of scope.
+
+Acceptance evidence
+manifests/rbac/<namespace>/role.yaml and rolebinding.yaml, one pair per namespace from Gate 32, granting only the resources/verbs that namespace's own workload uses; policy/admission/rbac-guard.yaml, an admission rule (Kyverno or OPA — mechanism not yet chosen) blocking wildcard verbs, cluster‑admin bindings, and cross‑namespace secret reads from application namespaces; docs/evidence/rbac-least-privilege-audit.md, a dated audit listing per namespace exactly which verbs/resources are granted and why; the admission controller rejects a deliberately over‑broad test Role (wildcard verb, or cross‑namespace secret read); a cluster RBAC drift scan shows no live ServiceAccount in an application namespace holding bindings beyond its committed Role.
+
+Stop condition
+Any application namespace without a Role scoped to its actual API calls, an over‑broad test Role accepted by the admission controller, or a live binding found beyond its committed Role.
+
+Rollback
+Git revert of the Role/RoleBinding and admission‑rule manifests through Argo reconciliation. Removing an over‑permissive live binding, if one is found, is itself a security fix and touches no application data.
+
+GATE 35
+Tenant‑to‑namespace model
+End state
+The plan states, once and explicitly, how tenant isolation — already exercised in Gate 29's drill — maps onto the namespace structure, so that drill has a concrete, named boundary to test against. Decided no later than Gate 15, since Gate 15's auth smoke test and audit events are the first place tenant identity is actually exercised and its acceptance evidence cannot mean anything if the isolation mechanism is still undeclared. If namespace‑per‑tenant is the confirmed model, a new tenant namespace is folded into Gate 32's namespace map and given its own P0–P6 promotion, not a bulk exception. A new tenant‑provisioning workflow is out of scope unless the confirmed model requires one — that would be a separate future gate.
+
+Acceptance evidence
+docs/architecture/tenant-isolation-model.md states which model is implemented — namespace‑per‑tenant, or shared‑namespace with isolation enforced at the application/database layer — and names the exact enforcement mechanism (for example PostgreSQL row‑level security, per‑tenant schema, or per‑tenant Wasabi bucket prefix); names one specific, testable mechanism, not "isolation is maintained"; Gate 29's step 12 ("Verify audit history and tenant isolation") carries a cross‑reference to this document's named mechanism once this gate closes; Gate 29's step 12, re‑run, actually exercises the named mechanism — the drill attempts a cross‑tenant read/write against the stated boundary.
+
+Stop condition
+The isolation document names no specific, testable mechanism, or Gate 29's re‑run does not actually exercise the named boundary.
+
+Rollback
+Git revert of the isolation‑model document and Gate 29 cross‑reference. No infrastructure change unless the confirmed model requires new namespaces, in which case rollback follows Gate 32's namespace‑manifest path.
+
+Part E — hardening backlog
 Operational hardening backlog
 Not yet specified as full gates. Each needs an explicit owner and deadline before it can be scheduled — that requirement is itself item 14.
 
@@ -599,10 +674,10 @@ Stand up the dedicated Wasabi account and the six buckets in Gate 18, each creat
 Choose the four MinIO nodes and storage paths; document why two control‑plane nodes are or are not storage eligible.
 Create the policy inventory schema, Hubble evidence procedure, positive/negative test harness, GitOps rollback procedure and namespace promotion record.
 Deploy baseline observability before Longhorn, MinIO or application policy enforcement.
-Assign an owner and deadline to every item in the operational hardening backlog (Part D).
+Assign an owner and deadline to every item in the operational hardening backlog (Part E).
 Execute each gate in order and stop on the first unmet dependency.
 Final acceptance rule
-The Veridex platform is production ready only when Gates 0 through 31 have dated PASS evidence for the same pinned release and target cluster. A later change to node topology, storage layout, CNI, DNS, policy model, secret mechanism, backup provider, Wasabi bucket architecture or data‑service quorum invalidates the affected gate and every dependent gate until they are rerun.
+The Veridex platform is production ready only when Gates 0 through 35 have dated PASS evidence for the same pinned release and target cluster. A later change to node topology, storage layout, CNI, DNS, policy model, secret mechanism, backup provider, Wasabi bucket architecture or data‑service quorum invalidates the affected gate and every dependent gate until they are rerun.
 
 Reference basis
 K3s documentation: Networking Services; Server Configuration; etcd Snapshot and Restore.
@@ -617,4 +692,4 @@ Wasabi — generating an S3 API key.
 Longhorn — setting an S3‑compatible backup target.
 k3s etcd‑snapshot CLI reference — S3‑compatible snapshot target options.
 CloudNativePG Barman Cloud plugin — object store providers — generic S3‑compatible endpoint support.
-Veridex AI — cluster production end‑state plan · Revision 3 (consolidated) · Gates 0–31 · backup destination: Wasabi · supersedes the 37‑item stage list
+Veridex AI — cluster production end‑state plan · Revision 3 (consolidated) · Gates 0–35 · backup destination: Wasabi · supersedes the 37‑item stage list · amended 13 September 2026 with Gates 32–35 (network policy and namespace articulation)

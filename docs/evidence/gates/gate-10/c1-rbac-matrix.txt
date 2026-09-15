@@ -1,0 +1,85 @@
+gate: 10
+check: G10-C1 (Denied-action RBAC matrix)
+captured_utc: 2026-09-15T08:37:54Z (corrected/valid run); see limitations for an earlier invalid run at 2026-09-15T08:35-08:36Z
+repo_commit: 145df11e4220e88c85c86952ae089a06bf9061a4
+plan_commit: bc27a0a2b9e872679007342b5d255b888e000722
+plan_sha256: 0c30445b0074edf3688ba57936e1c5149497b829e0f7d1b4328c5181bd222af8
+target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://127.0.0.1:6443 (k3s local admin kubeconfig on veridex-server-1); Argo CD API reached via a manually-managed `k3s kubectl port-forward svc/argocd-server 18443:443`
+captured_by: agent
+command: argocd proj role create-token veridex readonly --core --id gate10-rbac-test -e 1h (token issuance); then argocd app get/sync/delete root --config <isolated temp config> --auth-token <redacted> --server localhost:18443 --insecure --core=false
+exit_status: 0 (get); 20 (sync, PermissionDenied -- expected); 20 (delete, PermissionDenied -- expected)
+proof_class: live
+result: PASS
+limitations: >-
+  This check required two attempts, and the first attempt caused a real
+  production incident, disclosed in full below rather than omitted. The
+  corrected second attempt is the evidence supporting PASS; the JWT token
+  used for both was revoked (its metadata entry cleared by the next
+  bootstrap-argocd rerun re-applying the AppProject) after testing, and the
+  token itself expired at 2026-09-15T09:28:25Z regardless (1h TTL).
+--- unedited output (corrected, valid run) ---
+
+=== token issuance (--core mode, offline w.r.t. Argo CD's HTTP API) ===
+Create token succeeded for proj:veridex:readonly.
+  ID: gate10-rbac-test
+  Issued At: 2026-09-15T10:28:25+02:00
+  Expires At: 2026-09-15T11:28:25+02:00
+  Token: <redacted -- a scoped, 1-hour-TTL, read-only project-role JWT; never committed>
+
+=== ALLOWED: app get (read) ===
+Name:               argocd/root
+Project:            veridex
+Server:             https://kubernetes.default.svc
+Namespace:          argocd
+URL:                https://localhost:18443/applications/root
+Source:
+- Repo:             https://github.com/caribrefresh-source/Veridex-Platform.git
+  Target:           main
+rc=0
+
+=== DENIED (expected): app sync ===
+{"level":"fatal","msg":"rpc error: code = PermissionDenied desc = permission denied: applications, sync, veridex/root, sub: proj:veridex:readonly, iat: 2026-09-15T08:28:25Z","time":"2026-09-15T10:37:54+02:00"}
+rc=20
+
+=== DENIED (expected): app delete ===
+{"level":"fatal","msg":"rpc error: code = PermissionDenied desc = permission denied: applications, delete, veridex/root, sub: proj:veridex:readonly, iat: 2026-09-15T08:28:25Z","time":"2026-09-15T10:37:54+02:00"}
+rc=20
+
+=== confirm root Application untouched after the denied attempts ===
+sync=Synced health=Healthy
+
+--- disclosed incident: the first (invalid) test attempt ---
+
+The first attempt at this exact test used the same token but reused a
+stored argocd CLI login context (`~/.config/argocd/config`, current-context
+"kubernetes", core: true) left over from an earlier, unrelated diagnostic
+`argocd login veridex-cluster --core` call made during this same gate's
+build. That stored context's `core: true` setting silently overrode the
+`--server`/`--auth-token` flags on the `app sync`/`app delete` commands --
+confirmed by the tool's own "URL" field printing a random ephemeral local
+port each invocation, the signature of --core mode's internal proxy, rather
+than the fixed `localhost:18443` explicitly requested.
+
+Because --core mode talks directly to Kubernetes using the ambient
+kubeconfig (root's own k3s admin kubeconfig, i.e. cluster-admin) instead of
+Argo CD's own RBAC-enforcing API, both commands succeeded -- the tool
+reported "application 'root' deleted" -- silently bypassing the very RBAC
+policy under test. This deleted the live `root` Application object in
+production. Blast radius: confined to that one object. At the time of the
+incident, `main` did not yet contain this gate's real `gitops/` content
+(only .gitkeep placeholders), and `gitops/bootstrap/**` is excluded from
+the root app's own recursive scan, so nothing was cascade-deleted -- verified
+immediately after by listing every object in the `argocd` namespace
+(Deployments/Services/Pods/the `veridex` AppProject all present and
+untouched) and every cluster namespace (unchanged). Remediated within
+minutes by re-applying the still-present rendered manifest
+(`kubectl apply -f /tmp/root-application.yaml`) -- `application.argoproj.io/root
+created`, confirmed Synced/Healthy immediately after.
+
+Root cause fix for the retest: deleted the stale `~/.config/argocd/config`
+entirely and used an isolated, explicit `--config <temp path>` with
+`--core=false` for every command in the corrected run above, so no stored
+context could silently substitute cluster-admin access for the token under
+test. This was a testing-harness bug (leftover local CLI state), not an
+AppProject/RBAC policy defect -- the corrected run above shows the policy
+enforcing correctly once the test itself was honest.

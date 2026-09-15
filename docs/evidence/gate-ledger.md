@@ -9,8 +9,17 @@ Plan: `docs/Engineering Documents/Initial Stages Plan.txt`
 
 ## Position
 
-Last deliverable **D47**, last exit-gate check **EG51** (Gate 9, closed
-2026-09-15). The next closed gate starts at **D48** and **EG52**.
+Last deliverable **D53**, last exit-gate check **EG56** (Gate 10, closed
+2026-09-15). The next closed gate starts at **D54** and **EG57**.
+
+**Gate 10 stop-condition deviation.** Gate 10 closed **PASS** despite its own
+stop condition ("writable repo key") being triggered: the deployed
+`ARGOCD_REPO_PAT` was found live to carry near-full account-admin GitHub
+scope, not read-only. This is an explicit, disclosed operator override of
+the plan's own stop-condition rule, not a finding that the condition didn't
+apply — see `docs/evidence/gates/gate-10/closure.md`'s deviation note and
+`pat-scope-finding.txt` for the full account. Treat `ARGOCD_REPO_PAT`'s scope
+as an open risk in any later gate that touches repository credentials.
 
 **Gate 9 implementation note.** The plan's End state for Gate 9 names "k3s's
 native S3-compatible snapshot target" as the off-cluster upload mechanism.
@@ -49,6 +58,7 @@ closure evidence; `docs/evidence/legacy/README.md` maps it to Revision 3 gates.
 | 7 | Verification automation | D34–D37 | EG38–EG41 | 2026-09-14 | `64d80e6` | `64d80e6` | kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://10.2.0.100:6443 | `docs/evidence/gates/gate-07/closure.md` |
 | 8 | Backup foundation | D38–D40 | EG42–EG46 | 2026-09-15 | `bc27a0a` | `f287056` | Backblaze B2 account c1beac90ce56; bucket veridex-etcd-backup, bucketId 4c818bbe7abca920ac0e0516 | `docs/evidence/gates/gate-08/closure.md` |
 | 9 | etcd recovery | D41–D47 | EG47–EG51 | 2026-09-15 | `bc27a0a` | `212122c` | kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://10.2.0.100:6443; Backblaze B2 bucket veridex-etcd-backup, bucketId 4c818bbe7abca920ac0e0516 | `docs/evidence/gates/gate-09/closure.md` |
+| 10 | Argo CD handover | D48–D53 | EG52–EG56 | 2026-09-15 | `bc27a0a` | `145df11` | kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://127.0.0.1:6443 (local kubeconfig on veridex-server-1; same cluster, confirmed by UID match against Gates 4-9's VIP-addressed https://10.2.0.100:6443) | `docs/evidence/gates/gate-10/closure.md` (**PASS via explicit operator override of the plan's own stop-condition rule** — see Position note above) |
 
 ## Reopen log
 

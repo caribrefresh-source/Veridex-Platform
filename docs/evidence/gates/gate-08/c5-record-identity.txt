@@ -1,0 +1,43 @@
+gate: 8
+check: G08-C5
+captured_utc: 2026-09-15T00:34:35Z to 2026-09-15T00:37:00Z
+repo_commit: 2d167720bb986fb28109104b2993eb7ed32da96a
+plan_commit: bc27a0a2b9e872679007342b5d255b888e000722
+plan_sha256: 0c30445b0074edf3688ba57936e1c5149497b829e0f7d1b4328c5181bd222af8
+target_identity: Backblaze B2 account c1beac90ce56 (dedicated backup account); bucket veridex-etcd-backup, bucketId 4c818bbe7abca920ac0e0516; native API node api005/f005.backblazeb2.com
+captured_by: agent
+command: b2 bucket get veridex-etcd-backup ; b2 file url b2://veridex-etcd-backup/<name> ; b2 account get, filtered to accountId/apiUrl/downloadUrl lines only (key and auth-token lines excluded before output ever left the source machine)
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: This CLI/SDK version's account-get response exposes the native API node (api005.backblazeb2.com / f005.backblazeb2.com) but not a friendly S3-style region code (e.g. us-west-004) in the fields checked. The account/bucket identity is fully recorded and sufficient to prove this gate's mechanism; the precise region code for Gate 18's later per-bucket documentation is not independently confirmed here and should be read from the B2 web console (Bucket Settings) when Gate 18 is built, rather than guessed from the node number. The bucket get below ran under the restricted RESTORE key (listBuckets,listFiles,readFiles -- no readBucketRetentions, no readBucketEncryption), which is why defaultRetention/defaultServerSideEncryption/isFileLockEnabled read back as unknown/null here: that is the restore key correctly being denied bucket-configuration visibility it was never granted, not Object Lock or encryption actually being unset. Found in independent review (Tier 1) as a discrepancy against c1's output and disclosed here rather than silently left unexplained. The authoritative values for this same bucket (revision 3, identical to the bucket get below) are in c1-create-protected-object.txt: isFileLockEnabled true, defaultServerSideEncryption SSE-B2/AES256, defaultRetention governance/2 days -- captured moments earlier via the master key, which does hold those read capabilities.
+--- unedited output ---
+
+=== bucket identity (as the restricted restore key -- see limitations above for why several fields below read back masked) ===
+account_id: c1beac90ce56
+bucket_name: veridex-etcd-backup
+{
+    "accountId": "c1beac90ce56",
+    "bucketId": "4c818bbe7abca920ac0e0516",
+    "bucketInfo": {},
+    "bucketName": "veridex-etcd-backup",
+    "bucketType": "allPrivate",
+    "corsRules": [],
+    "defaultRetention": {
+        "mode": "unknown"
+    },
+    "defaultServerSideEncryption": {
+        "mode": null
+    },
+    "isFileLockEnabled": null,
+    "lifecycleRules": [],
+    "options": [
+        "s3"
+    ],
+    "replication": {
+        "asReplicationDestination": null,
+        "asReplicationSource": null
+    },
+    "revision": 3
+}
+https://f005.backblazeb2.com/file/veridex-etcd-backup/gate8-test-object-20260915T003358Z.txt

@@ -165,14 +165,20 @@
   loop: "{{ firewall_trusted_networks + firewall_trusted_pod_networks }}"
   tags: [gate3]
 
-- name: "Gate 3 -- assert the pod-network rule stays scoped to the API port, not a blanket accept"
+- name: "Gate 3 -- assert the pod-network rule stays scoped to named ports, not a blanket accept"
   ansible.builtin.assert:
     that:
-      - (firewall_trusted_pod_networks[0] ~ ' tcp dport ' ~ firewall_trusted_pod_api_port) in (_g3_nft.stdout | replace('\n', ' '))
+      # Matches the CIDR plus a dport qualifier rather than one literal port:
+      # nft renders multiple ports as an anonymous set, `tcp dport
+      # { 6443, 9100 }` (Gate 11 added node-exporter's 9100). The invariant
+      # being protected is "scoped, not blanket", which this still proves.
+      - (firewall_trusted_pod_networks[0] ~ ' tcp dport ') in (_g3_nft.stdout | replace('\n', ' '))
+      - _g3_nft.stdout is search(item | string)
     fail_msg: >-
       Pod-network rule on {{ inventory_hostname }} does not appear scoped to
-      tcp/{{ firewall_trusted_pod_api_port }} in the live ruleset.
+      tcp/{{ item }} in the live ruleset.
     quiet: true
+  loop: "{{ firewall_trusted_pod_ports }}"
   tags: [gate3]
 
 # --- Gate 4: k3s control plane ----------------------------------------------

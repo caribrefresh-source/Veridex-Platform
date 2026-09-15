@@ -26,9 +26,9 @@
   ansible.builtin.assert:
     that:
       - firewall_trusted_pod_networks | length > 0
-      - firewall_trusted_pod_api_port | int > 0
+      - firewall_trusted_pod_ports | length > 0
     fail_msg: >-
-      firewall_trusted_pod_networks or firewall_trusted_pod_api_port is unset.
+      firewall_trusted_pod_networks or firewall_trusted_pod_ports is unset.
       Without this, a pod's own traffic to a host-network service on a
       different node (e.g. the API server via the kubernetes ClusterIP) has
       no path through the default-drop INPUT policy (Gate 6).
@@ -72,16 +72,25 @@
     quiet: true
   loop: "{{ firewall_trusted_networks + firewall_trusted_pod_networks }}"
 
-- name: Assert the pod-network rule is scoped to the API port, not a blanket accept
+- name: Assert the pod-network rule is scoped to specific ports, not a blanket accept
   ansible.builtin.assert:
     that:
-      - (firewall_trusted_pod_networks[0] ~ ' tcp dport ' ~ firewall_trusted_pod_api_port) in (_nft.stdout | replace('\n', ' '))
+      # The rule must name the pod CIDR AND carry a dport qualifier. nft
+      # renders a multi-port anonymous set as `tcp dport { 6443, 9100 }`, so
+      # match on the CIDR followed by `tcp dport` rather than on one literal
+      # port number -- the old single-port assertion could not survive the
+      # set syntax, and asserting the whole rendered string would break again
+      # every time a justified port is added.
+      - (firewall_trusted_pod_networks[0] ~ ' tcp dport ') in (_nft.stdout | replace('\n', ' '))
+      # Every declared port is actually present.
+      - _nft.stdout is search(item | string)
     fail_msg: >-
-      The pod-network rule does not appear scoped to tcp/{{ firewall_trusted_pod_api_port }}
-      in the live ruleset -- it may have rendered as (or regressed to) a
-      blanket accept, which an independent review flagged as an unnecessary
+      The pod-network rule does not appear scoped to tcp/{{ item }} in the
+      live ruleset -- it may have rendered as (or regressed to) a blanket
+      accept, which an independent review flagged as an unnecessary
       blast-radius widening (Gate 6).
     quiet: true
+  loop: "{{ firewall_trusted_pod_ports }}"
 
 - name: Force a brand-new SSH connection (drop any multiplexed socket)
   # Same reasoning as roles/ssh-hardening: a string appearing in `nft list

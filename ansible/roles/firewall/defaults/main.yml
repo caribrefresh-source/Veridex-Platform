@@ -35,7 +35,24 @@ firewall_trusted_networks:
 # entry required.
 firewall_trusted_pod_networks:
   - "{{ k3s_cluster_cidr }}"
-firewall_trusted_pod_api_port: "{{ api_port }}"
+
+# The exact host ports pods may reach, and nothing else. Each entry carries
+# its own justification, per the rule stated above.
+#
+#   api_port (6443) -- the original Gate 6 entry, reasoning above.
+#
+#   9100 node-exporter -- added at Gate 11. node-exporter runs hostNetwork so
+#     that node metrics survive a Cilium failure (if the CNI is the thing
+#     that is broken, the metrics that would diagnose it must not depend on
+#     it). That puts its listener on the host, so vmagent -- an ordinary pod
+#     -- reaches it with a pod-CIDR source address and the default-drop INPUT
+#     policy ate it: all five node-exporter targets timed out while the
+#     exporter itself answered 200 on the node's own loopback. Read-only
+#     metrics endpoint, no authentication surface, and scoped to this one
+#     port rather than widening the pod CIDR to a blanket accept.
+firewall_trusted_pod_ports:
+  - "{{ api_port }}"
+  - 9100
 
 # Published on the PUBLIC interface. Only 32537 (Traefik's websecure
 # NodePort, kubernetes/infrastructure/ingress/service.yaml) is open so far --

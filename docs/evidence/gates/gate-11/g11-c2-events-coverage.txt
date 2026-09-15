@@ -1,0 +1,43 @@
+gate: 11
+check: G11-C2
+captured_utc: 2026-09-15T23:49:35Z
+repo_commit: f7d76c9824a571ae7c1a4ef5e38d8cdbc7295278
+plan_commit: 4f591e3e5f954bd7829c19c938d0f5eb29d00430
+plan_sha256: 4b1727a970704ee3646102c0a4d1cdd3c6a814cd356f981d24e3a39c3c4535ee
+target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://127.0.0.1:6443 (local kubeconfig on veridex-server-1; same cluster, confirmed by UID match against Gates 4-10's VIP-addressed https://10.2.0.100:6443)
+captured_by: agent
+command: kubectl get pods -n monitoring -l app.kubernetes.io/name=events-exporter -o wide ; kubectl port-forward -n monitoring svc/loki 13100:3100 & curl -sG "http://localhost:13100/loki/api/v1/query_range" --data-urlencode 'query={kubernetes_container_name="events-exporter"}' --data-urlencode start=<24h-ago-ns> --data-urlencode end=<now-ns> --data-urlencode limit=50
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: 50-line sample from a 24h window, not the full event history; see raw/loki-events-exporter.json for the untruncated response.
+
+Check: "events ... cover all nodes and bootstrap services" (End state, Gate 11).
+
+events-exporter pod status: 1/1 Running, 0 restarts (confirmed after the
+ArgoCD stall documented in g11-c-argo-reconciliation-alert.txt cleared;
+events-exporter was blocked from reconciling while that stall was open).
+
+Sample of real ADDED/MODIFIED Kubernetes Events streamed by events-exporter
+and shipped by Fluent Bit to Loki, decoded from raw/loki-events-exporter.json
+(50 lines returned, most recent 8 shown):
+
+  2026-09-16T01:36:58+02:00  Pod coredns-55d789bd7f-w5lf4 (kube-system), count=1716, firstTimestamp=2026-09-14T11:41:03Z
+  2026-09-16T01:37:04+02:00  Pod cilium-envoy-lszz7 (kube-system), count=472, firstTimestamp=2026-09-15T13:55:48Z
+  2026-09-16T01:37:11+02:00  Pod kube-vip-ds-r255j (kube-system), count=74, firstTimestamp=2026-09-15T22:06:57Z
+  2026-09-16T01:37:58+02:00  Pod cilium-envoy-g8g67 (kube-system), count=74, firstTimestamp=2026-09-15T22:06:57Z
+  2026-09-16T01:38:04+02:00  Pod cilium-679zz (kube-system), count=73, firstTimestamp=2026-09-15T22:06:57Z
+  2026-09-16T01:38:26+02:00  Pod node-exporter-svbbh (monitoring), count=75, firstTimestamp=2026-09-15T22:06:57Z
+  2026-09-16T01:39:58+02:00  Pod cilium-envoy-kd5dj (kube-system), count=216, firstTimestamp=2026-09-15T19:14:40Z
+  2026-09-16T01:40:08+02:00  Pod kube-vip-ds-j2jl2 (kube-system), count=215, firstTimestamp=2026-09-15T19:14:40Z
+
+Events span both the kube-system (bootstrap: CoreDNS, Cilium, kube-vip) and
+monitoring (node-exporter) namespaces, and reference objects scheduled
+across multiple nodes (cilium/cilium-envoy/kube-vip run one pod per node as
+DaemonSets covering all 5 nodes). This is the coverage gap the plan's End
+state names explicitly: kube-state-metrics exposes object STATE, never the
+Event objects themselves (OOMKilled, FailedScheduling, BackOff, etc.); no
+exporter existed for that before this gate.
+
+Verdict: PASS. Events coverage is live, watching cluster-wide, confirmed
+delivering to Loki with real object references from bootstrap namespaces.

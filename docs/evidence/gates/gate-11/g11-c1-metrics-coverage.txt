@@ -1,0 +1,47 @@
+gate: 11
+check: G11-C1
+captured_utc: 2026-09-15T23:49:35Z
+repo_commit: f7d76c9824a571ae7c1a4ef5e38d8cdbc7295278
+plan_commit: 4f591e3e5f954bd7829c19c938d0f5eb29d00430
+plan_sha256: 4b1727a970704ee3646102c0a4d1cdd3c6a814cd356f981d24e3a39c3c4535ee
+target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://127.0.0.1:6443 (local kubeconfig on veridex-server-1; same cluster, confirmed by UID match against Gates 4-10's VIP-addressed https://10.2.0.100:6443)
+captured_by: agent
+command: kubectl port-forward -n monitoring svc/vmsingle 18428:8428 & curl -s "http://localhost:18428/api/v1/query?query=up"
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: point-in-time snapshot of scrape health, not a retention-window guarantee; see raw/vm-up-targets.json for the full untruncated result set.
+
+Check: "Metrics ... cover all nodes and bootstrap services" (End state, Gate 11).
+
+Every vmagent scrape job's `up{}` value, queried directly against vmsingle,
+grouped by job (raw response: raw/vm-up-targets.json):
+
+  alertmanager:        1/1 up  -> alertmanager.monitoring.svc:9093
+  argocd:               1/1 up  -> argocd-metrics.argocd.svc:8082
+  cadvisor:             5/5 up  -> veridex-agent-1, veridex-agent-2, veridex-server-1, veridex-server-2, veridex-server-3
+  cilium-agent:         5/5 up  -> 10.2.1.100:9962, 10.2.1.101:9962, 10.2.1.10:9962, 10.2.1.11:9962, 10.2.1.12:9962
+  cilium-operator:      2/2 up  -> 10.2.1.100:9963, 10.2.1.101:9963
+  coredns:              2/2 up  -> 10.44.2.205:9153, 10.44.4.158:9153
+  etcd:                 3/3 up  -> veridex-server-1, veridex-server-2, veridex-server-3
+  grafana:              1/1 up  -> grafana.monitoring.svc:3000
+  kube-state-metrics:   1/1 up  -> kube-state-metrics.monitoring.svc:8080
+  kubelet:              5/5 up  -> veridex-agent-1, veridex-agent-2, veridex-server-1, veridex-server-2, veridex-server-3
+  loki:                 1/1 up  -> loki.monitoring.svc:3100
+  node-exporter:        5/5 up  -> veridex-agent-1, veridex-agent-2, veridex-server-1, veridex-server-2, veridex-server-3
+  traefik:              1/1 up  -> traefik-metrics.kube-system.svc:8082
+  vmagent:              1/1 up  -> localhost:8429
+  vmalert:              1/1 up  -> vmalert.monitoring.svc:8880
+  vmsingle:             1/1 up  -> vmsingle.monitoring.svc:8428
+
+All 5 cluster nodes (veridex-agent-1/2, veridex-server-1/2/3) are covered by
+node-exporter (host metrics), kubelet, and cadvisor (container/pod resource
+metrics). All 3 control-plane nodes are covered by etcd's own metrics
+listener (k3s_etcd_expose_metrics, Gate 11 change). All 5 nodes run a
+scraped Cilium agent. Every bootstrap/infrastructure service named in the
+plan's End state -- Argo CD, CoreDNS, Traefik, and the observability stack's
+own components -- has a healthy scrape target. Zero targets are down at
+capture time; no duplicate-target warnings remain in vmagent's own logs
+(fixed live for cilium-agent, cilium-operator and coredns during this gate).
+
+Verdict: PASS. Metrics cover all nodes and all named bootstrap services.

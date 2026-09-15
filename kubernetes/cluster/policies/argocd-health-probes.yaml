@@ -61,6 +61,25 @@
 # governed by the upstream default-deny, and no other namespace is touched.
 # Health endpoints expose liveness state, not application data.
 #
+# HARDENING (2026-09-15, Gate 11 closure adversarial review): the three
+# clauses below were originally scoped by L4 port alone. That was a real
+# over-grant on 8080/8082/8084: each of those ports is not a dedicated
+# health-only listener -- verified live, argocd-server's own Service maps
+# BOTH its http (80) and https (443) ports to the SAME targetPort 8080 that
+# serves /healthz, and the same is true of repo-server's 8084 (the
+# gRPC/reflection port, per Argo CD's upstream chart) and the application-
+# controller's 8082. An L4-only allow on those ports therefore admitted
+# whichever full service that port carries -- the UI/API/gRPC surface, not
+# only the probe -- to any source matching host/remote-node/health, the
+# 10.44.0.0/16 CIDR, or (worst case) the world entity. Fixed by adding an L7
+# HTTP rule restricting those three ports to the /healthz path actually
+# probed (Cilium's Envoy-backed L7 proxy is confirmed active on this
+# cluster: `cilium-dbg status --verbose` -> "Proxy Status: OK ... Envoy:
+# external"). Port 9001 (notifications-controller) is excluded from the L7
+# rule and kept as a separate plain L4 entry: its own liveness probe is a
+# raw TCP socket check, not HTTP, so there is no path to restrict, and this
+# was already the entire surface on that port.
+#
 # REMOVE THIS once the identity misclassification itself is fixed upstream or
 # by configuration; it is a targeted compensating control, not a design.
 ---
@@ -94,7 +113,12 @@ spec:
               protocol: TCP
             - port: "8080"   # argocd-server liveness + readiness
               protocol: TCP
-            - port: "9001"   # argocd-notifications-controller liveness (TCP socket)
+          rules:
+            http:
+              - method: "GET"
+                path: "/healthz.*"
+        - ports:
+            - port: "9001"   # argocd-notifications-controller liveness (TCP socket, no HTTP layer)
               protocol: TCP
     # Kept for defense-in-depth in case the datapath ever resolves the probe
     # to the CIDR-derived identity rather than host or world -- but per the
@@ -110,12 +134,18 @@ spec:
               protocol: TCP
             - port: "8080"
               protocol: TCP
+          rules:
+            http:
+              - method: "GET"
+                path: "/healthz.*"
+        - ports:
             - port: "9001"
               protocol: TCP
     # The actual fix: admits the packet when the datapath's identity
     # resolution fails and falls back to `world`, which is what was observed
     # live. Scoped to only these four ports on these four pods -- see the
-    # blast-radius note above.
+    # blast-radius note above -- and, as of the L7 hardening pass, further
+    # scoped to the /healthz path alone on the three HTTP ports.
     - fromEntities:
         - world
       toPorts:
@@ -126,5 +156,10 @@ spec:
               protocol: TCP
             - port: "8080"
               protocol: TCP
+          rules:
+            http:
+              - method: "GET"
+                path: "/healthz.*"
+        - ports:
             - port: "9001"
               protocol: TCP

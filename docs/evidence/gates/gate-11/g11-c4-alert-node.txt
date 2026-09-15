@@ -1,0 +1,36 @@
+gate: 11
+check: G11-C4
+captured_utc: 2026-09-15T23:49:35Z
+repo_commit: f7d76c9824a571ae7c1a4ef5e38d8cdbc7295278
+plan_commit: 4f591e3e5f954bd7829c19c938d0f5eb29d00430
+plan_sha256: 4b1727a970704ee3646102c0a4d1cdd3c6a814cd356f981d24e3a39c3c4535ee
+target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://127.0.0.1:6443 (local kubeconfig on veridex-server-1; same cluster, confirmed by UID match against Gates 4-10's VIP-addressed https://10.2.0.100:6443)
+captured_by: agent
+command: (trigger) stop k3s briefly on veridex-server-3, authorized live in-session after cordon+drain was found not to touch the Ready condition; (receive) curl vmsingle ALERTS{alertname="NodeNotReady"} and Loki query for kubernetes_container_name="alert-sink" |= "NodeNotReady"
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: single-node trigger (veridex-server-3), not exercised against every node; see raw/vm-alerts-NodeNotReady.json and raw/loki-alertsink-NodeNotReady.json for untruncated responses.
+
+Check: "Trigger and receive ... node ... alert" (Acceptance evidence, Gate 11).
+
+Trigger method: cordon+drain was tried first and found NOT to touch the
+`Ready` condition the NodeNotReady rule actually evaluates (it only sets
+SchedulingDisabled) -- surfaced live, corrected method authorized: briefly
+stopping the k3s service on veridex-server-3 so kubelet stops reporting
+Ready, then restarting it.
+
+Alertmanager/alert-sink delivery (decoded from raw/loki-alertsink-
+NodeNotReady.json, both status transitions present):
+
+  2026-09-16T00:05:23+02:00  alertname=NodeNotReady  status=firing    summary="Node veridex-server-3 is not Ready"
+  2026-09-16T00:09:23+02:00  alertname=NodeNotReady  status=resolved  summary="Node veridex-server-3 is not Ready"
+
+vmsingle's retained ALERTS{alertname="NodeNotReady"} time series
+(raw/vm-alerts-NodeNotReady.json) independently confirms vmalert itself
+evaluated and fired the rule over this same window, not just that
+Alertmanager received a message from elsewhere.
+
+Verdict: PASS. Triggered live, received end-to-end (vmalert -> Alertmanager
+-> alert-sink webhook -> Loki), with a full firing-then-resolved lifecycle
+inside a 4-minute window.

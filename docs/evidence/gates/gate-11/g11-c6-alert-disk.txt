@@ -1,0 +1,46 @@
+gate: 11
+check: G11-C6
+captured_utc: 2026-09-15T23:49:35Z
+repo_commit: f7d76c9824a571ae7c1a4ef5e38d8cdbc7295278
+plan_commit: 4f591e3e5f954bd7829c19c938d0f5eb29d00430
+plan_sha256: 4b1727a970704ee3646102c0a4d1cdd3c6a814cd356f981d24e3a39c3c4535ee
+target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://127.0.0.1:6443 (local kubeconfig on veridex-server-1; same cluster, confirmed by UID match against Gates 4-10's VIP-addressed https://10.2.0.100:6443)
+captured_by: agent
+command: (trigger) temporarily relaxed DiskSpaceLow's threshold from <15 to <90 (commit da2f22c) to force a real evaluation against live disk usage, then reverted to the real <15% threshold (commit 777984a); (receive) Loki query for kubernetes_container_name="alert-sink" |= "DiskSpaceLow"
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: triggered via a temporary threshold relaxation rather than actually filling a disk, since deliberately filling /boot on 5 live nodes is destructive; the rule expression and metric source are real and unmodified, only the numeric threshold was temporarily changed and then reverted (commits da2f22c, 777984a). See raw/vm-alerts-DiskSpaceLow.json and raw/loki-alertsink-DiskSpaceLow.json.
+
+Check: "Trigger and receive ... disk ... alert" (Acceptance evidence, Gate 11).
+
+Alert-sink deliveries, all 5 nodes, full firing-then-resolved lifecycle
+(decoded from raw/loki-alertsink-DiskSpaceLow.json):
+
+  2026-09-15T23:46:49+02:00  firing    Filesystem /boot on veridex-agent-1 below 15% free
+  2026-09-15T23:46:49+02:00  firing    Filesystem /boot on veridex-agent-2 below 15% free
+  2026-09-15T23:46:49+02:00  firing    Filesystem /boot on veridex-server-1 below 15% free
+  2026-09-15T23:46:49+02:00  firing    Filesystem /boot on veridex-server-2 below 15% free
+  2026-09-15T23:46:49+02:00  firing    Filesystem /boot on veridex-server-3 below 15% free
+  2026-09-15T23:56:49+02:00  resolved  Filesystem /boot on veridex-agent-1 below 15% free
+  2026-09-15T23:56:49+02:00  resolved  Filesystem /boot on veridex-agent-2 below 15% free
+  2026-09-15T23:56:49+02:00  resolved  Filesystem /boot on veridex-server-1 below 15% free
+  2026-09-15T23:56:49+02:00  resolved  Filesystem /boot on veridex-server-2 below 15% free
+  2026-09-15T23:56:49+02:00  resolved  Filesystem /boot on veridex-server-3 below 15% free
+
+The rule fired against every one of the 5 nodes simultaneously (real
+node_filesystem_avail_bytes/node_filesystem_size_bytes from node-exporter's
+filesystem collector, real disks only per the rule's tmpfs/overlay
+exclusion) -- confirming node-exporter's filesystem metrics reach vmalert
+for all 5 nodes, not just that the alert CAN fire in principle. The real
+threshold (<15%) is confirmed in the current deployed rule
+(kubernetes/infrastructure/monitoring/vmalert-deployment.yaml) -- the
+temporary relaxation was reverted at commit 777984a before this evidence was
+captured, so the currently-live rule is the production threshold, not the
+test one.
+
+Verdict: PASS. Triggered live (against real live filesystem metrics with a
+temporarily widened threshold to force evaluation, not a destructive disk
+fill), received end-to-end across all 5 nodes, full firing/resolved
+lifecycle confirmed, real threshold restored and confirmed live before
+closure.

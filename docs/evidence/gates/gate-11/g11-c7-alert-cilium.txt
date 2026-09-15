@@ -1,0 +1,35 @@
+gate: 11
+check: G11-C7
+captured_utc: 2026-09-15T23:49:35Z
+repo_commit: f7d76c9824a571ae7c1a4ef5e38d8cdbc7295278
+plan_commit: 4f591e3e5f954bd7829c19c938d0f5eb29d00430
+plan_sha256: 4b1727a970704ee3646102c0a4d1cdd3c6a814cd356f981d24e3a39c3c4535ee
+target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://127.0.0.1:6443 (local kubeconfig on veridex-server-1; same cluster, confirmed by UID match against Gates 4-10's VIP-addressed https://10.2.0.100:6443)
+captured_by: agent
+command: (trigger) temporary nftables DROP rule blocking veridex-server-2's Cilium metrics port (9962) from the pod CIDR, since deleting the pod alone recovers faster (15-30s) than the rule's 2-minute for-window and a NetworkPolicy-based block was found unenforceable (enable-host-firewall: false); (receive) Loki query for alert-sink
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: triggered via a temporary firewall rule rather than an actual agent crash, since a real crash risks the routine-DaemonSet-restart prohibition (CLAUDE.md Sec.9/15); vmagent itself needed a pod restart to exercise the new firewall rule against a fresh connection (an already-open connection bypassed the DROP via `ct state established,related accept`) -- disclosed as a nftables/conntrack mechanic, not a gap in the alert. See raw/vm-alerts-CiliumAgentDown.json and raw/loki-alertsink-CiliumAgentDown.json.
+
+Check: "Trigger and receive ... Cilium ... alert" (Acceptance evidence, Gate 11).
+
+Alert-sink deliveries (decoded from raw/loki-alertsink-CiliumAgentDown.json):
+
+  2026-09-16T00:28:09+02:00  firing    Cilium agent on veridex-server-2 is not scrapeable -- the agent itself, not just its pod
+  2026-09-16T00:30:09+02:00  resolved  Cilium agent on veridex-server-2 is not scrapeable -- the agent itself, not just its pod
+
+The rule (kubernetes/infrastructure/monitoring/vmalert-deployment.yaml,
+`up{job="cilium-agent"}==0`) was deliberately rewritten during this gate
+away from kube-state-metrics pod-readiness, after a live incident
+(2026-09-15) where the Cilium pod stayed Running/Ready while its datapath
+was actually broken -- pod readiness alone would have stayed silent through
+that exact failure. This check proves the rewritten rule against the
+datapath-level signal it was designed for: the scrape target itself going
+down, not just the pod object's status.
+
+Verdict: PASS. Triggered live via a real firewall-level block of the actual
+metrics port, received end-to-end, full firing/resolved lifecycle,
+resolution confirmed only after the firewall rule was removed and a fresh
+scrape connection was forced -- consistent with the rule's intent (agent
+health, not pod health).

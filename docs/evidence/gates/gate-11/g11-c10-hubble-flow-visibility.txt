@@ -1,0 +1,46 @@
+gate: 11
+check: G11-C10
+captured_utc: 2026-09-15T23:15:00Z
+repo_commit: f7d76c9824a571ae7c1a4ef5e38d8cdbc7295278
+plan_commit: 4f591e3e5f954bd7829c19c938d0f5eb29d00430
+plan_sha256: 4b1727a970704ee3646102c0a4d1cdd3c6a814cd356f981d24e3a39c3c4535ee
+target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://127.0.0.1:6443 (local kubeconfig on veridex-server-1; same cluster, confirmed by UID match against Gates 4-10's VIP-addressed https://10.2.0.100:6443)
+captured_by: agent
+command: RELAY_IP=$(kubectl get pod -n kube-system -l k8s-app=hubble-relay -o jsonpath='{.items[0].status.podIP}'); kubectl exec -n kube-system ds/cilium -- hubble observe --server "$RELAY_IP:4245" --follow --pod argocd/argocd-repo-server-7f9fdfbb74-5xhkr -o compact
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: this capture happened to run during a real, live policy-denial incident (see g11-c-argo* and kubernetes/cluster/policies/argocd-health-probes.yaml), which is a stronger demonstration than a synthetic test but means the sample is not a planned, isolated drill.
+
+Check: "Hubble flow visibility supports policy discovery" (End state, Gate 11).
+
+Hubble relay pod at capture time: 1/1 Running, 0 restarts (fixed earlier in
+this gate -- root cause was port 4244, Hubble's peer-service port, missing
+from firewall_trusted_pod_ports, not the originally-suspected stale BPF
+state; see ansible/roles/firewall/defaults/main.yml).
+
+Unedited output (46 lines total; representative excerpt below), captured
+live while argocd-repo-server was actively unready:
+
+  Sep 15 23:15:15.532: 10.44.4.103:33102 (world) <> argocd/argocd-repo-server-7f9fdfbb74-5xhkr:8084 (ID:17111) policy-verdict:none INGRESS DENIED (TCP Flags: SYN)
+  Sep 15 23:15:15.532: 10.44.4.103:33102 (world) <> argocd/argocd-repo-server-7f9fdfbb74-5xhkr:8084 (ID:17111) Policy denied DROPPED (TCP Flags: SYN)
+  [... repeating DENIED/DROPPED pairs, multiple source ports, ~23:15:15-23:15:33 ...]
+  Sep 15 23:15:18.597: argocd/argocd-repo-server-7f9fdfbb74-5xhkr:45246 (ID:17111) -> kube-system/coredns-55d789bd7f-w5lf4:53 (ID:6733) to-endpoint FORWARDED (UDP)
+  Sep 15 23:15:18.598: argocd/argocd-repo-server-7f9fdfbb74-5xhkr:57527 (ID:17111) <- kube-system/coredns-55d789bd7f-lgxxn:53 (ID:6733) to-endpoint FORWARDED (UDP)
+
+This single capture demonstrates the "supports policy discovery" claim
+directly, not just that flows are visible: it shows both a DENIED path
+(health-probe SYNs from 10.44.4.103, misclassified as `world`, hitting
+default-deny) and an ALLOWED path (the same pod's real DNS traffic being
+FORWARDED) at the same moment, on the same endpoint. This is exactly the
+mechanism used earlier in this gate to discover that the previously-deployed
+argocd-allow-health-probes CiliumNetworkPolicy's fromCIDR clause did not
+cover the observed failure mode (CIDR rules match only the CIDR-derived
+identity, not the generic `world` identity) -- a real policy-discovery
+outcome, not a demonstration for its own sake: it directly informed the
+fromEntities: [world] fix committed in the same commit as this evidence.
+
+Verdict: PASS. Hubble flow visibility is live, cluster-wide (relay
+connected to all 5 node peers), and was the actual instrument used to
+discover and correct a real policy gap during this gate -- the strongest
+form of "supports policy discovery" evidence available.

@@ -1,0 +1,33 @@
+gate: 11
+check: G11-C9
+captured_utc: 2026-09-15T23:49:35Z
+repo_commit: f7d76c9824a571ae7c1a4ef5e38d8cdbc7295278
+plan_commit: 4f591e3e5f954bd7829c19c938d0f5eb29d00430
+plan_sha256: 4b1727a970704ee3646102c0a4d1cdd3c6a814cd356f981d24e3a39c3c4535ee
+target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://127.0.0.1:6443 (local kubeconfig on veridex-server-1; same cluster, confirmed by UID match against Gates 4-10's VIP-addressed https://10.2.0.100:6443)
+captured_by: agent
+command: (trigger) an ephemeral ArgoCD Application (kubernetes/test/gate11-alert-trigger/) referencing a Deployment with a deliberately unresolvable image and progressDeadlineSeconds: 30, deleted after the test; (receive) Loki query for alert-sink
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: the trigger deployment and its Application were both temporary; the live ArgoCD Application and Deployment objects were deleted within the test window (confirmed live: `kubectl get application gate11-alert-trigger -n argocd` -> NotFound), but the repo manifest itself (kubernetes/test/gate11-alert-trigger/deployment.yaml, committed at 8b07cd3) was left behind and only removed as repo hygiene during this evidence-capture pass, in the same commit as this evidence. See raw/vm-alerts-ArgoAppDegraded.json and raw/loki-alertsink-ArgoAppDegraded.json. This check is distinct from the separate, unrelated Argo CD repo-server/notifications-controller stall investigated and fixed later in this same gate (Cilium identity misclassification against kubelet health probes) -- that was an availability incident in Argo CD's own control-plane pods, not a test of this alert rule.
+
+Check: "Trigger and receive ... Argo reconciliation ... alert" (Acceptance evidence, Gate 11).
+
+Alert-sink deliveries (decoded from raw/loki-alertsink-ArgoAppDegraded.json):
+
+  2026-09-15T23:14:15+02:00  firing    Argo CD application gate11-alert-trigger is Degraded
+  2026-09-15T23:18:15+02:00  resolved  Argo CD application gate11-alert-trigger is Degraded
+
+The rule reads argocd_app_info (Argo CD's own already-live metrics, scraped
+via the `argocd` vmagent job) for health_status="Degraded" -- a real
+application genuinely entered Degraded state (an unschedulable/unresolvable
+image causing the Deployment to miss its rollout deadline), was observed,
+alerted, and then both the test Deployment and its Application were removed,
+which is reflected in the resolved transition above.
+
+Verdict: PASS. Triggered live via a real Degraded ArgoCD Application,
+received end-to-end, full firing/resolved lifecycle. Live test artifacts
+(Application, Deployment) were confirmed removed; the stray repo manifest
+was found and removed during this same evidence pass -- disclosed rather
+than presented as having been clean all along.

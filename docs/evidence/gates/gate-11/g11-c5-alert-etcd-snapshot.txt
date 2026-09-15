@@ -1,0 +1,75 @@
+gate: 11
+check: G11-C5
+captured_utc: 2026-09-15T23:49:35Z
+repo_commit: f7d76c9824a571ae7c1a4ef5e38d8cdbc7295278
+plan_commit: 4f591e3e5f954bd7829c19c938d0f5eb29d00430
+plan_sha256: 4b1727a970704ee3646102c0a4d1cdd3c6a814cd356f981d24e3a39c3c4535ee
+target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://127.0.0.1:6443 (local kubeconfig on veridex-server-1; same cluster, confirmed by UID match against Gates 4-10's VIP-addressed https://10.2.0.100:6443)
+captured_by: agent
+command: (trigger, unintended) missing textfile-collector metric on veridex-server-1; (fix) ansible-playbook playbooks/etcd-s3-backup.yml --limit k3s_servers; (receive+recovery) curl vmalert /api/v1/alerts, Alertmanager /api/v2/alerts, and Loki alert-sink query
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: the trigger for this alert was not a deliberate test -- it was a genuine, pre-existing gap discovered live during Gate 11 closure evidence-gathering (see narrative below). The evidence still satisfies "trigger and receive" (real firing, real delivery, real recovery), but disclosed here rather than presented as a clean planned drill; see raw/vm-alerts-EtcdSnapshotSyncStale.json, raw/loki-alertsink-EtcdSnapshotSyncStale.json, raw/alertmanager-active-final.json.
+
+Check: "Trigger and receive ... etcd snapshot ... alert" (Acceptance evidence, Gate 11).
+
+FINDING, live, during evidence capture: EtcdSnapshotSyncStale was found
+ACTIVELY FIRING and had been continuously since 2026-09-15T18:09:00Z (6+
+hours) at the moment this evidence was gathered -- confirmed via
+Alertmanager's own /api/v2/alerts (state: active) and vmalert's /api/v1/alerts
+(state: firing, activeAt unchanged across polls). Root cause, verified live:
+the hourly cron on veridex-server-1 was genuinely succeeding every run
+(/var/log/etcd-s3-backup/sync.log showed "sync end, ok" every hour, most
+recently minutes before this check), but the DEPLOYED sync script
+(/usr/local/bin/etcd-s3-backup-sync.sh) predated the Gate 11 metrics-writing
+logic already present in Git (ansible/roles/etcd-s3-backup/templates/
+sync-script.sh.j2) -- the Ansible converge that renders it had been coded
+but never actually applied to the live node. /var/lib/node-exporter/
+textfile_collector/ was empty, so etcd_snapshot_sync_last_success_timestamp_
+seconds was fully absent, and the rule's `or absent(...)` clause fired
+continuously. This is the exact condition the plan's stop condition names
+("missing storage metrics") -- see g11-c11-stop-condition.txt.
+
+FIX, authorized live: `ansible-playbook -i inventory/production/hosts.yml
+playbooks/etcd-s3-backup.yml --limit k3s_servers`, using the real
+ETCD_S3_ACCESS_KEY/ETCD_S3_SECRET_KEY from the operator's local credential
+file per docs/security/secret-register.yml. --check --diff run first,
+confirmed the diff was exactly the intended metrics-trap addition, scoped
+to veridex-server-1 only (0 changes on veridex-server-2/3, correctly
+identified as not `is_first_server`). Applied for real: changed=2 on
+veridex-server-1 (render script, run sync once), 0 failures, the role's own
+built-in post-sync assertion passed.
+
+Post-fix, live:
+  /var/lib/node-exporter/textfile_collector/etcd_snapshot.prom now contains
+  both etcd_snapshot_sync_last_attempt_timestamp_seconds and
+  etcd_snapshot_sync_last_success_timestamp_seconds with a fresh timestamp
+  (1789515935).
+  vmsingle confirmed scraping it within ~60s.
+  vmalert re-evaluated: EtcdSnapshotSyncStale no longer appears in
+  `/api/v1/alerts` (queried again ~75s after the metric appeared).
+  Alertmanager confirmed: no longer in `/api/v2/alerts` active list
+  (raw/alertmanager-active-final.json -- only ContainerCPUThrottlingHigh
+  remains active, an unrelated P2 capacity alert, disclosed and out of
+  scope for this check).
+
+Alert-sink deliveries during the firing period (decoded from raw/loki-
+alertsink-EtcdSnapshotSyncStale.json -- 5 repeat deliveries at Alertmanager's
+hourly repeat_interval, all status=firing since the underlying condition
+never crossed back to resolved on its own before the fix landed):
+
+  2026-09-15T20:58:55+02:00  firing
+  2026-09-15T21:58:55+02:00  firing
+  2026-09-15T22:58:55+02:00  firing
+  2026-09-15T23:58:55+02:00  firing
+  2026-09-16T00:58:55+02:00  firing
+
+Verdict: PASS, with a disclosed finding-and-fix rather than a clean planned
+drill. "Trigger" is satisfied by a real, live, unplanned firing (arguably
+stronger evidence than a synthetic drill, since it is not a contrived
+condition). "Receive" is satisfied by five real webhook deliveries to
+alert-sink. Recovery is confirmed live at both the vmalert-evaluation layer
+and the Alertmanager-delivery layer. The underlying gap (converge coded but
+never applied) is fixed and now matches Git; see g11-c11-stop-condition.txt
+for the "missing storage metrics" stop-condition evaluation this also feeds.

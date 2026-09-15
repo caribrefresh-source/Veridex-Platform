@@ -15,9 +15,14 @@ spec:
   source:
     repoURL: https://github.com/caribrefresh-source/Veridex-Platform.git
     targetRevision: main
+    # No `directory: {recurse: false}` stanza: recurse defaults to false, and
+    # because false is the zero value the API server drops the whole
+    # `directory` key from the stored object. Declaring it in Git therefore
+    # creates a diff (Git has the key, live does not) that Argo CD can never
+    # resolve -- the parent app-of-apps sits permanently OutOfSync and stops
+    # converging. Found live on the traefik Application, which had exactly
+    # this stanza and blocked root from applying this file at all.
     path: kubernetes/infrastructure/monitoring
-    directory:
-      recurse: false
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring

@@ -15,9 +15,13 @@ spec:
   source:
     repoURL: https://github.com/caribrefresh-source/Veridex-Platform.git
     targetRevision: main
+    # `directory: {recurse: false}` removed 2026-09-15: recurse defaults to
+    # false, and because false is the zero value the API server drops the
+    # whole `directory` key from the stored object. Git had the key, the live
+    # object did not, so root (the app-of-apps) saw a diff it could never
+    # resolve -- it sat permanently OutOfSync and stopped applying anything
+    # new, including the Gate 11 monitoring Application.
     path: kubernetes/infrastructure/ingress
-    directory:
-      recurse: false
   destination:
     server: https://kubernetes.default.svc
     namespace: kube-system

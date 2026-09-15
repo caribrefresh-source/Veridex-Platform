@@ -30,9 +30,17 @@ verify-cluster: ## Check cluster health
 bootstrap-argocd: ## Install Argo CD and apply the root application
 	cd $(ANSIBLE_DIR) && ansible-playbook -i inventory/$(ENV)/hosts.yml playbooks/bootstrap-argocd.yml
 
+# Needs ETCD_S3_ACCESS_KEY / ETCD_S3_SECRET_KEY exported first (Gate 8's B2
+# writer key -- see docs/security/secret-register.yml), same as install-cluster
+# needs K3S_TOKEN. k3s's own native --etcd-s3 uploader is not used here --
+# see roles/etcd-s3-backup/defaults/main.yml for why.
+.PHONY: etcd-s3-backup
+etcd-s3-backup: ## Deploy off-cluster etcd snapshot upload to Backblaze B2
+	cd $(ANSIBLE_DIR) && ansible-playbook -i inventory/$(ENV)/hosts.yml playbooks/etcd-s3-backup.yml
+
 # The full bring-up in dependency order.
 .PHONY: bring-up
-bring-up: prepare-hosts install-cluster install-cilium verify-cluster bootstrap-argocd ## Run the whole bring-up in order
+bring-up: prepare-hosts install-cluster install-cilium verify-cluster etcd-s3-backup bootstrap-argocd ## Run the whole bring-up in order
 
 .PHONY: build
 build: ## Render every environment kustomization

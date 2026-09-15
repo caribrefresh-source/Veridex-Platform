@@ -1,0 +1,42 @@
+gate: 9
+check: (supporting evidence, not a numbered acceptance-evidence check -- cited from closure.md Technical Detail; the finding that shaped this gate's whole design)
+captured_utc: 2026-09-15T05:04:49Z to 2026-09-15T05:04:54Z (diagnosis); 2026-09-15T00:35:39Z (first reproduction)
+repo_commit: 212122c45dbcd38a012902b943f90a498d5e5de8
+plan_commit: bc27a0a2b9e872679007342b5d255b888e000722
+plan_sha256: 0c30445b0074edf3688ba57936e1c5149497b829e0f7d1b4328c5181bd222af8
+target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://10.2.0.100:6443; host veridex-server-1
+captured_by: agent
+command: k3s etcd-snapshot save --name gate9-validate2 --etcd-s3 --etcd-s3-endpoint=s3.us-east-005.backblazeb2.com --etcd-s3-region=us-east-005 --etcd-s3-bucket=veridex-etcd-backup --etcd-s3-folder=etcd-snapshots --etcd-s3-retention=48 (safe one-off CLI test, no persistent config change); followed by journalctl on veridex-server-1 for the same time window; followed by an nftables OUTPUT-chain read and a curl reachability test to rule out the firewall/network as the cause
+exit_status: 0 (the k3s command itself exits 0 -- the S3 upload fails asynchronously inside the same process, logged separately)
+proof_class: live
+result: FAIL (of the plan's originally-assumed mechanism) -- this is the deliberate negative finding that justified building roles/etcd-s3-backup instead; it is not a Gate 9 acceptance-evidence check in its own right
+limitations: Tested against k3s v1.36.4+k3s1 and b2 CLI 4.7.1 only, both exact pinned versions in production use at the time of this gate. A future k3s release could add the missing header; re-verify before assuming this finding is permanent (see the comment in roles/k3s-server/defaults/main.yml).
+--- unedited output ---
+
+=== journalctl on veridex-server-1, the exact upload failure ===
+Sep 15 06:35:39 veridex-server-1 k3s[63977]: time="2026-09-15T06:35:39+02:00" level=info msg="Reusing cached S3 client for endpoint=\"https://s3.us-east-005.backblazeb2.com\" bucket=\"veridex-etcd-backup\" folder=\"etcd-snapshots\""
+Sep 15 06:35:39 veridex-server-1 k3s[63977]: time="2026-09-15T06:35:39+02:00" level=info msg="Saving etcd snapshot gate9-validate2-veridex-server-1-1789446940 to S3"
+Sep 15 06:35:39 veridex-server-1 k3s[63977]: time="2026-09-15T06:35:39+02:00" level=info msg="Uploading snapshot to s3://veridex-etcd-backup/etcd-snapshots/gate9-validate2-veridex-server-1-1789446940"
+Sep 15 06:35:40 veridex-server-1 k3s[63977]: time="2026-09-15T06:35:40+02:00" level=error msg="Error received during snapshot upload to S3: Content-MD5 OR x-amz-checksum- HTTP header is required for Put Object requests with Object Lock parameters"
+Sep 15 06:35:40 veridex-server-1 k3s[63977]: time="2026-09-15T06:35:40+02:00" level=info msg="Event occurred" apiVersion=k3s.cattle.io/v1 fieldPath= kind=ETCDSnapshotFile logger=k3s message="Failed to save snapshot gate9-validate2-veridex-server-1-1789446940 on veridex-server-1: Content-MD5 OR x-amz-checksum- HTTP header is required for Put Object requests with Object Lock parameters" object=s3-gate9-validate2-veridex-server-1-1789446940-486ce7 reason=ETCDSnapshotFailed type=Warning
+
+(Local timestamps above are CEST, UTC+2; matches this gate's other UTC-labelled captures once converted -- 06:35:39+02:00 = 04:35:39Z.)
+
+=== independent confirmation the bucket received nothing from this attempt (b2 CLI, restore key) ===
+$ b2 ls -l -r b2://veridex-etcd-backup/
+(only the pre-existing Gate 8 test object listed; no etcd-snapshots/ prefix at all)
+
+=== ruling out the firewall / network before concluding it was the uploader ===
+$ nft list ruleset | grep -E 'chain (input|output|forward)|policy'
+chain input { policy drop; }
+chain forward { policy accept; }
+chain output { policy accept; }   <- egress is open, not the cause
+
+$ curl -sS -m 8 -o /dev/null -w 'http_code=%{http_code} time_total=%{time_total}\n' https://s3.us-east-005.backblazeb2.com/
+http_code=403 time_total=0.309826   <- endpoint reachable, TLS works, DNS resolves; 403 on an unauthenticated root GET is the expected S3 response, not a network failure
+
+=== confirming B2's own CLI uploads to this exact same Object-Lock-enabled bucket without issue (Gate 8's own evidence, cited for comparison) ===
+See docs/evidence/gates/gate-08/c1-create-protected-object.txt -- the writer key uploaded a protected test object successfully at Gate 8, proving the incompatibility is k3s's own minimal S3 client, not B2 or this bucket's Object Lock configuration in general.
+
+=== research: no known upstream issue for this exact combination ===
+Searched k3s-io/k3s GitHub issues for "Object Lock" and "Content-MD5" + etcd snapshot S3 upload (2026-09-15): no existing issue found describing this incompatibility. Several other etcd-snapshot-S3 issues exist (upload timeout, retention-with-folder, scheduled-vs-manual uploads) but none address Object Lock's required header. Treated as an untested combination the plan itself anticipated might exist ("Highest-priority unresolved issue... What is not yet proven is B2-specific behavior under this exact stack"), not a known/tracked bug with a workaround.

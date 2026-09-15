@@ -9,8 +9,21 @@ Plan: `docs/Engineering Documents/Initial Stages Plan.txt`
 
 ## Position
 
-Last deliverable **D40**, last exit-gate check **EG46** (Gate 8, closed
-2026-09-15). The next closed gate starts at **D41** and **EG47**.
+Last deliverable **D47**, last exit-gate check **EG51** (Gate 9, closed
+2026-09-15). The next closed gate starts at **D48** and **EG52**.
+
+**Gate 9 implementation note.** The plan's End state for Gate 9 names "k3s's
+native S3-compatible snapshot target" as the off-cluster upload mechanism.
+That mechanism was tried, live, against the exact pinned k3s version and
+found incompatible with Gate 8's Object-Lock-enabled bucket (it never sends
+the `Content-MD5`/`x-amz-checksum-` header B2's Object Lock requires — full
+finding in `docs/evidence/gates/gate-09/native-uploader-incompatibility.txt`).
+With the repository owner's explicit authorization, a sidecar uploader
+(`roles/etcd-s3-backup`, built on the already-proven-working `b2` CLI)
+replaces it. Gate 9's substantive acceptance evidence is met in full; the
+specific tool is not the one the plan's prose names. `audit`/future gates
+should treat this as the actual implemented mechanism, not the plan's literal
+text, until the plan document itself is amended.
 
 The plan blob advanced from `4ebc8de` to `64d80e6` at Gate 7's closure (the
 Gates 32-35 amendment, Part D; hardening backlog renumbered to Part E). Gates
@@ -35,6 +48,7 @@ closure evidence; `docs/evidence/legacy/README.md` maps it to Revision 3 gates.
 | 6 | Cilium and cluster DNS | D30–D33 | EG32–EG37 | 2026-09-14 | `4ebc8de` | `8bf4f56` | kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://10.2.0.100:6443 | `docs/evidence/gates/gate-06/closure.md` |
 | 7 | Verification automation | D34–D37 | EG38–EG41 | 2026-09-14 | `64d80e6` | `64d80e6` | kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://10.2.0.100:6443 | `docs/evidence/gates/gate-07/closure.md` |
 | 8 | Backup foundation | D38–D40 | EG42–EG46 | 2026-09-15 | `bc27a0a` | `f287056` | Backblaze B2 account c1beac90ce56; bucket veridex-etcd-backup, bucketId 4c818bbe7abca920ac0e0516 | `docs/evidence/gates/gate-08/closure.md` |
+| 9 | etcd recovery | D41–D47 | EG47–EG51 | 2026-09-15 | `bc27a0a` | `212122c` | kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://10.2.0.100:6443; Backblaze B2 bucket veridex-etcd-backup, bucketId 4c818bbe7abca920ac0e0516 | `docs/evidence/gates/gate-09/closure.md` |
 
 ## Reopen log
 
@@ -47,6 +61,7 @@ closure evidence; `docs/evidence/legacy/README.md` maps it to Revision 3 gates.
 |---|---|---|---|---|
 | O1 | 2026-09-13 | Plan: "Execute each gate in order and stop on the first unmet dependency." Gate 13: the MINIO_KMS_SECRET_KEY incident "(Gate 22) is closed before this gate can pass", with scheduling "enforced per Gate 23" and "capacity thresholds per Gate 24", and a stop condition of "capacity below safety threshold". Gate 22: "must complete before … Gate 13 or Gate 24 can pass." In strict numeric order Gate 13 closes before Gate 22, so neither can close. | Gate 13 may be **built** (MinIO deployed, not approved for production) once Gates 0–12 are closed. Gates 22, 23 and 24 then close, in that order, before Gate 13 **closes**. Their dependencies are Gates 0–12 plus Gate 13's deployment — not Gates 14–21. Gate 14 is not built until Gate 13 closes. | Repository owner, 2026-09-13 session, adopting the resolution proposed there |
 | O2 | 2026-09-15 | Gate 8: "Exact bucket architecture, credential mechanism and Object Lock activation are specified in Gates 18–21." Gate 21: "One key per producer/bucket pairing" for producers (CloudNativePG, MinIO, Longhorn, k3s etcd) that do not exist until Gates 9, 12, 13 and 14 close. Neither side can go first under strict numeric order: Gate 8 names Gates 18–21 as its own specification, and Gate 21 cannot fully close before producers built at Gates 9/12/13/14, which themselves follow Gate 8 in numeric order. | Gate 8 **builds and closes now** on its own self-contained acceptance evidence (one protected test bucket, Object Lock two-phase activation per Gate 19, one writer key + one restore key under the application-key model of Gates 20–21) — using Gates 18–21's text as design reference, not as a closure blocker. Gates 18–21 close later, incrementally, as their own fuller requirements become satisfiable: Gate 18 once all six buckets are formally defined, Gate 20 once full account isolation is audited, Gate 21 only once each producer exists (Gates 9/12/13/14) and gets its own scoped key. Mirrors O1's split exactly. | Repository owner, 2026-09-15 session, adopting the resolution proposed there |
+| O3 | 2026-09-15 | Gate 9: "see Gate 17, veridex-etcd-backup in Gate 18." Gate 17's "k3s etcd" row requires proof of "Scheduled upload, listing, pruning and isolated restore" — substantively Gate 9's own acceptance evidence — but Gate 17 as a whole cannot close until all six producer rows (CloudNativePG, Velero, MinIO, Longhorn, k3s etcd, audit exporter) are each proven, at gates (12, 13, 14) that follow Gate 9 in numeric order. `veridex-etcd-backup` (Gate 18) already exists live, created at Gate 8. | Gate 9 **builds and closes now** on its own self-contained acceptance evidence (two observed scheduled snapshot cycles, local and remote retention verified, download, isolated restore, API query of restored objects) against the real `veridex-etcd-backup` bucket and `ETCD_S3_ACCESS_KEY`/`ETCD_S3_SECRET_KEY` Gate 8 already created — using Gate 17's "k3s etcd" row and Gate 18's bucket text as design reference, not a closure blocker. Gate 17 closes later, once every producer row is proven at its own gate; Gate 9 proving its own row now is a contribution toward that, not something blocked by it. Mirrors O1 and O2 exactly. | Repository owner, 2026-09-15 session, adopting the resolution proposed there |
 
 ## Open ordering conflicts
 
@@ -63,9 +78,6 @@ Gate 35's exit check — none of which are enumerated below. None involve Gates
 0-7, so none blocked Gate 7's closure; the re-derivation is owed before Gate 11
 closes.
 
-- **Gate 9 → Gates 17 and 18.** Gate 9's stop condition includes "unproven
-  Backblaze B2 behavior for the pinned k3s version" (Gate 17's k3s etcd row)
-  and it uses `veridex-etcd-backup` from Gate 18.
 - **Gate 12 → Gate 26.** Gate 12 defers "final tiering and node feasibility" to
   Gate 26, whose stop condition must be resolved "before longhorn-critical is
   used".

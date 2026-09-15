@@ -1,0 +1,25 @@
+gate: 9
+check: G09-C3
+captured_utc: 2026-09-15T05:04:00Z
+repo_commit: 212122c45dbcd38a012902b943f90a498d5e5de8
+plan_commit: bc27a0a2b9e872679007342b5d255b888e000722
+plan_sha256: 0c30445b0074edf3688ba57936e1c5149497b829e0f7d1b4328c5181bd222af8
+target_identity: Backblaze B2 account c1beac90ce56, bucket veridex-etcd-backup (bucketId 4c818bbe7abca920ac0e0516)
+captured_by: agent
+command: b2 file download b2://veridex-etcd-backup/etcd-snapshots/etcd-snapshot-veridex-server-1-1789448404 /tmp/gate9/restore-snapshot.db (as the restricted restore key: listBuckets,listFiles,readFiles -- no writeFiles, no deleteFiles); sha1sum comparison against the file's own recorded checksum
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: none identified
+--- unedited output ---
+
+$ b2 file download b2://veridex-etcd-backup/etcd-snapshots/etcd-snapshot-veridex-server-1-1789448404 /tmp/gate9/restore-snapshot.db
+restore-snapshot.db: 100%|##########| 14.2M/14.2M [00:00<00:00, 15.9MB/s]
+Checksum matches
+Download finished
+exit_status=0
+
+$ sha1sum /tmp/gate9/restore-snapshot.db
+0174e08c1cab97923a7dc82a4ad885b9c505cc2d  /tmp/gate9/restore-snapshot.db
+
+This is the exact file the isolated restore drill (G09-C4/C5) was performed against.

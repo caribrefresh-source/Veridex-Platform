@@ -48,6 +48,28 @@
   when: k3s_audit_enabled | bool
   notify: restart k3s
 
+- name: Assert k3s's native etcd-s3 uploader stays disabled
+  # Gate 9, verified live 2026-09-15: k3s's built-in --etcd-s3 uploader does
+  # not send the Content-MD5/x-amz-checksum- header an Object-Lock-enabled
+  # bucket requires, so every upload to veridex-etcd-backup fails (see the
+  # full finding on etcd_s3_endpoint in defaults/main.yml). etcd_s3_endpoint
+  # is role-default blank on purpose; this assert is the code-enforced half
+  # of that guard -- a comment alone doesn't stop a future group_vars/host_vars
+  # override (higher Ansible precedence than role defaults) from silently
+  # re-enabling the same broken path. Off-cluster upload is
+  # roles/etcd-s3-backup instead.
+  ansible.builtin.assert:
+    that:
+      - etcd_s3_endpoint | length == 0
+    fail_msg: >-
+      etcd_s3_endpoint is set to '{{ etcd_s3_endpoint }}', which would enable
+      k3s's native --etcd-s3 uploader. That path is proven broken against an
+      Object-Lock-enabled bucket (see roles/k3s-server/defaults/main.yml) --
+      leave it blank and use roles/etcd-s3-backup for off-cluster upload
+      instead, or re-verify the Content-MD5 finding against a newer k3s
+      release before overriding this.
+    quiet: true
+
 - name: Write k3s config.yaml
   ansible.builtin.template:
     src: config.yaml.j2

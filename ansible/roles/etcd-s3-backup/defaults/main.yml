@@ -1,0 +1,49 @@
+---
+# etcd-s3-backup role default variables
+#
+# Gate 9 (etcd recovery): uploads k3s's own local etcd snapshots to Backblaze
+# B2 on the same hourly cadence, via the b2 CLI -- NOT k3s's native --etcd-s3
+# uploader, which is proven incompatible with an Object-Lock-enabled bucket
+# (roles/k3s-server/defaults/main.yml has the full finding). This role owns
+# only the sidecar: install the pinned CLI, deploy the writer-key credential
+# file and the sync script, and schedule it. The bucket's Object Lock,
+# encryption and lifecycle rule are Gate 8/9 control-node bootstrap actions,
+# not managed by this role -- B2-side bucket configuration, once set,
+# persists independently of any node converge.
+
+# Pinned to the exact version installed and tested this session (2026-09-15).
+# Bump deliberately, not by floating -- re-verify the Content-MD5/Object-Lock
+# finding against any newer version before assuming it still applies.
+etcd_s3_backup_cli_version: "4.7.1"
+
+etcd_s3_backup_venv: /opt/etcd-s3-backup/venv
+etcd_s3_backup_cli_bin: "{{ etcd_s3_backup_venv }}/bin/b2"
+
+etcd_s3_backup_cred_dir: /etc/etcd-s3-backup
+etcd_s3_backup_cred_file: "{{ etcd_s3_backup_cred_dir }}/credentials"
+etcd_s3_backup_script: /usr/local/bin/etcd-s3-backup-sync.sh
+etcd_s3_backup_log_dir: /var/log/etcd-s3-backup
+
+# Same bucket and region Gate 8 created and confirmed live (b2 account get).
+etcd_s3_backup_endpoint: "s3.us-east-005.backblazeb2.com"
+etcd_s3_backup_bucket: "veridex-etcd-backup"
+etcd_s3_backup_folder: "etcd-snapshots"
+
+# The SAME writer key Gate 8 created for k3s etcd (ETCD_S3_ACCESS_KEY/
+# ETCD_S3_SECRET_KEY, registered in docs/security/secret-register.yml) --
+# listBuckets,listFiles,writeFiles only, no deleteFiles. Reused here rather
+# than minted twice: it is already scoped to exactly this bucket and this
+# producer, matching Gate 21's "one key per producer/bucket pairing" even
+# though the upload mechanism changed.
+etcd_s3_backup_access_key: "{{ lookup('env', 'ETCD_S3_ACCESS_KEY') | default('', true) }}"
+etcd_s3_backup_secret_key: "{{ lookup('env', 'ETCD_S3_SECRET_KEY') | default('', true) }}"
+
+# k3s's own local snapshot directory (roles/k3s-server: k3s_data_dir).
+etcd_s3_backup_snapshot_dir: "{{ k3s_data_dir }}/server/db/snapshots"
+
+# k3s's local snapshot cron is "0 * * * *" (k3s_etcd_snapshot_cron). Offset
+# 5 minutes past the hour so the local snapshot has already landed before
+# this sync runs -- k3s's own snapshot save completes in low single-digit
+# seconds (observed live), so 5 minutes is generous headroom, not a tight
+# race.
+etcd_s3_backup_cron_minute: 5

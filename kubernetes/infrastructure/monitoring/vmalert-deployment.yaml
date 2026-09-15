@@ -45,9 +45,20 @@ data:
         interval: 30s
         rules:
           - alert: DiskSpaceLow
+            # GATE 11 ACCEPTANCE EVIDENCE -- TEMPORARY THRESHOLD, REVERT AFTER
+            # CAPTURE. Real threshold is < 15; every filesystem on this
+            # cluster is genuinely over 84% free, so proving the alert with
+            # the real threshold would mean deliberately filling a node's
+            # disk toward 85%+ used -- on a control-plane node that hosts
+            # etcd, an out-of-disk event risks the same component this
+            # session spent an hour making observable. Raised to < 90 instead,
+            # which the lowest real value (84.11%) already satisfies: this
+            # exercises the actual expression, labels, `for:` duration and
+            # full receive path against real, unmodified node_filesystem_*
+            # data -- not synthetic data, unlike the DNS trigger.
             expr: >-
               node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"}
-              / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs"} * 100 < 15
+              / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs"} * 100 < 90
             for: 5m
             labels:
               severity: P2

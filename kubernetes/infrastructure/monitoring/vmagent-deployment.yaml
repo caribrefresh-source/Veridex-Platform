@@ -89,20 +89,6 @@ data:
           - source_labels: [__meta_kubernetes_pod_ip]
             target_label: __address__
             replacement: "${1}:9153"
-      # GATE 11 ACCEPTANCE EVIDENCE -- TEMPORARY, REMOVE AFTER CAPTURE.
-      # A SEPARATE job, deliberately: bolting a static target onto the
-      # coredns job above does not work, because that job's relabel_configs
-      # keeps only targets whose __meta_kubernetes_pod_label_k8s_app matches
-      # "kube-dns" -- a static target carries no such label, fails the match,
-      # and is dropped before it is ever scraped (found live: it did not even
-      # appear as a target, "down" or otherwise). Still job="coredns", which
-      # is all up{job="coredns"} == 0 actually checks -- the alert rule
-      # cannot tell targets in one job_name block from two apart.
-      - job_name: coredns-alert-trigger
-        static_configs:
-          - targets: ["127.0.0.1:19153"]
-            labels:
-              job: coredns
       - job_name: argocd
         static_configs:
           - targets: ["argocd-metrics.argocd.svc:8082"]

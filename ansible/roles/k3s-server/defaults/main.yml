@@ -35,6 +35,30 @@ k3s_etcd_snapshot_retention: 48
 # this (sends Content-MD5/x-amz-checksum- on snapshot PUT), re-enabling this
 # block is the smaller change -- check the upstream changelog for exactly
 # that fix before assuming it still doesn't work.
+# Gate 11 (baseline observability): expose etcd's own metrics listener.
+#
+# By default k3s binds the etcd metrics listener to 127.0.0.1:2381, so nothing
+# off the node can read it. The consequence, found while building Gate 11's
+# dashboards: the platform's most critical stateful component had NO
+# first-party observability. The 8 etcd_* metric families that were reaching
+# storage are the API server's CLIENT-side view of etcd (request latency it
+# observed), not etcd's own -- no quorum state, no leader identity or change
+# count, no WAL fsync latency, no database size against quota. Every one of
+# those is a leading indicator for the failure modes Gate 4's own stop
+# condition names.
+#
+# Setting this to true binds that listener on 0.0.0.0:2381. The endpoint is
+# unauthenticated, which is why access is constrained at the firewall instead
+# (roles/firewall: the vLAN is already trusted, and 2381 is added to the
+# pod-CIDR allowlist for vmagent specifically). It exposes operational
+# telemetry -- database size, key count, latency -- never key or value data.
+#
+# CHANGING THIS RESTARTS k3s ON EVERY SERVER NODE (the role's `restart k3s`
+# handler). That is a control-plane and etcd restart: high-risk under
+# CLAUDE.md Section 12, and it must be rolled one node at a time so etcd keeps
+# quorum (3 voters, 2 needed).
+k3s_etcd_expose_metrics: true
+
 etcd_s3_endpoint: ""
 etcd_s3_bucket: ""
 etcd_s3_folder: "etcd-snapshots"

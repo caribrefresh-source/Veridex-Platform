@@ -21,3 +21,25 @@ cilium_ready_delay: 10
 # across nodes. See tasks/main.yml for the pod-template-hash safety check
 # that guards against this silently restarting the agent DaemonSet.
 cilium_hubble_relay_enabled: true
+
+# Gate 11 (baseline observability): Cilium's own agent and operator metrics.
+#
+# Without this there are no cilium_* series at all, so Cilium alerting has to
+# infer agent health from kube-state-metrics pod readiness -- which says a pod
+# is Running, not that the datapath is healthy. Absent: endpoint regeneration
+# failures, policy revision state, BPF map pressure, IP allocation exhaustion,
+# drop counts by reason, and the conntrack pressure that already differs 4x
+# between this cluster's two agent nodes.
+#
+# Applied automatically on a FRESH install (the flags below are part of the
+# install command, so a clean rebuild gets it with no extra step).
+#
+# On an EXISTING cluster it is different: enabling it changes the agent
+# DaemonSet's pod template, which rolls every Cilium pod. CLAUDE.md Sections 9
+# and 15 prohibit that without root-cause analysis and explicit authorisation,
+# and this session has already seen what an unplanned Cilium roll costs. So the
+# converge path is gated behind the flag below, which is deliberately false:
+# a routine `ansible-playbook` run will NOT restart Cilium to pick this up.
+# Set it to true for one authorised run when the restart is actually intended.
+cilium_prometheus_enabled: true
+cilium_allow_disruptive_upgrade: false

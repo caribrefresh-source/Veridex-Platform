@@ -1,0 +1,30 @@
+gate: 11
+check: G11-C3
+captured_utc: 2026-09-15T23:49:35Z
+repo_commit: f7d76c9824a571ae7c1a4ef5e38d8cdbc7295278
+plan_commit: 4f591e3e5f954bd7829c19c938d0f5eb29d00430
+plan_sha256: 4b1727a970704ee3646102c0a4d1cdd3c6a814cd356f981d24e3a39c3c4535ee
+target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://127.0.0.1:6443 (local kubeconfig on veridex-server-1; same cluster, confirmed by UID match against Gates 4-10's VIP-addressed https://10.2.0.100:6443)
+captured_by: agent
+command: kubectl port-forward -n monitoring svc/loki 13100:3100 & curl -sG "http://localhost:13100/loki/api/v1/label/node/values" --data-urlencode start=<24h-ago-ns> --data-urlencode end=<now-ns>
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: proves the `node` label has been stamped by every node's Fluent Bit pod at least once in 24h; does not itself prove zero gaps in continuous coverage.
+
+Check: "logs ... cover all nodes and bootstrap services" (End state, Gate 11).
+
+Raw response (also raw/loki-node-values.json):
+
+  {"status":"success","data":["veridex-agent-1","veridex-agent-2","veridex-server-1","veridex-server-2","veridex-server-3"]}
+
+All 5 cluster nodes appear as distinct values of the `node` label Fluent Bit
+stamps on every shipped log line (kubernetes/infrastructure/monitoring/
+fluent-bit-daemonset.yaml, the `modify` filter added at this gate
+specifically so a node-scoped log query is possible). Fluent Bit runs as a
+DaemonSet, one pod per node, tailing /var/log/containers/*.log -- so this
+also demonstrates every node's own container log stream, from bootstrap
+services and everything else scheduled there, reaches Loki.
+
+Verdict: PASS. Logs cover all 5 nodes, confirmed by live label enumeration
+against the real Loki store, not by DaemonSet pod-readiness alone.

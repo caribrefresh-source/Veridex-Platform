@@ -1,0 +1,34 @@
+gate: 11
+check: G11-C8
+captured_utc: 2026-09-15T23:49:35Z
+repo_commit: f7d76c9824a571ae7c1a4ef5e38d8cdbc7295278
+plan_commit: 4f591e3e5f954bd7829c19c938d0f5eb29d00430
+plan_sha256: 4b1727a970704ee3646102c0a4d1cdd3c6a814cd356f981d24e3a39c3c4535ee
+target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://127.0.0.1:6443 (local kubeconfig on veridex-server-1; same cluster, confirmed by UID match against Gates 4-10's VIP-addressed https://10.2.0.100:6443)
+captured_by: agent
+command: (trigger) a dedicated coredns-alert-trigger static scrape job pointed at an unreachable target (127.0.0.1:19153), added after the first attempt was silently dropped by the coredns job's own k8s_app=kube-dns keep-filter; (receive) Loki query for alert-sink
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: triggered via a deliberately-unreachable static target rather than actually stopping CoreDNS, since a real CoreDNS outage affects cluster-wide DNS resolution; the rule and delivery path exercised are identical to a real outage's signal (a coredns-family target's up==0). See raw/vm-alerts-CoreDNSDown.json and raw/loki-alertsink-CoreDNSDown.json.
+
+Check: "Trigger and receive ... DNS ... alert" (Acceptance evidence, Gate 11).
+
+First attempt at this trigger was silently dropped: bolting a dead static
+target onto the existing `coredns` scrape job meant it never appeared as a
+target at all, because that job's own `keep` filter on the k8s_app=kube-dns
+pod label filtered it out (a static target carries no such label). Found by
+reading vmagent's actual target list rather than assuming the trigger
+worked. Fixed by giving the trigger its own `coredns-alert-trigger` job with
+an explicit `job: coredns` label override, so the CoreDNSDown rule (which
+matches on job=coredns) would actually evaluate it.
+
+Alert-sink deliveries (decoded from raw/loki-alertsink-CoreDNSDown.json):
+
+  2026-09-15T23:30:12+02:00  firing    CoreDNS target 127.0.0.1:19153 is not scrapeable
+  2026-09-15T23:40:12+02:00  resolved  CoreDNS target 127.0.0.1:19153 is not scrapeable
+
+Verdict: PASS. Triggered live, received end-to-end, full firing/resolved
+lifecycle. The trigger's own dead-end (silently dropped target) was found
+and fixed before evidence was captured, and is disclosed here rather than
+omitted.

@@ -1,0 +1,60 @@
+gate: 11
+check: G11-C11
+captured_utc: 2026-09-15T23:52:00Z
+repo_commit: f7d76c9824a571ae7c1a4ef5e38d8cdbc7295278
+plan_commit: 4f591e3e5f954bd7829c19c938d0f5eb29d00430
+plan_sha256: 4b1727a970704ee3646102c0a4d1cdd3c6a814cd356f981d24e3a39c3c4535ee
+target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://127.0.0.1:6443 (local kubeconfig on veridex-server-1; same cluster, confirmed by UID match against Gates 4-10's VIP-addressed https://10.2.0.100:6443)
+captured_by: agent
+command: see cross-references below; this check synthesizes results already captured in g11-c1 through g11-c10 plus the alertmanager-active-final.json snapshot.
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: evaluated at capture time (2026-09-15T23:52Z), after the etcd-snapshot metrics gap (g11-c5) was found and fixed; the stop condition would have been TRIGGERED for the "missing storage metrics" clause for the ~6 hours before that fix. This gate's evidence is honest about that window rather than presenting the fixed end state as if the gap never occurred.
+
+Check: Stop condition, verbatim: "No actionable alert path, missing storage
+metrics, or policy rollout without flow evidence."
+
+Clause 1 -- "No actionable alert path": NOT triggered.
+  All 6 required alert classes (g11-c4 through g11-c9) demonstrated a
+  complete, real path: vmalert rule evaluation -> Alertmanager routing (5
+  severity-tiered routes, P0-P3) -> webhook delivery to alert-sink ->
+  structured log -> Fluent Bit -> Loki, independently queryable after the
+  fact (which is how this evidence was gathered: real historical Loki
+  queries, not re-triggered for this check). The path is actionable:
+  alerts carry severity, class, summary and are durably logged, not just
+  transiently visible in Alertmanager's UI.
+
+Clause 2 -- "missing storage metrics": NOT triggered, AS OF THIS CAPTURE.
+  Disk/filesystem metrics (node_filesystem_avail_bytes /
+  node_filesystem_size_bytes) are live for all 5 nodes, confirmed in g11-c6.
+  etcd snapshot sync metrics (etcd_snapshot_sync_last_success_timestamp_
+  seconds) are live as of the fix documented in g11-c5.
+  DISCLOSED: this clause WAS triggered for approximately 6 hours before this
+  capture (2026-09-15T18:09Z onward) -- the etcd-snapshot textfile metric
+  was completely absent on veridex-server-1 because a coded Ansible fix had
+  never actually been converged onto the live node. Found and fixed live
+  during this same evidence-gathering pass (see g11-c5 for the full
+  narrative and raw/alertmanager-active-final.json for the live confirmation
+  that only the unrelated ContainerCPUThrottlingHigh alert remains active).
+  No PersistentVolumeClaim-backed storage exists yet in this cluster (Hetzner
+  CSI/storage classes are a later gate per the sequential build plan); this
+  clause is therefore scoped to the storage metrics that exist today (node
+  filesystem, etcd snapshot sync) and does not assess PVC-level metrics that
+  have no subject yet.
+
+Clause 3 -- "policy rollout without flow evidence": NOT triggered.
+  Exactly one CiliumNetworkPolicy was rolled out during this gate
+  (argocd-allow-health-probes, kubernetes/cluster/policies/
+  argocd-health-probes.yaml). Its live behavior -- both what it denies and
+  what it allows -- is directly captured with real Hubble flow evidence in
+  g11-c10, which is in fact how a gap in the policy's first version was
+  discovered and corrected (fromCIDR did not cover the `world`-identity
+  case; fromEntities: [world] was added and is now live, confirmed via the
+  same endpoint's realized policy, cilium-dbg endpoint get 1519).
+
+Verdict: PASS (not triggered) as of capture time. The "missing storage
+metrics" clause was genuinely triggered for a real window earlier in this
+gate's own work; it is disclosed rather than hidden, and closure is being
+recorded only after live confirmation that the underlying gap is fixed and
+the clause no longer holds.

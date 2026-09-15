@@ -1,0 +1,25 @@
+---
+# Cluster-scoped network policy that is NOT part of a single workload's own
+# manifest set. Sync-wave 0 alongside namespaces: a compensating policy that
+# unblocks health probes must exist before the workloads it protects are
+# reconciled, not after.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cluster-policies
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: veridex
+  source:
+    repoURL: https://github.com/caribrefresh-source/Veridex-Platform.git
+    targetRevision: main
+    path: kubernetes/cluster/policies
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

@@ -1,0 +1,89 @@
+# Allow kubelet health probes to reach Argo CD's readiness/liveness ports.
+#
+# ROOT CAUSE (captured live, 2026-09-15, agent-1):
+#
+#   xx drop (Policy denied) to endpoint 1519, file bpf_lxc.c:2412,
+#     identity world->17111: 10.44.4.103:60858 -> 10.44.4.188:8084 tcp SYN
+#   xx drop (Policy denied) to endpoint 4088, file bpf_lxc.c:2412,
+#     identity world->23186: 10.44.4.103:43062 -> 10.44.4.190:8082 tcp SYN
+#
+# 10.44.4.103 is veridex-agent-1's own cilium_host address -- the interface
+# kubelet probes egress through. 8084 is argocd-repo-server's liveness and
+# readiness port; 8082 is argocd-application-controller's readiness port.
+# So these drops ARE the health probes.
+#
+# Argo CD's upstream install ships a NetworkPolicy per component that permits
+# ingress only from sibling Argo CD pods. The kubelet is not a pod, so it
+# matches no podSelector. Cilium normally covers this: allow-localhost=auto
+# inserts an implicit `reserved:host` allow, and that rule exists and works --
+# it has forwarded 28,188 packets. The failure is that the probe's source is
+# INTERMITTENTLY resolved as `world` rather than `host`, and a world-sourced
+# packet matches neither the implicit host allow nor any upstream rule, so
+# default-deny drops it.
+#
+# The effect is cyclical and was mistaken for a transient three times: probes
+# denied -> pods unready -> Service endpoints empty -> Argo CD cannot reconcile
+# ("no route to host" to argocd-repo-server) -> identity resolves -> recovery.
+# argocd-repo-server had accumulated 28 restarts and
+# argocd-notifications-controller 40 by the time this was captured.
+#
+# WHY fromEntities ALONE IS NOT THE FIX: `host` is already allowed and is
+# already bypassed by the misclassification. This policy therefore also admits
+# the cluster's own pod CIDR, which is what the cilium_host addresses belong
+# to, so the allow holds whichever identity the probe presents.
+#
+# SCOPE: narrowly the four probe ports actually in use, verified against live
+# pod specs. It grants nothing else -- every other port on these pods remains
+# governed by the upstream default-deny, and no other namespace is touched.
+# Health endpoints expose liveness state, not application data.
+#
+# REMOVE THIS once the identity misclassification itself is fixed upstream or
+# by configuration; it is a targeted compensating control, not a design.
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: argocd-allow-health-probes
+  namespace: argocd
+spec:
+  endpointSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values:
+          - argocd-repo-server
+          - argocd-application-controller
+          - argocd-server
+          - argocd-notifications-controller
+  ingress:
+    # The identities this SHOULD arrive as, kept so the policy still reads
+    # correctly once the misclassification is resolved.
+    - fromEntities:
+        - host
+        - remote-node
+        - health
+      toPorts:
+        - ports:
+            - port: "8084"   # argocd-repo-server liveness + readiness
+              protocol: TCP
+            - port: "8082"   # argocd-application-controller readiness
+              protocol: TCP
+            - port: "8080"   # argocd-server liveness + readiness
+              protocol: TCP
+            - port: "9001"   # argocd-notifications-controller liveness (TCP socket)
+              protocol: TCP
+    # The identity it actually arrives as while the fault is occurring. The
+    # cilium_host addresses live in the cluster pod CIDR, so this catches the
+    # world-misclassified probe without admitting anything external.
+    - fromCIDR:
+        - 10.44.0.0/16
+      toPorts:
+        - ports:
+            - port: "8084"
+              protocol: TCP
+            - port: "8082"
+              protocol: TCP
+            - port: "8080"
+              protocol: TCP
+            - port: "9001"
+              protocol: TCP

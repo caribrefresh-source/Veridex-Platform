@@ -311,12 +311,12 @@ CloudNativePG	Barman Cloud plugin, generic S3‑compatible object store (endpoin
 Velero	AWS provider plugin, configured with the B2 S3‑compatible endpoint and region	Namespace and volume restore
 MinIO backup	MinIO's native server‑side bucket replication to an S3‑compatible remote, or a tested mirror tool	Versions, metadata, retention and checksums restored
 Longhorn	Native S3‑compatible backupstore — Longhorn's standard, documented backup‑target type	Incremental backup, list, delete under lifecycle rules and complete restore
-k3s etcd	Native S3‑compatible snapshot target (--etcd-s3-endpoint, access/secret key)	Scheduled upload, listing, pruning and isolated restore
+k3s etcd	Pinned b2-CLI sidecar uploader (the native k3s S3 snapshot target is incompatible with B2 Object Lock at the pinned version)	Scheduled upload, listing, pruning and isolated restore
 Audit exporter	S3‑compatible client against the B2 endpoint	Immutable object retrieved and verified
 Stop condition
 Any row declared compatible without a version‑pinned test. Community reports of friction between Longhorn and non‑AWS S3‑compatible backends exist (addressing style, UI display bugs) — verify against the exact pinned Longhorn release rather than assuming "S3‑compatible" is uniform across vendors. B2's S3‑compatible API does not implement object ACLs, IAM roles, bucket policies, object tagging or browser POST uploads: any producer or tool that silently depends on one of those is a failed row, not a warning. Do not quietly fall back to MinIO as the only backup if any producer's path fails.
 
-References: Backblaze B2 S3‑Compatible API documentation · Longhorn — setting an S3‑compatible backup target · k3s etcd‑snapshot CLI (S3 options) · CloudNativePG Barman Cloud plugin — object store providers
+References: Backblaze B2 S3‑Compatible API documentation · Backblaze B2 CLI documentation · k3s native-uploader incompatibility evidence (Gate 9) · Longhorn — setting an S3‑compatible backup target · CloudNativePG Barman Cloud plugin — object store providers
 
 GATE 18
 Backblaze B2 bucket architecture

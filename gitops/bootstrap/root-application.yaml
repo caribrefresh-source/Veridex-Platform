@@ -20,7 +20,14 @@ spec:
       # gitops/bootstrap/namespace.yaml) -- excluded so the root app never
       # tries to reconcile the object that creates it, or take ownership of
       # a namespace Ansible deliberately owns instead.
-      exclude: "bootstrap/**"
+      #
+      # policies/ holds CI-time contracts, NOT Kubernetes manifests --
+      # consumer-capability-gates.yaml is a `gates: []` document with no
+      # apiVersion or kind. Argo CD's directory source parses every .yaml
+      # under its path as a manifest, so leaving it in scope would fail
+      # manifest generation for the whole root app and stall every child
+      # Application behind a ComparisonError. Excluded deliberately.
+      exclude: "{bootstrap/**,policies/**}"
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd

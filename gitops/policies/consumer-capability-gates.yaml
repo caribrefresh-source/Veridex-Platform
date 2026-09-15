@@ -1,0 +1,41 @@
+# Consumer-capability gates -- cross-component deployment-ordering contracts.
+#
+# SCAFFOLD ONLY. No gates are declared below because this repo has no
+# interdependent services yet (applications/ and platform/ are both still
+# .gitkeep placeholders). This file exists now, empty, so the mechanism has
+# a home before it's needed rather than being improvised under pressure the
+# first time it is.
+#
+# THE DEFECT THIS EXISTS TO PREVENT (ported from K3s-HA's real incident,
+# 2026-08-28/29 -- see that repo's gitops/policies/consumer-capability-gates.yaml
+# for the full account): a backend enforcement flag was activated on one
+# service while the frontend change it depended on had merged but not yet
+# deployed. For ~20.5 hours, production silently broke in the COMBINATION of
+# two independently-deployed, independently-healthy versions -- exactly the
+# thing no single component's health check, and no ArgoCD Synced/Healthy
+# status, can see.
+#
+# WHAT A GATE ASSERTS, stated precisely: "This backend enforcement flag may
+# not be enabled unless, for every declared consumer, the SOURCE REVISION
+# IDENTIFIED BY its image pin contains the capability it depends on." That
+# proves image pin -> claimed commit -> inspected source. It does NOT prove
+# deployed image bytes were reproducibly built from that commit -- closing
+# that needs digest pinning + build attestation, tracked separately when
+# this mechanism is actually populated.
+#
+# HOW CAPABILITY SHOULD BE PROVEN when gates are added: by CONTENT at the
+# pinned commit (read the source at the pinned SHA and check for the
+# capability's marker), not by tag or git ancestry -- K3s-HA's incident
+# history includes a confirmed case where an ancestry check would have given
+# a false negative on the actual fix, because that repo squash-merges and a
+# feature branch's commits are not ancestors of the squashed commit on main.
+# Confirm whether this repo's merge strategy has the same property before
+# reusing an ancestry-based check here.
+#
+# ADDING A GATE: declare it below once there is something to gate. Prefer a
+# data-driven checker (adapted from K3s-HA's scripts/check-consumer-capability-gates.py,
+# not copied -- its manifest paths are K3s-HA-specific) over a bespoke
+# one-off script, so the next cross-component enforcement change is a config
+# edit rather than new code.
+
+gates: []

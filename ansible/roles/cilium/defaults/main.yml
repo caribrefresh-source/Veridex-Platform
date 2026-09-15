@@ -14,3 +14,10 @@ cilium_kubeconfig: /etc/rancher/k3s/k3s.yaml
 
 cilium_ready_retries: 60
 cilium_ready_delay: 10
+
+# Gate 11 (baseline observability): cluster-wide Hubble flow visibility.
+# enable-hubble is already true at the agent level (set by `cilium install`'s
+# own default) -- this adds hubble-relay, the component that aggregates flows
+# across nodes. See tasks/main.yml for the pod-template-hash safety check
+# that guards against this silently restarting the agent DaemonSet.
+cilium_hubble_relay_enabled: true

@@ -1,0 +1,194 @@
+# vmalert v1.152.0, digest-pinned for linux/amd64 (verified against Docker
+# Hub 2026-09-15). Evaluates the 6 alert classes Gate 11's acceptance
+# evidence names (node, etcd snapshot, disk, Cilium, DNS, Argo
+# reconciliation) against vmsingle and forwards firing alerts to Alertmanager.
+#
+# Rule notes:
+#   NodeNotReady        kube-state-metrics' view of the node Ready condition
+#                        -- more authoritative than "can we still scrape it".
+#   DiskSpaceLow         node-exporter filesystem collector, real disks only
+#                        (tmpfs/overlay excluded).
+#   EtcdSnapshotSyncStale  the textfile metric roles/etcd-s3-backup's sync
+#                        script now writes on veridex-server-1 (see that
+#                        role) -- fires on staleness OR total absence, so a
+#                        broken metrics pipeline itself is not silent.
+#   CiliumAgentDown      kube-state-metrics pod readiness, name-matched to
+#                        the cilium DaemonSet's own pods (cilium-XXXXX)
+#                        specifically -- excludes cilium-envoy-* and
+#                        cilium-operator-*, which are separate components.
+#                        Known limitation: name-pattern match, not an
+#                        owner-reference join.
+#   CoreDNSDown          scrape-based: vmagent's own `coredns` job target up.
+#   ArgoAppDegraded / ArgoAppReconciliationStale  argocd_app_info from Argo
+#                        CD's already-live application-controller metrics.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vmalert-rules
+  namespace: monitoring
+data:
+  rules.yml: |
+    groups:
+      - name: node
+        interval: 30s
+        rules:
+          - alert: NodeNotReady
+            expr: kube_node_status_condition{condition="Ready", status="true"} == 0
+            for: 2m
+            labels:
+              severity: critical
+              class: node
+            annotations:
+              summary: "Node {{ $labels.node }} is not Ready"
+      - name: disk
+        interval: 30s
+        rules:
+          - alert: DiskSpaceLow
+            expr: >-
+              node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"}
+              / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs"} * 100 < 15
+            for: 5m
+            labels:
+              severity: warning
+              class: disk
+            annotations:
+              summary: "Filesystem {{ $labels.mountpoint }} on {{ $labels.node }} below 15% free"
+      - name: etcd-snapshot
+        interval: 60s
+        rules:
+          - alert: EtcdSnapshotSyncStale
+            expr: >-
+              (time() - etcd_snapshot_sync_last_success_timestamp_seconds > 7200)
+              or absent(etcd_snapshot_sync_last_success_timestamp_seconds)
+            for: 0m
+            labels:
+              severity: critical
+              class: etcd-snapshot
+            annotations:
+              summary: "etcd snapshot sync to Backblaze B2 has not succeeded in over 2 hours"
+      - name: cilium
+        interval: 30s
+        rules:
+          - alert: CiliumAgentDown
+            expr: >-
+              kube_pod_status_ready{namespace="kube-system", condition="true", pod=~"^cilium-[a-z0-9]{5}$"} == 0
+            for: 2m
+            labels:
+              severity: critical
+              class: cilium
+            annotations:
+              summary: "Cilium agent pod {{ $labels.pod }} is not Ready"
+      - name: dns
+        interval: 30s
+        rules:
+          - alert: CoreDNSDown
+            expr: up{job="coredns"} == 0
+            for: 2m
+            labels:
+              severity: critical
+              class: dns
+            annotations:
+              summary: "CoreDNS target {{ $labels.instance }} is not scrapeable"
+      - name: argo-reconciliation
+        interval: 30s
+        rules:
+          - alert: ArgoAppDegraded
+            expr: argocd_app_info{health_status="Degraded"} == 1
+            for: 5m
+            labels:
+              severity: critical
+              class: argo-reconciliation
+            annotations:
+              summary: "Argo CD application {{ $labels.name }} is Degraded"
+          - alert: ArgoAppReconciliationStale
+            expr: argocd_app_info{sync_status="OutOfSync"} == 1
+            for: 30m
+            labels:
+              severity: warning
+              class: argo-reconciliation
+            annotations:
+              summary: "Argo CD application {{ $labels.name }} has been OutOfSync for over 30m"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vmalert
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: vmalert
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vmalert
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: vmalert
+    spec:
+      serviceAccountName: vmalert
+      containers:
+        - name: vmalert
+          image: "victoriametrics/vmalert:v1.152.0@sha256:fcb589f10382d8e928786900306eb5a7f5b06d2dacb8b578554547d2ff3f4ee7"
+          args:
+            - --datasource.url=http://vmsingle.monitoring.svc:8428
+            - --remoteWrite.url=http://vmsingle.monitoring.svc:8428
+            - --remoteRead.url=http://vmsingle.monitoring.svc:8428
+            - --notifier.url=http://alertmanager.monitoring.svc:9093
+            - --rule=/etc/vmalert/rules.yml
+            - --evaluationInterval=30s
+            - --httpListenAddr=:8880
+          ports:
+            - name: http
+              containerPort: 8880
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 30m
+              memory: 64Mi
+            limits:
+              cpu: 150m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65534
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: rules
+              mountPath: /etc/vmalert
+              readOnly: true
+      volumes:
+        - name: rules
+          configMap:
+            name: vmalert-rules
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vmalert
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: vmalert
+spec:
+  selector:
+    app.kubernetes.io/name: vmalert
+  ports:
+    - name: http
+      port: 8880
+      targetPort: http

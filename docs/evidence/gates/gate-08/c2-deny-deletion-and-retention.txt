@@ -1,0 +1,26 @@
+gate: 8
+check: G08-C2
+captured_utc: 2026-09-15T00:34:01Z to 2026-09-15T00:34:30Z
+repo_commit: 2d167720bb986fb28109104b2993eb7ed32da96a
+plan_commit: bc27a0a2b9e872679007342b5d255b888e000722
+plan_sha256: 0c30445b0074edf3688ba57936e1c5149497b829e0f7d1b4328c5181bd222af8
+target_identity: Backblaze B2 account c1beac90ce56 (dedicated backup account); bucket veridex-etcd-backup, bucketId 4c818bbe7abca920ac0e0516; native API node api005/f005.backblazeb2.com
+captured_by: agent
+command: b2 rm --fail-fast b2://veridex-etcd-backup/<name> (as writer key, then again as restore key) ; b2 file update --file-retention-mode none --bypass-governance b2://veridex-etcd-backup/<name> (as writer key)
+exit_status: 1 (all three sub-tests -- non-zero is the correct/expected result)
+proof_class: live
+result: PASS
+limitations: Denial is at the capability layer (neither key holds deleteFiles, writeFileRetentions or bypassGovernance) -- not yet at the Object-Lock-governance layer, since testing that would require a key that DOES hold bypassGovernance (the master key), which is exactly the capability Gate 20/21 forbid giving to a runtime identity. The two-layer design (capability denial first, governance-mode override reserved for the master key alone) is the intended production posture, not a gap: Compliance mode (Gate 19) is what removes the override even from the master key. Found in independent review (Tier 1): this proves early deletion/retention-reduction is denied for the two runtime identities Gate 8 creates -- it does not by itself prove Gate 8's stop-condition clause "administrator can silently remove retention", since the master key retains a deliberate (not silent) bypassGovernance override under Governance mode, and no alerting on that action exists yet (Gate 20's "alerts for ... retention and bucket configuration changes", not yet built). This gate's stop condition is read as being about a routine/automated identity silently doing so, which is what was tested and denied; the human-operated master key's own capability is Gate 19 (Compliance mode) and Gate 20 (alerting)'s territory to close, per Ordering decision O2. Disclosed in full in closure.md section 6 and 8, not glossed over.
+--- unedited output ---
+
+=== writer key attempts early deletion (expect DENY) ===
+ count: 0/0   0 /s count: 0/1   0 /sDeletion of file "gate8-test-object-20260915T003358Z.txt" (4_z4c818bbe7abca920ac0e0516_f1069911542dff2cc_d20260915_m003401_c005_v0501016_t0050_u01789432441735) failed: unauthorized for application key with capabilities 'listBuckets,writeFiles,listFiles', restricted to buckets ['veridex-etcd-backup'] (unauthorized)
+ count: 0/1   0 /s                  exit_status=1
+
+=== writer key attempts retention reduction (expect DENY) ===
+ERROR: unauthorized for application key with capabilities 'listBuckets,writeFiles,listFiles', restricted to buckets ['veridex-etcd-backup'] (None)
+exit_status=1
+
+=== restore key attempts early deletion (expect DENY -- extra layer beyond the plan's own minimum) ===
+ count: 0/0   0 /s count: 0/1   0 /sDeletion of file "gate8-test-object-20260915T003358Z.txt" (4_z4c818bbe7abca920ac0e0516_f1069911542dff2cc_d20260915_m003401_c005_v0501016_t0050_u01789432441735) failed: unauthorized for application key with capabilities 'readFiles,listBuckets,listFiles', restricted to buckets ['veridex-etcd-backup'] (unauthorized)
+ count: 0/1   0 /s                  exit_status=1

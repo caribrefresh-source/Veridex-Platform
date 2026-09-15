@@ -1,0 +1,139 @@
+gate: 8
+check: G08-C1
+captured_utc: 2026-09-15T00:33:01Z to 2026-09-15T00:34:01Z
+repo_commit: 2d167720bb986fb28109104b2993eb7ed32da96a
+plan_commit: bc27a0a2b9e872679007342b5d255b888e000722
+plan_sha256: 0c30445b0074edf3688ba57936e1c5149497b829e0f7d1b4328c5181bd222af8
+target_identity: Backblaze B2 account c1beac90ce56 (dedicated backup account); bucket veridex-etcd-backup, bucketId 4c818bbe7abca920ac0e0516; native API node api005/f005.backblazeb2.com
+captured_by: agent
+command: b2 bucket create --file-lock-enabled --default-server-side-encryption SSE-B2 veridex-etcd-backup allPrivate ; b2 bucket update --default-retention-mode governance --default-retention-period '2 days' veridex-etcd-backup allPrivate ; b2 file upload --sha1 <sha1> veridex-etcd-backup <testfile> <name> (as the restricted writer key) ; b2 file info (as the master key, read-only, to independently confirm the object inherited the bucket default retention)
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: Bucket created once for this proof and kept as the real veridex-etcd-backup bucket Gate 9 will use (per Ordering decision O2), not a throwaway test bucket. Default retention period (2 days, matching the plan's 48-hourly-snapshot figure) is provisional -- Gate 18 has not yet closed and may set a different final duration; changing it later is a plain bucket update, not a re-creation, since governance mode allows it. Object Lock is Governance mode only at this gate -- Compliance-mode activation is explicitly Gate 19's own two-phase procedure, not repeated here.
+--- unedited output ---
+
+=== bucket create ===
+4c818bbe7abca920ac0e0516
+
+=== bucket update (governance, 2 days default retention) ===
+{
+    "accountId": "c1beac90ce56",
+    "bucketId": "4c818bbe7abca920ac0e0516",
+    "bucketInfo": {},
+    "bucketName": "veridex-etcd-backup",
+    "bucketType": "allPrivate",
+    "corsRules": [],
+    "defaultRetention": {
+        "mode": "governance",
+        "period": {
+            "duration": 2,
+            "unit": "days"
+        }
+    },
+    "defaultServerSideEncryption": {
+        "algorithm": "AES256",
+        "mode": "SSE-B2"
+    },
+    "isFileLockEnabled": true,
+    "lifecycleRules": [],
+    "options": [
+        "s3"
+    ],
+    "replication": {
+        "asReplicationDestination": null,
+        "asReplicationSource": null
+    },
+    "revision": 3
+}
+
+=== bucket get (post-config, confirms fileLockEnabled/defaultRetention/defaultServerSideEncryption) ===
+{
+    "accountId": "c1beac90ce56",
+    "bucketId": "4c818bbe7abca920ac0e0516",
+    "bucketInfo": {},
+    "bucketName": "veridex-etcd-backup",
+    "bucketType": "allPrivate",
+    "corsRules": [],
+    "defaultRetention": {
+        "mode": "governance",
+        "period": {
+            "duration": 2,
+            "unit": "days"
+        }
+    },
+    "defaultServerSideEncryption": {
+        "algorithm": "AES256",
+        "mode": "SSE-B2"
+    },
+    "isFileLockEnabled": true,
+    "lifecycleRules": [],
+    "options": [
+        "s3"
+    ],
+    "replication": {
+        "asReplicationDestination": null,
+        "asReplicationSource": null
+    },
+    "revision": 3
+}
+
+=== upload as restricted writer key (listBuckets,listFiles,writeFiles; no deleteFiles, no writeFileRetentions) ===
+/tmp/gate8/testfile.txt:   0%|          | 0.00/89.0 [00:00<?, ?B/s]/tmp/gate8/testfile.txt: 100%|██████████| 89.0/89.0 [00:00<00:00, 167B/s]/tmp/gate8/testfile.txt: 100%|██████████| 89.0/89.0 [00:00<00:00, 119B/s]
+URL by file name: https://f005.backblazeb2.com/file/veridex-etcd-backup/gate8-test-object-20260915T003358Z.txt
+URL by fileId: https://f005.backblazeb2.com/b2api/v4/b2_download_file_by_id?fileId=4_z4c818bbe7abca920ac0e0516_f1069911542dff2cc_d20260915_m003401_c005_v0501016_t0050_u01789432441735
+{
+    "accountId": "c1beac90ce56",
+    "action": "upload",
+    "bucketId": "4c818bbe7abca920ac0e0516",
+    "contentMd5": "c35269ff30b5a09ce5148a1b4f4d606a",
+    "contentSha1": "61e832fadd03a42550ad26f75d9c8c60e391efcc",
+    "contentType": "text/plain",
+    "fileId": "4_z4c818bbe7abca920ac0e0516_f1069911542dff2cc_d20260915_m003401_c005_v0501016_t0050_u01789432441735",
+    "fileInfo": {
+        "src_last_modified_millis": "1789432438611"
+    },
+    "fileName": "gate8-test-object-20260915T003358Z.txt",
+    "fileRetention": {
+        "mode": "unknown",
+        "retainUntilTimestamp": null
+    },
+    "legalHold": "unknown",
+    "replicationStatus": null,
+    "serverSideEncryption": {
+        "algorithm": "AES256",
+        "mode": "SSE-B2"
+    },
+    "size": 89,
+    "uploadTimestamp": 1789432441735
+}
+/usr/lib/python3.14/multiprocessing/resource_tracker.py:396: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown: {'/mp-tm280d19'}
+  warnings.warn(
+
+=== independent read-only confirmation the object inherited governance/2-days retention (master key, readFiles+readFileRetentions) ===
+{
+    "contentSha1": "61e832fadd03a42550ad26f75d9c8c60e391efcc",
+    "contentType": "text/plain",
+    "fileId": "4_z4c818bbe7abca920ac0e0516_f1069911542dff2cc_d20260915_m003401_c005_v0501016_t0050_u01789432441735",
+    "fileInfo": {
+        "src_last_modified_millis": "1789432438611"
+    },
+    "fileName": "gate8-test-object-20260915T003358Z.txt",
+    "fileRetention": {
+        "mode": "governance",
+        "retainUntilTimestamp": 1789605241735
+    },
+    "legalHold": null,
+    "replicationStatus": null,
+    "serverSideEncryption": {
+        "algorithm": "AES256",
+        "mode": "SSE-B2"
+    },
+    "size": 89,
+    "uploadTimestamp": 1789432441735
+}
+exit_status=0
+
+=== uploaded test object content (89 bytes, non-sensitive) ===
+Gate 8 protected test object -- created 2026-09-15T00:33:58Z
+Bucket: veridex-etcd-backup

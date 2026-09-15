@@ -1,0 +1,35 @@
+gate: 8
+check: G08-C4
+captured_utc: 2026-09-15T00:34:20Z
+repo_commit: 2d167720bb986fb28109104b2993eb7ed32da96a
+plan_commit: bc27a0a2b9e872679007342b5d255b888e000722
+plan_sha256: 0c30445b0074edf3688ba57936e1c5149497b829e0f7d1b4328c5181bd222af8
+target_identity: Backblaze B2 account c1beac90ce56 (dedicated backup account); bucket veridex-etcd-backup, bucketId 4c818bbe7abca920ac0e0516; native API node api005/f005.backblazeb2.com
+captured_by: agent
+command: b2 file download b2://veridex-etcd-backup/<name> <local path> (as the restricted restore key) ; sha1sum comparison against the uploaded file
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: none identified
+--- unedited output ---
+
+=== download, restore identity ===
+File name:           gate8-test-object-20260915T003358Z.txt
+File id:             4_z4c818bbe7abca920ac0e0516_f1069911542dff2cc_d20260915_m003401_c005_v0501016_t0050_u01789432441735
+Output file path:    /tmp/gate8/downloaded.txt
+File size:           89
+Content type:        text/plain
+Content sha1:        61e832fadd03a42550ad26f75d9c8c60e391efcc
+Encryption:          mode=SSE-B2, algorithm=AES256
+Retention:           <unauthorized to read>
+Legal hold:          <unauthorized to read>
+INFO src_last_modified_millis: 1789432438611
+Checksum matches
+downloaded.txt:   0%|          | 0.00/89.0 [00:00<?, ?B/s]downloaded.txt: 100%|██████████| 89.0/89.0 [00:00<00:00, 57.8kB/s]
+Download finished
+/usr/lib/python3.14/multiprocessing/resource_tracker.py:396: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown: {'/mp-mw7hbv7u'}
+  warnings.warn(
+
+uploaded sha1:   61e832fadd03a42550ad26f75d9c8c60e391efcc
+downloaded sha1: 61e832fadd03a42550ad26f75d9c8c60e391efcc
+CHECKSUM MATCH

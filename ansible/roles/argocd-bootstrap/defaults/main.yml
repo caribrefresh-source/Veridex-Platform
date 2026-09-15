@@ -1,13 +1,50 @@
 ---
 # argocd-bootstrap role default variables
 #
-# Scope: the repository credential only. Installing Argo CD itself is not
-# implemented in this role yet -- see tasks/main.yml.
+# Scope: install Argo CD itself (pinned, checksum-verified), the repository
+# credential, RBAC least-privilege overlay, and the one-time imperative apply
+# of the veridex AppProject + root Application (Gate 10).
 
 argocd_namespace: argocd
 
 # KUBECONFIG for the CLI. k3s writes here; this is NOT the kubeadm path.
 argocd_kubeconfig: /etc/rancher/k3s/k3s.yaml
+
+# Pinned to the current stable GA at the time of Gate 10 (verified via the
+# GitHub releases API, prerelease: false). The 3.6.0 VERSION file on the
+# master branch is unreleased/dev -- do not follow it.
+argocd_version: "3.5.3"
+argocd_install_manifest_url: "https://raw.githubusercontent.com/argoproj/argo-cd/v{{ argocd_version }}/manifests/install.yaml"
+# Downloaded and verified directly (not trusted from a summarization) on
+# 2026-09-15: 59 resources across 11 kinds.
+argocd_install_manifest_sha256: "7efe2d6bbc03f63623640f1e4198f16c84009d510fb810ef71e56df1b7614ba9"
+argocd_install_manifest_path: /tmp/argocd-install-v{{ argocd_version }}.yaml
+
+# CLI, needed on the bootstrap server for --core-mode operations (project
+# role token issuance, RBAC-matrix and drift-test evidence) since no
+# Ingress/Traefik is exposed for the Argo CD API yet.
+argocd_cli_url: "https://github.com/argoproj/argo-cd/releases/download/v{{ argocd_version }}/argocd-linux-amd64"
+argocd_cli_sha256_amd64: "b860f73f57cbddd993cd446f5236d797c1b1ac8554857b2683d2669f17e765b4"
+argocd_cli_bin: /usr/local/bin/argocd
+
+argocd_ready_retries: 60
+argocd_ready_delay: 10
+
+# The veridex AppProject (gitops/projects/veridex.yaml): this repo only,
+# this cluster only (never an external/attacker-controlled destination --
+# the "unrestricted destinations" stop condition). Namespace enumeration
+# within this cluster is explicitly deferred to Gate 32 ("once GitOps can
+# manage manifests, every namespace name ... must be resolved and committed
+# before any wave begins" -- Gate 10's own gap-closure note), so destinations
+# stay namespace: '*' scoped to this one server until Gate 32 narrows it.
+#
+# Its name ("veridex") is a literal constant in that manifest, not a
+# variable here: the same file is both this role's imperative-apply source
+# (below) and, once merged to main, Argo CD's own GitOps-reconciled source
+# of truth for the object -- templating the name would mean either
+# rendering Jinja before Argo CD ever sees the file (impossible; Argo CD
+# reads it straight from Git) or committing unrendered `{{ }}` syntax as a
+# literal AppProject name.
 
 # Must match gitops/bootstrap/root-application.yaml's repoURL byte for byte.
 # Argo CD pairs a credential to a repository by string-matching the URL, so a

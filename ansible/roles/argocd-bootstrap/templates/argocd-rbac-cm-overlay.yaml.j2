@@ -1,0 +1,27 @@
+---
+# Strategic-merge overlay onto the install manifest's argocd-rbac-cm, which
+# ships with no `data:` at all (verified against the pinned install
+# manifest, 2026-09-15) -- meaning RBAC falls back entirely to Argo CD's
+# hardcoded implicit default rather than an explicit repo-owned policy. Set
+# it explicitly instead of relying on an undocumented-in-this-repo fallback
+# (CLAUDE.md Section 8: least privilege by default).
+#
+# The built-in local `admin` superuser bypasses policy.csv entirely by
+# design (Argo CD's own architecture) -- this overlay only governs any other
+# subject: project-role JWT tokens (see gitops/projects/veridex.yaml) and
+# any future SSO user/group.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-rbac-cm
+  namespace: {{ argocd_namespace }}
+  labels:
+    app.kubernetes.io/name: argocd-rbac-cm
+    app.kubernetes.io/part-of: argocd
+data:
+  policy.default: role:readonly
+  policy.csv: |
+    p, role:readonly, applications, get, */*, allow
+    p, role:readonly, clusters, get, *, allow
+    p, role:readonly, repositories, get, *, allow
+    p, role:readonly, projects, get, *, allow

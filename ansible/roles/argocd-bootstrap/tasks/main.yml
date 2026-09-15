@@ -1,8 +1,10 @@
 ---
 # argocd-bootstrap role tasks
 #
-# Scope: the repository credential Argo CD needs to clone a PRIVATE repo.
-# Installing Argo CD itself is not implemented here yet.
+# Scope: the repository credential Argo CD needs to clone a PRIVATE repo,
+# the pinned Argo CD install itself, a least-privilege RBAC overlay, and the
+# one-time imperative apply of the veridex AppProject + root Application
+# (Gate 10 -- everything downstream of that one apply is GitOps-reconciled).
 #
 # Why this credential is created by Ansible and not reconciled from Git:
 # Argo CD needs it in order to read the repository at all, so a Secret
@@ -61,8 +63,17 @@
       no_log: true
 
     - name: Apply the repository credential
+      # --server-side: client-side apply's diff runs against a stored
+      # last-applied-configuration annotation, but a stringData Secret's
+      # live object only ever has `data` (the server converts and drops
+      # stringData) -- kubectl's client-side diff for this shape reports
+      # "configured" on every single run even with byte-identical input
+      # (found live 2026-09-15: two successive applies of the same
+      # rendered file, both "configured", never "unchanged"). Server-side
+      # apply diffs field values directly against the live object instead
+      # and correctly reports "unchanged" once nothing differs.
       ansible.builtin.command:
-        cmd: k3s kubectl apply -f {{ argocd_repo_manifest_path }}
+        cmd: k3s kubectl apply -f {{ argocd_repo_manifest_path }} --server-side --force-conflicts
       environment:
         KUBECONFIG: "{{ argocd_kubeconfig }}"
       register: _argocd_repo_secret
@@ -79,13 +90,305 @@
         state: absent
 
 - name: Confirm the credential is present and labelled
+  # argv (not a plain cmd string): the command module shlex-splits a string
+  # cmd, which silently strips the backslash-escaped dots this jsonpath
+  # needs for a literal-dotted label key, breaking the query with no error
+  # (empty stdout) rather than a parse failure. Found live 2026-09-15 -- this
+  # task had never actually executed against a real Secret before Gate 10,
+  # since ARGOCD_REPO_PAT did not exist until now.
   ansible.builtin.command:
-    cmd: >-
-      k3s kubectl -n {{ argocd_namespace }} get secret {{ argocd_repo_secret_name }}
-      -o jsonpath={.metadata.labels.argocd\.argoproj\.io/secret-type}
+    argv:
+      - k3s
+      - kubectl
+      - -n
+      - "{{ argocd_namespace }}"
+      - get
+      - secret
+      - "{{ argocd_repo_secret_name }}"
+      - -o
+      - "jsonpath={.metadata.labels.argocd\\.argoproj\\.io/secret-type}"
   environment:
     KUBECONFIG: "{{ argocd_kubeconfig }}"
   register: _argocd_repo_label
   changed_when: false
   failed_when: _argocd_repo_label.stdout != 'repository'
+  when: is_first_server | bool
+
+- name: Check for an existing Argo CD install
+  # Evidence/logging only -- does NOT gate the apply below. kubectl apply is
+  # itself idempotent, and gating on one Deployment's existence proved wrong
+  # in practice: a partially-applied manifest (see server-side note below)
+  # left argocd-server created while another resource was still missing, so
+  # a "skip if this one Deployment exists" guard would have skipped the
+  # retry that fixed it.
+  ansible.builtin.command:
+    cmd: k3s kubectl -n {{ argocd_namespace }} get deployment argocd-server -o jsonpath={.metadata.name}
+  environment:
+    KUBECONFIG: "{{ argocd_kubeconfig }}"
+  register: _argocd_server_deploy
+  changed_when: false
+  failed_when: false
+  when: is_first_server | bool
+
+- name: Install Argo CD
+  when: is_first_server | bool
+  block:
+    - name: Download the pinned Argo CD install manifest
+      ansible.builtin.get_url:
+        url: "{{ argocd_install_manifest_url }}"
+        dest: "{{ argocd_install_manifest_path }}"
+        checksum: "sha256:{{ argocd_install_manifest_sha256 }}"
+        mode: "0644"
+
+    # -n injects the namespace on the objects that omit it (verified against
+    # this pinned manifest: most namespaced objects carry no explicit
+    # namespace field and rely on this flag). Cluster-scoped RBAC objects
+    # apply as-is regardless.
+    #
+    # --server-side (not client-side apply): the applicationsets.argoproj.io
+    # CRD's schema is large enough that client-side apply's
+    # last-applied-configuration annotation exceeds Kubernetes' 262144-byte
+    # annotation limit -- found live 2026-09-15 (client-side apply created
+    # 58 of 59 resources, then failed on that one CRD with exactly this
+    # error). Server-side apply doesn't use that annotation at all. This is
+    # Argo CD's own documented recommendation for this exact failure mode.
+    # --force-conflicts: safe here -- this playbook is the sole owner of
+    # every object in this manifest; nothing else ever field-manages them.
+    - name: Apply the Argo CD install manifest
+      ansible.builtin.command:
+        cmd: >-
+          k3s kubectl apply -n {{ argocd_namespace }} -f {{ argocd_install_manifest_path }}
+          --server-side --force-conflicts
+      environment:
+        KUBECONFIG: "{{ argocd_kubeconfig }}"
+      register: _argocd_install
+      changed_when: >-
+        'created' in _argocd_install.stdout or 'configured' in _argocd_install.stdout
+
+- name: Wait for the Argo CD repo server to be ready
+  ansible.builtin.command:
+    cmd: >-
+      k3s kubectl -n {{ argocd_namespace }} rollout status deployment/argocd-repo-server
+      --timeout={{ argocd_ready_retries * argocd_ready_delay }}s
+  environment:
+    KUBECONFIG: "{{ argocd_kubeconfig }}"
+  changed_when: false
+  when: is_first_server | bool
+
+- name: Wait for the Argo CD server to be ready
+  ansible.builtin.command:
+    cmd: >-
+      k3s kubectl -n {{ argocd_namespace }} rollout status deployment/argocd-server
+      --timeout={{ argocd_ready_retries * argocd_ready_delay }}s
+  environment:
+    KUBECONFIG: "{{ argocd_kubeconfig }}"
+  changed_when: false
+  when: is_first_server | bool
+
+- name: Wait for the Argo CD application controller to be ready
+  ansible.builtin.command:
+    cmd: >-
+      k3s kubectl -n {{ argocd_namespace }} rollout status statefulset/argocd-application-controller
+      --timeout={{ argocd_ready_retries * argocd_ready_delay }}s
+  environment:
+    KUBECONFIG: "{{ argocd_kubeconfig }}"
+  changed_when: false
+  when: is_first_server | bool
+
+- name: Overlay least-privilege RBAC policy
+  # argocd-rbac-cm ships with no data at all (verified 2026-09-15 against
+  # the pinned install manifest) -- this sets an explicit default instead of
+  # relying on Argo CD's undocumented-here implicit fallback (CLAUDE.md
+  # Section 8). The built-in local admin user is unaffected: it bypasses
+  # policy.csv entirely, by Argo CD's own design.
+  ansible.builtin.template:
+    src: argocd-rbac-cm-overlay.yaml.j2
+    dest: /tmp/argocd-rbac-cm-overlay.yaml
+    mode: "0644"
+  register: _rbac_overlay_rendered
+  when: is_first_server | bool
+
+- name: Apply the RBAC overlay
+  # --server-side: this ConfigMap was first created by the install
+  # manifest's own server-side apply (see above); a plain client-side apply
+  # on top of a server-side-created object showed "configured" on every
+  # rerun even with identical content (found live 2026-09-15, same
+  # symptom and fix as the repo-credential Secret above). Staying on
+  # server-side apply throughout keeps one consistent field-manager story
+  # for every object this role touches.
+  ansible.builtin.command:
+    cmd: k3s kubectl apply -f /tmp/argocd-rbac-cm-overlay.yaml --server-side --force-conflicts
+  environment:
+    KUBECONFIG: "{{ argocd_kubeconfig }}"
+  register: _rbac_overlay_apply
+  changed_when: >-
+    'created' in _rbac_overlay_apply.stdout or 'configured' in _rbac_overlay_apply.stdout
+  when: is_first_server | bool
+
+- name: Download the pinned Argo CD CLI
+  ansible.builtin.get_url:
+    url: "{{ argocd_cli_url }}"
+    dest: "{{ argocd_cli_bin }}"
+    checksum: "sha256:{{ argocd_cli_sha256_amd64 }}"
+    mode: "0755"
+  when: is_first_server | bool
+
+# Imperative bootstrap: nothing exists yet to reconcile these two objects,
+# and the root Application cannot reference the veridex AppProject before it
+# exists, so the project is applied first. Everything downstream of this one
+# apply -- including this AppProject's own future revisions -- is reconciled
+# by the root app itself (gitops/bootstrap/root-application.yaml excludes
+# bootstrap/** from its own recursive scan, so it never re-manages this step
+# or the Ansible-owned argocd Namespace).
+#
+# Sourced from origin/main via `git show`, not the control node's working
+# tree: a plain copy of the working tree would apply whatever happens to be
+# checked out locally -- including an uncommitted edit or a feature branch --
+# while every check for this gate reports "root app from main". Found during
+# Gate 10's own adversarial review (2026-09-15): the two would silently
+# diverge on any control node that isn't sitting exactly on main.
+- name: Fetch the latest origin/main
+  ansible.builtin.command:
+    cmd: git fetch origin main
+    chdir: "{{ playbook_dir }}/../.."
+  delegate_to: localhost
+  become: false
+  run_once: true
+  changed_when: true
+
+- name: Render the veridex AppProject from origin/main
+  ansible.builtin.shell:
+    cmd: git show origin/main:gitops/projects/veridex.yaml > /tmp/gate10-veridex-project.yaml
+    chdir: "{{ playbook_dir }}/../.."
+    executable: /bin/bash
+  delegate_to: localhost
+  become: false
+  run_once: true
+  changed_when: true
+
+- name: Render the root Application from origin/main
+  ansible.builtin.shell:
+    cmd: git show origin/main:gitops/bootstrap/root-application.yaml > /tmp/gate10-root-application.yaml
+    chdir: "{{ playbook_dir }}/../.."
+    executable: /bin/bash
+  delegate_to: localhost
+  become: false
+  run_once: true
+  changed_when: true
+
+# copy (not command+chdir) to move the two control-node-rendered files above
+# onto veridex-server-1, where kubectl actually runs.
+- name: Copy the veridex AppProject to the bootstrap server
+  ansible.builtin.copy:
+    src: /tmp/gate10-veridex-project.yaml
+    dest: /tmp/veridex-project.yaml
+    mode: "0644"
+  when: is_first_server | bool
+
+- name: Apply the veridex AppProject
+  ansible.builtin.command:
+    cmd: k3s kubectl apply -f /tmp/veridex-project.yaml
+  environment:
+    KUBECONFIG: "{{ argocd_kubeconfig }}"
+  register: _veridex_project
+  changed_when: >-
+    'created' in _veridex_project.stdout or 'configured' in _veridex_project.stdout
+  when: is_first_server | bool
+
+- name: Copy the root Application to the bootstrap server
+  ansible.builtin.copy:
+    src: /tmp/gate10-root-application.yaml
+    dest: /tmp/root-application.yaml
+    mode: "0644"
+  when: is_first_server | bool
+
+- name: Apply the root Application
+  ansible.builtin.command:
+    cmd: k3s kubectl apply -f /tmp/root-application.yaml
+  environment:
+    KUBECONFIG: "{{ argocd_kubeconfig }}"
+  register: _root_app
+  changed_when: >-
+    'created' in _root_app.stdout or 'configured' in _root_app.stdout
+  when: is_first_server | bool
+
+- name: Remove the control-node scratch renders of origin/main
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /tmp/gate10-veridex-project.yaml
+    - /tmp/gate10-root-application.yaml
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+- name: Check for the initial admin secret
+  # Idempotency gate for the rotation below: present only immediately after
+  # a fresh install, absent on every rerun once rotated.
+  ansible.builtin.command:
+    cmd: k3s kubectl -n {{ argocd_namespace }} get secret argocd-initial-admin-secret -o jsonpath={.metadata.name}
+  environment:
+    KUBECONFIG: "{{ argocd_kubeconfig }}"
+  register: _initial_admin_secret
+  changed_when: false
+  failed_when: false
+  when: is_first_server | bool
+
+- name: Rotate the initial admin password and discard both values
+  # Argo CD's own documented manual-reset procedure: the local admin
+  # account's bcrypt hash lives directly in argocd-secret
+  # (admin.password/admin.passwordMtime), so this patches it directly
+  # rather than going through argocd-server's HTTP API -- avoiding any
+  # dependency on port-forward/login session state for a one-time rotation.
+  # `argocd account bcrypt` hashes fully offline (no login, no server
+  # contact). Neither the initial nor the new password is ever assigned to
+  # an Ansible-registered variable outside this one shell process, and
+  # no_log hides all of this task's output, including on failure.
+  #
+  # Every continuation stays at this same indentation deliberately: a more
+  # deeply indented line inside a YAML folded (>-) scalar is preserved
+  # literally instead of being folded to a space, which silently split the
+  # kubectl patch command in two during Gate 10's own build (found live
+  # 2026-09-15 -- rc=127 as "-p ...json..." on its own line then ran as a
+  # command).
+  ansible.builtin.shell:
+    cmd: >-
+      set -euo pipefail &&
+      new_pw=$(openssl rand -base64 32) &&
+      new_hash=$({{ argocd_cli_bin }} account bcrypt --password "$new_pw") &&
+      k3s kubectl -n {{ argocd_namespace }} patch secret argocd-secret -p "{\"stringData\": {\"admin.password\": \"$new_hash\", \"admin.passwordMtime\": \"$(date -u +%FT%TZ)\"}}" &&
+      k3s kubectl -n {{ argocd_namespace }} delete secret argocd-initial-admin-secret
+    executable: /bin/bash
+  environment:
+    KUBECONFIG: "{{ argocd_kubeconfig }}"
+  register: _admin_rotate
+  no_log: true
+  changed_when: _admin_rotate.rc == 0
+  when:
+    - is_first_server | bool
+    - _initial_admin_secret.rc == 0
+
+- name: Confirm the initial admin secret is gone
+  ansible.builtin.command:
+    cmd: k3s kubectl -n {{ argocd_namespace }} get secret argocd-initial-admin-secret
+  environment:
+    KUBECONFIG: "{{ argocd_kubeconfig }}"
+  register: _initial_secret_check
+  changed_when: false
+  failed_when: false
+  when: is_first_server | bool
+
+- name: Remove the non-secret rendered manifests
+  # None of these three carry credentials (unlike the repo-credential file,
+  # cleaned up in its own always: block above) -- their content is identical
+  # to what's already committed in this repo. Removed anyway for consistency
+  # rather than leaving scratch files behind indefinitely.
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /tmp/argocd-rbac-cm-overlay.yaml
+    - /tmp/veridex-project.yaml
+    - /tmp/root-application.yaml
   when: is_first_server | bool

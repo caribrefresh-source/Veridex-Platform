@@ -1,0 +1,220 @@
+# Kubernetes Events coverage.
+#
+# Gate 11's End state names four coverage areas: "Metrics, events, logs and
+# alerts cover all nodes and bootstrap services." Metrics, logs and alerts
+# were all live; events were not -- kube-state-metrics exposes object STATE
+# (a pod's phase, a node's conditions), never the Event objects themselves
+# (OOMKilled, FailedScheduling, BackOff, image pull failures, and so on),
+# and no exporter for those existed anywhere in the stack.
+#
+# This is a minimal stdlib-only watcher: it streams the cluster-wide Events
+# API and writes one structured JSON line per event to stdout, which
+# Fluent Bit already ships to Loki from every node -- the same pattern
+# alert-sink already uses for alerts, so events land in the same place and
+# are queryable the same way rather than needing a second storage system.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: events-exporter
+  namespace: monitoring
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: events-exporter
+rules:
+  # Read-only, and only the Events resource -- this is cluster-wide because
+  # events must be watched wherever they occur, not scoped to one namespace.
+  # Both API groups are granted since k3s's Events objects are readable via
+  # either path; only one is actually watched (see EVENTS_API_GROUP below),
+  # but the RBAC covers whichever one a future k3s version prefers.
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["events.k8s.io"]
+    resources: ["events"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: events-exporter
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: events-exporter
+subjects:
+  - kind: ServiceAccount
+    name: events-exporter
+    namespace: monitoring
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: events-exporter-app
+  namespace: monitoring
+data:
+  watch.py: |
+    """Stream the cluster Events API -> one structured JSON log line each."""
+    import json
+    import os
+    import ssl
+    import sys
+    import time
+    import urllib.error
+    import urllib.request
+    from datetime import datetime, timezone
+
+    API_SERVER = "https://kubernetes.default.svc"
+    EVENTS_PATH = "/api/v1/events"  # core/v1 -- what kubectl reads by default
+    TOKEN_PATH = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+    CA_PATH = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+
+    ssl_ctx = ssl.create_default_context(cafile=CA_PATH)
+
+
+    def read_token():
+        # Re-read on every (re)connect: projected SA tokens are rotated by
+        # kubelet in place, and a long-lived watch must not hold a stale one
+        # across a reconnect.
+        with open(TOKEN_PATH, "r", encoding="utf-8") as fh:
+            return fh.read().strip()
+
+
+    def emit(event_type, obj):
+        involved = obj.get("involvedObject", {}) or {}
+        record = {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "event": "k8s_event",
+            "watch_type": event_type,  # ADDED | MODIFIED | DELETED
+            "type": obj.get("type"),  # Normal | Warning
+            "reason": obj.get("reason"),
+            "message": obj.get("message"),
+            "count": obj.get("count"),
+            "firstTimestamp": obj.get("firstTimestamp"),
+            "lastTimestamp": obj.get("lastTimestamp"),
+            "namespace": obj.get("metadata", {}).get("namespace"),
+            "involvedObject": {
+                "kind": involved.get("kind"),
+                "name": involved.get("name"),
+                "namespace": involved.get("namespace"),
+            },
+            "source": obj.get("source", {}).get("component")
+            or (obj.get("reportingComponent") or None),
+        }
+        # flush: without it a line can sit in a pipe buffer and never reach
+        # the container log, which would defeat the whole point.
+        print(json.dumps(record, sort_keys=True), flush=True)
+
+
+    def watch_once(resource_version):
+        token = read_token()
+        url = f"{API_SERVER}{EVENTS_PATH}?watch=true&timeoutSeconds=280"
+        if resource_version:
+            url += f"&resourceVersion={resource_version}"
+        req = urllib.request.Request(
+            url, headers={"Authorization": f"Bearer {token}", "Accept": "application/json"}
+        )
+        last_rv = resource_version
+        with urllib.request.urlopen(req, context=ssl_ctx, timeout=300) as resp:
+            for line in resp:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    payload = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                obj = payload.get("object", {}) or {}
+                rv = obj.get("metadata", {}).get("resourceVersion")
+                if rv:
+                    last_rv = rv
+                wtype = payload.get("type")
+                if wtype == "ERROR":
+                    # 410 Gone: the watch's resourceVersion aged out of the
+                    # API server's cache. Restart from scratch (empty
+                    # resourceVersion => a fresh list+watch), not a crash.
+                    print(
+                        json.dumps({
+                            "ts": datetime.now(timezone.utc).isoformat(),
+                            "event": "watch_error",
+                            "detail": obj,
+                        }),
+                        flush=True,
+                    )
+                    return None
+                if wtype in ("ADDED", "MODIFIED"):
+                    emit(wtype, obj)
+        return last_rv
+
+
+    def main():
+        resource_version = None
+        backoff = 1
+        while True:
+            try:
+                resource_version = watch_once(resource_version)
+                backoff = 1  # a clean stream end resets backoff
+            except (urllib.error.URLError, TimeoutError, ConnectionError, OSError) as exc:
+                print(
+                    json.dumps({
+                        "ts": datetime.now(timezone.utc).isoformat(),
+                        "event": "watch_reconnect",
+                        "error": type(exc).__name__,
+                        "backoff_s": backoff,
+                    }),
+                    flush=True,
+                )
+                time.sleep(backoff)
+                backoff = min(backoff * 2, 30)
+
+
+    if __name__ == "__main__":
+        main()
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: events-exporter
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: events-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: events-exporter
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: events-exporter
+    spec:
+      serviceAccountName: events-exporter
+      containers:
+        - name: events-exporter
+          image: "python:3.12-slim@sha256:2fe5997d249a808b8eeea52c58a1dbffbba28754dc11699ef5c029f2d818ce79"
+          command: ["python3", "/app/watch.py"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 96Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65534
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: app
+              mountPath: /app
+              readOnly: true
+      volumes:
+        - name: app
+          configMap:
+            name: events-exporter-app

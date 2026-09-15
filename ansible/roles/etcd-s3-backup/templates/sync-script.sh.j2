@@ -18,6 +18,34 @@ set -euo pipefail
 exec >> {{ etcd_s3_backup_log_dir }}/sync.log 2>&1
 echo "--- $(date -u +%Y-%m-%dT%H:%M:%SZ) sync start ---"
 
+# Gate 11 (baseline observability): a Prometheus textfile-collector metric so
+# vmalert can alert on a stale or missing sync. success_ts is read back from
+# the previous run's file first -- each cron invocation is a fresh process,
+# so without this a FAILED run would overwrite a real prior success with 0
+# and falsely look like snapshots had never succeeded. The trap runs on both
+# the success path and any set -e exit, so a failure still records the
+# attempt (the metric going stale is itself the failure signal).
+metrics_file="{{ etcd_s3_backup_metrics_file }}"
+metrics_tmp="${metrics_file}.tmp.$$"
+success_ts=0
+if [[ -f "${metrics_file}" ]]; then
+  success_ts=$(awk '/^etcd_snapshot_sync_last_success_timestamp_seconds /{print $2}' "${metrics_file}" 2>/dev/null || echo 0)
+  [[ "${success_ts}" =~ ^[0-9]+$ ]] || success_ts=0
+fi
+
+write_metrics() {
+  {
+    echo "# HELP etcd_snapshot_sync_last_attempt_timestamp_seconds Unix time of the last etcd snapshot sync attempt (success or failure)."
+    echo "# TYPE etcd_snapshot_sync_last_attempt_timestamp_seconds gauge"
+    echo "etcd_snapshot_sync_last_attempt_timestamp_seconds $(date +%s)"
+    echo "# HELP etcd_snapshot_sync_last_success_timestamp_seconds Unix time of the last successful etcd snapshot sync to B2. 0 if never succeeded."
+    echo "# TYPE etcd_snapshot_sync_last_success_timestamp_seconds gauge"
+    echo "etcd_snapshot_sync_last_success_timestamp_seconds ${success_ts}"
+  } > "${metrics_tmp}"
+  mv -f "${metrics_tmp}" "${metrics_file}"
+}
+trap write_metrics EXIT
+
 # shellcheck disable=SC1091
 source {{ etcd_s3_backup_cred_dir }}/credentials
 export B2_APPLICATION_KEY_ID B2_APPLICATION_KEY
@@ -27,4 +55,5 @@ export B2_APPLICATION_KEY_ID B2_APPLICATION_KEY
   "b2://{{ etcd_s3_backup_bucket }}/{{ etcd_s3_backup_folder }}/"
 # set -e means a sync failure exits before this line -- its absence in the
 # log for a given run IS the failure signal, not a printed non-zero code.
+success_ts=$(date +%s)
 echo "--- $(date -u +%Y-%m-%dT%H:%M:%SZ) sync end, ok ---"

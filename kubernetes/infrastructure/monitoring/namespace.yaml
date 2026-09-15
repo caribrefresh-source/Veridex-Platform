@@ -1,0 +1,11 @@
+# Gate 11 (baseline observability). Plain, unlabeled namespace -- Gate 32
+# (namespace enumeration) has not run yet. Precedent: Traefik (also Wave 7
+# "cluster services" in the plan's namespace table) was deployed the same way,
+# into an existing namespace, ahead of Gate 32's namespace map (see gate-11
+# closure record and ledger ordering decision O4 for the reasoning). Gate 32
+# may later confirm or rename this namespace as the resolved Wave 7 name.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring

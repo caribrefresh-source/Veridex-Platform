@@ -1,0 +1,104 @@
+# node-exporter v1.12.1, digest-pinned for linux/amd64 (verified against
+# Docker Hub's registry API 2026-09-15, matching this cluster's node
+# architecture -- all 5 nodes report amd64).
+#
+# hostNetwork + hostPID: reads the real host /proc and /sys, not the pod's
+# own namespace, and is reachable by node IP so vmagent can use plain
+# `role: node` service discovery without depending on Cilium pod networking
+# to scrape node health -- if Cilium itself is the thing that's broken, node
+# metrics must still get through.
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: node-exporter
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: node-exporter
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: node-exporter
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: node-exporter
+    spec:
+      serviceAccountName: node-exporter
+      hostNetwork: true
+      hostPID: true
+      tolerations:
+        - operator: Exists
+      containers:
+        - name: node-exporter
+          image: "prom/node-exporter:v1.12.1@sha256:da83fae85603c4e47e6c68369a7d746e2dda683dc35ea2e234b4f171e0d92798"
+          args:
+            - --path.procfs=/host/proc
+            - --path.sysfs=/host/sys
+            - --path.rootfs=/host/root
+            - --collector.textfile.directory=/host/textfile_collector
+            # Excludes the read-only bind mounts below and virtual/overlay
+            # filesystems from the filesystem collector, matching upstream's
+            # own recommended exclusion set.
+            - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+|var/lib/kubelet/.+)($|/)
+            - --web.listen-address=:9100
+          ports:
+            - name: metrics
+              containerPort: 9100
+              hostPort: 9100
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: proc
+              mountPath: /host/proc
+              readOnly: true
+            - name: sys
+              mountPath: /host/sys
+              readOnly: true
+            - name: root
+              mountPath: /host/root
+              readOnly: true
+            - name: textfile-collector
+              mountPath: /host/textfile_collector
+              readOnly: true
+      volumes:
+        - name: proc
+          hostPath:
+            path: /proc
+        - name: sys
+          hostPath:
+            path: /sys
+        - name: root
+          hostPath:
+            path: /
+        # Populated on veridex-server-1 only, by the etcd-s3-backup role's
+        # sync script (roles/etcd-s3-backup) -- see that role for the metric
+        # it writes. DirectoryOrCreate so every other node's node-exporter
+        # still starts cleanly with an empty directory.
+        - name: textfile-collector
+          hostPath:
+            path: /var/lib/node-exporter/textfile_collector
+            type: DirectoryOrCreate

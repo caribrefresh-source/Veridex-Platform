@@ -1,0 +1,115 @@
+# VictoriaMetrics single-node v1.152.0, digest-pinned for linux/amd64
+# (verified against Docker Hub 2026-09-15). Single node, not a cluster
+# deployment or the Operator -- matches this repo's existing pattern of raw
+# pinned manifests (see kubernetes/infrastructure/ingress/) rather than
+# adding an operator and its CRDs for a 5-node cluster.
+#
+# Storage: no StorageClass exists yet (Longhorn is Gate 12, which the plan
+# explicitly sequences after this gate). hostPath on veridex-agent-1, the
+# node with the 512 GiB disk designated for this kind of data (see
+# ansible/inventory/production/hosts.yml's role-assignment rationale).
+# Single replica pinned to that one node via nodeSelector so the hostPath
+# data survives pod restarts. Known limitation: no replication, and this
+# data does not survive that node's loss -- tracked for migration to a
+# Longhorn-backed PVC once Gate 12 closes.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vmsingle
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: vmsingle
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vmsingle
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: vmsingle
+    spec:
+      serviceAccountName: vmsingle
+      nodeSelector:
+        kubernetes.io/hostname: veridex-agent-1
+      initContainers:
+        # kubelet creates the hostPath directory as root:root 0755, which the
+        # main container (runAsUser 65534) cannot write to. One-time chown,
+        # then it never runs as root again.
+        - name: fix-data-dir-ownership
+          image: "busybox:1.37.0@sha256:7a3ebe5bfd1a4a19797d20b0c0bb39d44393e9a03fd852c0865b0f540d868df0"
+          command: ["/bin/sh", "-c", "chown -R 65534:65534 /victoria-metrics-data"]
+          securityContext:
+            runAsUser: 0
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - CHOWN
+          volumeMounts:
+            - name: data
+              mountPath: /victoria-metrics-data
+      containers:
+        - name: vmsingle
+          image: "victoriametrics/victoria-metrics:v1.152.0@sha256:58e70086a0eae76562c759ec71ae18af225e57d1986dd2fd357e759349439c4c"
+          args:
+            - --storageDataPath=/victoria-metrics-data
+            - --retentionPeriod=15d
+            - --httpListenAddr=:8428
+          ports:
+            - name: http
+              containerPort: 8428
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65534
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: data
+              mountPath: /victoria-metrics-data
+      volumes:
+        - name: data
+          hostPath:
+            path: /var/lib/monitoring/victoria-metrics-data
+            type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vmsingle
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: vmsingle
+spec:
+  selector:
+    app.kubernetes.io/name: vmsingle
+  ports:
+    - name: http
+      port: 8428
+      targetPort: http

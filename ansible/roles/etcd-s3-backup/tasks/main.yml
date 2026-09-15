@@ -78,6 +78,18 @@
     mode: "0700"
   when: is_first_server | bool
 
+# Gate 11: shared with node-exporter's textfile collector (mounted read-only
+# from the same host path). 0755 so the node-exporter container, running as
+# UID 65534, can read it -- only root (the sync script, via cron) writes here.
+- name: Create the node-exporter textfile-collector directory
+  ansible.builtin.file:
+    path: "{{ etcd_s3_backup_textfile_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: is_first_server | bool
+
 - name: Render the sync script
   ansible.builtin.template:
     src: sync-script.sh.j2

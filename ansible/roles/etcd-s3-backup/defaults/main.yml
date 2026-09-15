@@ -47,3 +47,11 @@ etcd_s3_backup_snapshot_dir: "{{ k3s_data_dir }}/server/db/snapshots"
 # seconds (observed live), so 5 minutes is generous headroom, not a tight
 # race.
 etcd_s3_backup_cron_minute: 5
+
+# Gate 11 (baseline observability): the sync script writes success/attempt
+# timestamps here as a Prometheus textfile-collector metric so vmalert can
+# alert on a stale or missing etcd snapshot sync. Must match the
+# node-exporter DaemonSet's --collector.textfile.directory
+# (kubernetes/infrastructure/monitoring/node-exporter-daemonset.yaml).
+etcd_s3_backup_textfile_dir: /var/lib/node-exporter/textfile_collector
+etcd_s3_backup_metrics_file: "{{ etcd_s3_backup_textfile_dir }}/etcd_snapshot.prom"

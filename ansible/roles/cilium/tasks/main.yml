@@ -210,6 +210,86 @@
   changed_when: false
   when: is_first_server | bool
 
+# Gate 11 (baseline observability): cluster-wide Hubble flow visibility.
+# Runs only once Cilium itself is confirmed healthy above, so this never
+# races an in-progress MTU/API-host-drift upgrade.
+- name: Check whether hubble-relay is already enabled
+  ansible.builtin.command:
+    cmd: k3s kubectl -n {{ cilium_namespace }} get deployment hubble-relay -o jsonpath={.metadata.name}
+  register: _hubble_relay_deploy
+  changed_when: false
+  failed_when: false
+  when:
+    - is_first_server | bool
+    - cilium_hubble_relay_enabled | bool
+
+- name: Capture the Cilium DaemonSet pod template before enabling Hubble relay (safety baseline)
+  ansible.builtin.command:
+    cmd: k3s kubectl -n {{ cilium_namespace }} get daemonset cilium -o jsonpath={.spec.template}
+  register: _ds_template_before
+  changed_when: false
+  when:
+    - is_first_server | bool
+    - cilium_hubble_relay_enabled | bool
+    - _hubble_relay_deploy.stdout | default('') == ''
+
+- name: Enable Hubble relay
+  ansible.builtin.command:
+    cmd: >-
+      {{ cilium_cli_bin }} upgrade
+      --namespace {{ cilium_namespace }}
+      --reuse-values
+      --set hubble.relay.enabled=true
+      --set k8sServiceHost={{ cilium_k8s_service_host }}
+      --set k8sServicePort={{ cilium_k8s_service_port }}
+      --set MTU={{ cilium_mtu }}
+  environment:
+    KUBECONFIG: "{{ cilium_kubeconfig }}"
+  register: _hubble_upgrade
+  changed_when: _hubble_upgrade.rc == 0
+  timeout: "{{ cilium_install_timeout }}"
+  when:
+    - is_first_server | bool
+    - cilium_hubble_relay_enabled | bool
+    - _hubble_relay_deploy.stdout | default('') == ''
+
+- name: Read the Cilium DaemonSet pod template after enabling Hubble relay
+  ansible.builtin.command:
+    cmd: k3s kubectl -n {{ cilium_namespace }} get daemonset cilium -o jsonpath={.spec.template}
+  register: _ds_template_after
+  changed_when: false
+  when: _hubble_upgrade is defined and _hubble_upgrade is changed
+
+# The repository contract prohibits restarting the Cilium DaemonSet without
+# root-cause analysis and explicit authorisation (CLAUDE.md Section 9/15).
+# hubble-relay is a separate Deployment reading the agent's already-open
+# Hubble port (4244); enabling it should never touch the agent DaemonSet's
+# own pod spec. This assert is the proof -- if the Helm chart's templating
+# changed the DaemonSet spec as a side effect, stop here rather than letting
+# kubelet notice the drift and roll it later unsupervised. A failure here
+# means: do not proceed: revert hubble.relay.enabled and get separate
+# authorisation for the restart.
+- name: Assert the Cilium DaemonSet pod template is unchanged after enabling Hubble relay
+  ansible.builtin.assert:
+    that:
+      - _ds_template_before.stdout == _ds_template_after.stdout
+    fail_msg: >-
+      Enabling hubble.relay.enabled changed the Cilium DaemonSet's pod
+      template -- this would cause a Cilium restart, which is prohibited
+      without a separate root-cause analysis and explicit authorisation
+      (CLAUDE.md Section 9/15). Revert with `cilium upgrade --reuse-values
+      --set hubble.relay.enabled=false` and escalate before retrying.
+    quiet: true
+  when: _hubble_upgrade is defined and _hubble_upgrade is changed
+
+- name: Wait for hubble-relay to become ready
+  ansible.builtin.command:
+    cmd: >-
+      k3s kubectl -n {{ cilium_namespace }} rollout status deployment/hubble-relay
+      --timeout=300s
+  changed_when: false
+  when: _hubble_upgrade is defined and _hubble_upgrade is changed
+
 # Plain grep over YAML rather than jsonpath. jsonpath needs quoting for both
 # filter expressions and literal text, and neither survives Ansible's command
 # module intact -- this role and k3s-server both hit that trap.

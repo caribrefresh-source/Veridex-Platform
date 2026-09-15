@@ -1,0 +1,129 @@
+# vmagent v1.152.0, digest-pinned for linux/amd64 (verified against Docker
+# Hub 2026-09-15). Scrapes using plain Prometheus-compatible scrape_configs
+# and remote-writes to vmsingle -- this is what satisfies the plan's
+# "Express Prometheus scraping" requirement (line 550) without running
+# Prometheus itself.
+#
+# Scrape jobs and why each is here:
+#   node-exporter   role: node SD, port 9100 (hostNetwork) -- node/disk alerts,
+#                   and the etcd-snapshot textfile metric on veridex-server-1.
+#   kube-state-metrics  static target -- node readiness, Cilium/CoreDNS pod
+#                   health (kube_pod_status_ready, restart counts).
+#   coredns         role: pod SD in kube-system only -- DNS alert.
+#   argocd          static target (argocd-metrics Service, already live) --
+#                   Argo reconciliation alert.
+#   vmagent/vmsingle/vmalert self-scrape -- so the observability stack can
+#                   alert on its own components being down.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vmagent-scrape-config
+  namespace: monitoring
+data:
+  scrape.yml: |
+    scrape_configs:
+      - job_name: node-exporter
+        kubernetes_sd_configs:
+          - role: node
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_node_address_InternalIP]
+            target_label: __address__
+            replacement: "${1}:9100"
+          - source_labels: [__meta_kubernetes_node_name]
+            target_label: node
+      - job_name: kube-state-metrics
+        static_configs:
+          - targets: ["kube-state-metrics.monitoring.svc:8080"]
+      - job_name: coredns
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names: ["kube-system"]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_k8s_app]
+            regex: kube-dns
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_ip]
+            target_label: __address__
+            replacement: "${1}:9153"
+      - job_name: argocd
+        static_configs:
+          - targets: ["argocd-metrics.argocd.svc:8082"]
+      - job_name: vmagent
+        static_configs:
+          - targets: ["localhost:8429"]
+      - job_name: vmsingle
+        static_configs:
+          - targets: ["vmsingle.monitoring.svc:8428"]
+      - job_name: vmalert
+        static_configs:
+          - targets: ["vmalert.monitoring.svc:8880"]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vmagent
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: vmagent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vmagent
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: vmagent
+    spec:
+      serviceAccountName: vmagent
+      containers:
+        - name: vmagent
+          image: "victoriametrics/vmagent:v1.152.0@sha256:1aefeb03067d8a38d91ea353dfd43bea6f20dfdf4f842180ce163737ac8235d9"
+          args:
+            - --promscrape.config=/etc/vmagent/scrape.yml
+            - --remoteWrite.url=http://vmsingle.monitoring.svc:8428/api/v1/write
+            - --httpListenAddr=:8429
+          ports:
+            - name: http
+              containerPort: 8429
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65534
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: scrape-config
+              mountPath: /etc/vmagent
+              readOnly: true
+            - name: persist-queue
+              mountPath: /vmagentdata
+      volumes:
+        - name: scrape-config
+          configMap:
+            name: vmagent-scrape-config
+        - name: persist-queue
+          emptyDir: {}

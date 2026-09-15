@@ -67,12 +67,25 @@ firewall_trusted_pod_networks:
 #     Verified: a pod got 0 metric lines from 9962 before this, while the
 #     endpoint itself answered 200 on the node. Read-only telemetry -- endpoint
 #     state, BPF map pressure, drop counts by reason, IP allocation.
+#
+#   4244 Hubble's peer-service port on the Cilium agent -- same hostNetwork
+#     shape as the four above, missed when hubble-relay was enabled because
+#     nothing actually tested pod-to-4244 reachability at the time. This is
+#     hubble-relay's entire root cause: it had been crash-looping (49
+#     restarts) since the day it was enabled on a completely mundane firewall
+#     gap, not the stale-BPF-state theory recorded earlier -- VERIFIED live,
+#     both the ClusterIP (hubble-peer:443, which DNATs to this port) and the
+#     node IP directly timed out identically from a same-node pod, which rules
+#     out a Service-routing explanation and points squarely at the host
+#     firewall. gRPC peer-discovery traffic only -- no flow content, no
+#     credentials.
 firewall_trusted_pod_ports:
   - "{{ api_port }}"
   - 9100
   - 2381
   - 9962
   - 9963
+  - 4244
 
 # Published on the PUBLIC interface. Only 32537 (Traefik's websecure
 # NodePort, kubernetes/infrastructure/ingress/service.yaml) is open so far --

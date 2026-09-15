@@ -9,8 +9,21 @@ Plan: `docs/Engineering Documents/Initial Stages Plan.txt`
 
 ## Position
 
-Last deliverable **D40**, last exit-gate check **EG46** (Gate 8, closed
-2026-09-15). The next closed gate starts at **D41** and **EG47**.
+Last deliverable **D47**, last exit-gate check **EG51** (Gate 9, closed
+2026-09-15). The next closed gate starts at **D48** and **EG52**.
+
+**Gate 9 implementation note.** The plan's End state for Gate 9 names "k3s's
+native S3-compatible snapshot target" as the off-cluster upload mechanism.
+That mechanism was tried, live, against the exact pinned k3s version and
+found incompatible with Gate 8's Object-Lock-enabled bucket (it never sends
+the `Content-MD5`/`x-amz-checksum-` header B2's Object Lock requires — full
+finding in `docs/evidence/gates/gate-09/native-uploader-incompatibility.txt`).
+With the repository owner's explicit authorization, a sidecar uploader
+(`roles/etcd-s3-backup`, built on the already-proven-working `b2` CLI)
+replaces it. Gate 9's substantive acceptance evidence is met in full; the
+specific tool is not the one the plan's prose names. `audit`/future gates
+should treat this as the actual implemented mechanism, not the plan's literal
+text, until the plan document itself is amended.
 
 The plan blob advanced from `4ebc8de` to `64d80e6` at Gate 7's closure (the
 Gates 32-35 amendment, Part D; hardening backlog renumbered to Part E). Gates
@@ -35,6 +48,7 @@ closure evidence; `docs/evidence/legacy/README.md` maps it to Revision 3 gates.
 | 6 | Cilium and cluster DNS | D30–D33 | EG32–EG37 | 2026-09-14 | `4ebc8de` | `8bf4f56` | kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://10.2.0.100:6443 | `docs/evidence/gates/gate-06/closure.md` |
 | 7 | Verification automation | D34–D37 | EG38–EG41 | 2026-09-14 | `64d80e6` | `64d80e6` | kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://10.2.0.100:6443 | `docs/evidence/gates/gate-07/closure.md` |
 | 8 | Backup foundation | D38–D40 | EG42–EG46 | 2026-09-15 | `bc27a0a` | `f287056` | Backblaze B2 account c1beac90ce56; bucket veridex-etcd-backup, bucketId 4c818bbe7abca920ac0e0516 | `docs/evidence/gates/gate-08/closure.md` |
+| 9 | etcd recovery | D41–D47 | EG47–EG51 | 2026-09-15 | `bc27a0a` | `212122c` | kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://10.2.0.100:6443; Backblaze B2 bucket veridex-etcd-backup, bucketId 4c818bbe7abca920ac0e0516 | `docs/evidence/gates/gate-09/closure.md` |
 
 ## Reopen log
 

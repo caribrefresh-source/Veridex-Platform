@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Reject an Argo CD GitHub credential with repository write access."""
+"""Reject classic PATs and prove a fine-grained token cannot write Git refs."""
 
 from __future__ import annotations
 
 import argparse
 import json
 import os
+import secrets
 import sys
 import urllib.error
 import urllib.request
@@ -45,15 +46,40 @@ def main() -> int:
     if classic_scopes:
         print("ERROR: classic PAT scopes are not accepted; use a fine-grained read-only credential", file=sys.stderr)
         return 1
-    permissions = payload.get("permissions") or {}
-    forbidden = [name for name in ("admin", "maintain", "push") if permissions.get(name)]
-    if forbidden:
-        print("ERROR: token has repository write/admin permission: " + ", ".join(forbidden), file=sys.stderr)
+    # The response's `permissions` object describes the authenticated user's
+    # repository role, not the permissions granted to a fine-grained token.
+    # Prove denial at the write endpoint instead. The all-zero object ID can
+    # never create a ref: a write-capable credential reaches payload validation
+    # (422), while a Contents:read credential is rejected at authorization
+    # (403). Thus this probe cannot change repository state either way.
+    probe = urllib.request.Request(
+        f"https://api.github.com/repos/{args.repository}/git/refs",
+        data=json.dumps(
+            {
+                "ref": f"refs/heads/veridex-permission-probe-{secrets.token_hex(8)}",
+                "sha": "0" * 40,
+            }
+        ).encode(),
+        method="POST",
+        headers=request.headers,
+    )
+    try:
+        urllib.request.urlopen(probe, timeout=20)
+    except urllib.error.HTTPError as exc:
+        if exc.code != 403:
+            print(
+                f"ERROR: Git reference write reached payload handling (HTTP {exc.code}); "
+                "token is not proven read-only",
+                file=sys.stderr,
+            )
+            return 1
+    except (urllib.error.URLError, TimeoutError) as exc:
+        print(f"ERROR: GitHub write-denial probe failed: {type(exc).__name__}", file=sys.stderr)
+        return 2
+    else:
+        print("ERROR: Git reference write unexpectedly succeeded", file=sys.stderr)
         return 1
-    if not permissions.get("pull"):
-        print("ERROR: token lacks repository read permission", file=sys.stderr)
-        return 1
-    print(f"PASS: credential can read {args.repository} and has no repository write/admin permission")
+    print(f"PASS: credential can read {args.repository} and cannot write Git refs")
     return 0
 
 

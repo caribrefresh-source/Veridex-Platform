@@ -1,0 +1,11 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  annotations:
+    veridex.io/owner: platform-observability
+    veridex.io/purpose: Cluster metrics, logs, alerts, and capacity dashboards
+  labels:
+    veridex.io/wave: "7"
+    veridex.io/role: cluster-services

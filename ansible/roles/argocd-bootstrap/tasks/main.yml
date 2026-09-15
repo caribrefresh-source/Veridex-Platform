@@ -31,7 +31,7 @@
       on {{ argocd_repo_url }} and nothing else.
   when: is_first_server | bool
 
-- name: Reject a GitHub credential with repository write or classic PAT scope
+- name: Reject a classic PAT or a credential with Git contents write access
   ansible.builtin.command:
     argv:
       - python3

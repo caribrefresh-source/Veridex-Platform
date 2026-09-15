@@ -76,6 +76,16 @@ data:
           - source_labels: [__meta_kubernetes_pod_label_k8s_app]
             regex: kube-dns
             action: keep
+          # Same duplicate-target bug class as cilium-agent/cilium-operator,
+          # present in this job since it was first written -- CoreDNS exposes
+          # three ports (dns/UDP 53, dns-tcp/TCP 53, metrics/TCP 9153), so
+          # role:pod SD emits one candidate per port, and without this every
+          # one of them collapsed onto the same rewritten "${ip}:9153". Only
+          # surfaced now because Gate 11's acceptance-evidence run actually
+          # read vmagent's own logs instead of just checking target health.
+          - source_labels: [__meta_kubernetes_pod_container_port_name]
+            regex: metrics
+            action: keep
           - source_labels: [__meta_kubernetes_pod_ip]
             target_label: __address__
             replacement: "${1}:9153"

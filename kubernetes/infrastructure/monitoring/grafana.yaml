@@ -111,12 +111,19 @@ spec:
           volumeMounts:
             - {name: provisioning, mountPath: /etc/grafana/provisioning/datasources/datasources.yaml, subPath: datasources.yaml, readOnly: true}
             - {name: provisioning, mountPath: /etc/grafana/provisioning/dashboards/dashboards.yaml, subPath: dashboards.yaml, readOnly: true}
-            - {name: dashboards, mountPath: /var/lib/grafana/dashboards, readOnly: true}
+            # Each dashboard ConfigMap gets its OWN subdirectory. Mounting one
+            # of them directly at /var/lib/grafana/dashboards and nesting the
+            # next inside it would put a mountpoint inside a read-only
+            # ConfigMap volume; siblings under the data emptyDir avoid that.
+            # Grafana's file provider walks the tree recursively.
+            - {name: capacity-dashboard, mountPath: /var/lib/grafana/dashboards/capacity, readOnly: true}
+            - {name: platform-dashboards, mountPath: /var/lib/grafana/dashboards/platform, readOnly: true}
             - {name: data, mountPath: /var/lib/grafana}
             - {name: tmp, mountPath: /tmp}
       volumes:
         - {name: provisioning, configMap: {name: grafana-provisioning}}
-        - {name: dashboards, configMap: {name: grafana-capacity-dashboard}}
+        - {name: capacity-dashboard, configMap: {name: grafana-capacity-dashboard}}
+        - {name: platform-dashboards, configMap: {name: grafana-platform-dashboards}}
         - {name: data, emptyDir: {}}
         - {name: tmp, emptyDir: {}}
 ---

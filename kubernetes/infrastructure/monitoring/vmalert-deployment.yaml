@@ -209,6 +209,10 @@ spec:
             - --remoteRead.url=http://vmsingle.monitoring.svc:8428
             - --notifier.url=http://alertmanager.monitoring.svc:9093
             - --rule=/etc/vmalert/rules.yml
+            # Same reason as vmagent: without a config check, edited rules
+            # reach the mounted file but are never re-read, so a rule change
+            # silently does nothing until the pod restarts.
+            - --rule.configCheckInterval=30s
             - --evaluationInterval=30s
             - --httpListenAddr=:8880
           ports:

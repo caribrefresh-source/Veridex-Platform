@@ -134,6 +134,11 @@ spec:
             # is on the root filesystem -- and readOnlyRootFilesystem is true,
             # so it panics in MustMkdirIfNotExist on startup.
             - --remoteWrite.tmpDataPath=/vmagentdata
+            # Without this, a ConfigMap change reaches the mounted file but
+            # vmagent never re-reads it -- new scrape jobs sat unread on disk
+            # until the pod happened to restart. GitOps updates ConfigMaps; it
+            # does not restart pods.
+            - --promscrape.configCheckInterval=30s
             - --httpListenAddr=:8429
           ports:
             - name: http

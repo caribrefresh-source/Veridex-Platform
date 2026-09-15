@@ -329,6 +329,7 @@
       --set k8sServiceHost={{ cilium_k8s_service_host }}
       --set k8sServicePort={{ cilium_k8s_service_port }}
       --set MTU={{ cilium_mtu }}
+      --set updateStrategy.rollingUpdate.maxUnavailable={{ cilium_max_unavailable }}
   environment:
     KUBECONFIG: "{{ cilium_kubeconfig }}"
   register: _cilium_metrics_upgrade

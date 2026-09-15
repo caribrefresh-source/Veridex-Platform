@@ -113,6 +113,38 @@ data:
       - job_name: traefik
         static_configs:
           - targets: ["traefik-metrics.kube-system.svc:8082"]
+      # Cilium agent metrics (9962), one per node. Replaces inferring datapath
+      # health from pod readiness -- a Cilium pod can be Running and passing
+      # probes while its datapath is broken, which is exactly what happened on
+      # 2026-09-15. Gives endpoint regeneration failures, policy revision
+      # state, BPF map pressure, IP allocation and drops by reason.
+      - job_name: cilium-agent
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names: ["kube-system"]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_k8s_app]
+            regex: cilium
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_ip]
+            target_label: __address__
+            replacement: "${1}:9962"
+          - source_labels: [__meta_kubernetes_pod_node_name]
+            target_label: node
+      # The operator already listens on :9963 and needed no restart to do so.
+      - job_name: cilium-operator
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names: ["kube-system"]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_io_cilium_app]
+            regex: operator
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_ip]
+            target_label: __address__
+            replacement: "${1}:9963"
       # etcd's own metrics, exposed by k3s_etcd_expose_metrics (roles/k3s-server)
       # and reachable through the pod-CIDR firewall allowance for 2381.
       # Control-plane nodes only -- agents run no etcd. Without this the only

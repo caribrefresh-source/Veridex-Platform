@@ -54,6 +54,78 @@ data:
               class: disk
             annotations:
               summary: "Filesystem {{ $labels.mountpoint }} on {{ $labels.node }} below 15% free"
+      - name: capacity-recording
+        interval: 30s
+        rules:
+          - record: veridex:container_cpu_usage_cores:rate5m
+            expr: >-
+              sum by (namespace, pod, container, node)
+              (rate(container_cpu_usage_seconds_total{container!="", image!=""}[5m]))
+          - record: veridex:container_cpu_throttled_ratio:rate5m
+            expr: >-
+              sum by (namespace, pod, container)
+              (rate(container_cpu_cfs_throttled_periods_total{container!="", image!=""}[5m]))
+              / clamp_min(sum by (namespace, pod, container)
+              (rate(container_cpu_cfs_periods_total{container!="", image!=""}[5m])), 1)
+          - record: veridex:container_memory_working_set_bytes
+            expr: >-
+              sum by (namespace, pod, container, node)
+              (container_memory_working_set_bytes{container!="", image!=""})
+          - record: veridex:container_memory_rss_bytes
+            expr: >-
+              sum by (namespace, pod, container, node)
+              (container_memory_rss{container!="", image!=""})
+          - record: veridex:namespace_cpu_requests_cores
+            expr: sum by (namespace) (kube_pod_container_resource_requests{resource="cpu", unit="core"})
+          - record: veridex:namespace_cpu_limits_cores
+            expr: sum by (namespace) (kube_pod_container_resource_limits{resource="cpu", unit="core"})
+          - record: veridex:namespace_memory_requests_bytes
+            expr: sum by (namespace) (kube_pod_container_resource_requests{resource="memory", unit="byte"})
+          - record: veridex:namespace_memory_limits_bytes
+            expr: sum by (namespace) (kube_pod_container_resource_limits{resource="memory", unit="byte"})
+          - record: veridex:pvc_used_bytes
+            expr: max by (namespace, persistentvolumeclaim) (kubelet_volume_stats_used_bytes)
+          - record: veridex:pvc_capacity_bytes
+            expr: max by (namespace, persistentvolumeclaim) (kubelet_volume_stats_capacity_bytes)
+          - record: veridex:pvc_requested_bytes
+            expr: max by (namespace, persistentvolumeclaim) (kube_persistentvolumeclaim_resource_requests_storage_bytes)
+      - name: capacity-alerts
+        interval: 30s
+        rules:
+          - alert: ContainerOOMKilled
+            expr: >-
+              increase(kube_pod_container_status_restarts_total[10m]) > 0
+              and on (namespace, pod, container)
+              kube_pod_container_status_last_terminated_reason{reason="OOMKilled"} == 1
+            labels:
+              severity: critical
+              class: capacity
+            annotations:
+              summary: "Container {{ $labels.namespace }}/{{ $labels.pod }}/{{ $labels.container }} was OOMKilled"
+          - alert: ContainerCPUThrottlingHigh
+            expr: veridex:container_cpu_throttled_ratio:rate5m > 0.25
+            for: 15m
+            labels:
+              severity: warning
+              class: capacity
+            annotations:
+              summary: "Container {{ $labels.namespace }}/{{ $labels.pod }}/{{ $labels.container }} is heavily CPU throttled"
+          - alert: PVCUsageHigh
+            expr: veridex:pvc_used_bytes / clamp_min(veridex:pvc_capacity_bytes, 1) > 0.75
+            for: 15m
+            labels:
+              severity: warning
+              class: capacity
+            annotations:
+              summary: "PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} is over 75% used"
+          - alert: CapacityMetricsMissing
+            expr: absent(container_memory_working_set_bytes{container!="", image!=""})
+            for: 10m
+            labels:
+              severity: critical
+              class: capacity
+            annotations:
+              summary: "kubelet/cAdvisor capacity metrics are missing"
       - name: etcd-snapshot
         interval: 60s
         rules:

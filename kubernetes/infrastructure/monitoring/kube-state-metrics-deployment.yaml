@@ -26,7 +26,7 @@ spec:
         - name: kube-state-metrics
           image: "registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.20.0@sha256:01171220c7c059afc85034ffe687bfe7249e41c0cc46fbe9a5128503ceee3016"
           args:
-            - --resources=nodes,pods,namespaces,daemonsets,deployments,statefulsets
+            - --resources=nodes,pods,namespaces,daemonsets,deployments,statefulsets,persistentvolumeclaims
             - --port=8080
             - --telemetry-port=8081
           ports:

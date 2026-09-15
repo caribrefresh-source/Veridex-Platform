@@ -1,0 +1,132 @@
+# Grafana OSS 13.2.1. Internal ClusterIP only; anonymous access is Viewer-only
+# because no secret delivery mechanism is approved yet. There is no Ingress.
+# Dashboards and data sources are immutable, Git-provisioned configuration.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-provisioning
+  namespace: monitoring
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    prune: true
+    datasources:
+      - name: VictoriaMetrics
+        uid: victoriametrics
+        type: prometheus
+        access: proxy
+        url: http://vmsingle.monitoring.svc:8428
+        isDefault: true
+        editable: false
+        jsonData:
+          prometheusType: Prometheus
+          prometheusVersion: 3.0.0
+          timeInterval: 30s
+      - name: Loki
+        uid: loki
+        type: loki
+        access: proxy
+        url: http://loki.monitoring.svc:3100
+        editable: false
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+      - name: veridex
+        folder: Veridex
+        type: file
+        disableDeletion: true
+        editable: false
+        updateIntervalSeconds: 30
+        options:
+          path: /var/lib/grafana/dashboards
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-capacity-dashboard
+  namespace: monitoring
+data:
+  capacity.json: |
+    {
+      "annotations":{"list":[{"name":"OOM kills","datasource":{"type":"prometheus","uid":"victoriametrics"},"enable":true,"expr":"ALERTS{alertname=\"ContainerOOMKilled\",alertstate=\"firing\"}"}]},
+      "editable":false,"graphTooltip":1,"refresh":"30s","schemaVersion":41,
+      "tags":["veridex","capacity"],"timezone":"browser","title":"Veridex Capacity: Actual vs Pledged","uid":"veridex-capacity","version":1,
+      "time":{"from":"now-30d","to":"now"},
+      "templating":{"list":[{"name":"namespace","type":"query","datasource":{"type":"prometheus","uid":"victoriametrics"},"query":{"query":"label_values(kube_pod_info, namespace)"},"includeAll":true,"multi":true,"current":{"text":"All","value":"$__all"}}]},
+      "panels":[
+        {"id":1,"type":"timeseries","title":"CPU actual vs requests vs limits by namespace","datasource":{"type":"prometheus","uid":"victoriametrics"},"gridPos":{"x":0,"y":0,"w":12,"h":8},"fieldConfig":{"defaults":{"unit":"cores"}},"targets":[{"refId":"A","legendFormat":"{{namespace}} actual","expr":"sum by (namespace) (veridex:container_cpu_usage_cores:rate5m{namespace=~\"$namespace\"})"},{"refId":"B","legendFormat":"{{namespace}} request","expr":"veridex:namespace_cpu_requests_cores{namespace=~\"$namespace\"}"},{"refId":"C","legendFormat":"{{namespace}} limit","expr":"veridex:namespace_cpu_limits_cores{namespace=~\"$namespace\"}"}]},
+        {"id":2,"type":"timeseries","title":"Memory working set, RSS, requests and limits","datasource":{"type":"prometheus","uid":"victoriametrics"},"gridPos":{"x":12,"y":0,"w":12,"h":8},"fieldConfig":{"defaults":{"unit":"bytes"}},"targets":[{"refId":"A","legendFormat":"{{namespace}} working set","expr":"sum by (namespace) (veridex:container_memory_working_set_bytes{namespace=~\"$namespace\"})"},{"refId":"B","legendFormat":"{{namespace}} RSS","expr":"sum by (namespace) (veridex:container_memory_rss_bytes{namespace=~\"$namespace\"})"},{"refId":"C","legendFormat":"{{namespace}} request","expr":"veridex:namespace_memory_requests_bytes{namespace=~\"$namespace\"}"},{"refId":"D","legendFormat":"{{namespace}} limit","expr":"veridex:namespace_memory_limits_bytes{namespace=~\"$namespace\"}"}]},
+        {"id":3,"type":"timeseries","title":"CPU throttling ratio by container","datasource":{"type":"prometheus","uid":"victoriametrics"},"gridPos":{"x":0,"y":8,"w":12,"h":8},"fieldConfig":{"defaults":{"unit":"percentunit","min":0}},"targets":[{"refId":"A","legendFormat":"{{namespace}}/{{pod}}/{{container}}","expr":"veridex:container_cpu_throttled_ratio:rate5m{namespace=~\"$namespace\"}"}]},
+        {"id":4,"type":"timeseries","title":"PVC actual vs requested vs filesystem capacity","datasource":{"type":"prometheus","uid":"victoriametrics"},"gridPos":{"x":12,"y":8,"w":12,"h":8},"fieldConfig":{"defaults":{"unit":"bytes"}},"targets":[{"refId":"A","legendFormat":"{{namespace}}/{{persistentvolumeclaim}} used","expr":"veridex:pvc_used_bytes{namespace=~\"$namespace\"}"},{"refId":"B","legendFormat":"{{namespace}}/{{persistentvolumeclaim}} requested","expr":"veridex:pvc_requested_bytes{namespace=~\"$namespace\"}"},{"refId":"C","legendFormat":"{{namespace}}/{{persistentvolumeclaim}} capacity","expr":"veridex:pvc_capacity_bytes{namespace=~\"$namespace\"}"}]},
+        {"id":5,"type":"table","title":"Container memory p95 / p99 / max over selected period","datasource":{"type":"prometheus","uid":"victoriametrics"},"gridPos":{"x":0,"y":16,"w":24,"h":8},"targets":[{"refId":"A","format":"table","instant":true,"expr":"quantile_over_time(0.95, veridex:container_memory_working_set_bytes{namespace=~\"$namespace\"}[$__range])","legendFormat":"p95 {{namespace}}/{{pod}}/{{container}}"},{"refId":"B","format":"table","instant":true,"expr":"quantile_over_time(0.99, veridex:container_memory_working_set_bytes{namespace=~\"$namespace\"}[$__range])","legendFormat":"p99 {{namespace}}/{{pod}}/{{container}}"},{"refId":"C","format":"table","instant":true,"expr":"max_over_time(veridex:container_memory_working_set_bytes{namespace=~\"$namespace\"}[$__range])","legendFormat":"max {{namespace}}/{{pod}}/{{container}}"}]}
+      ]
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: grafana
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: grafana
+    spec:
+      serviceAccountName: grafana
+      containers:
+        - name: grafana
+          image: "grafana/grafana:13.2.1@sha256:1dec240d14e232597dce9bfa56dae55f4397b138cdc91e3ee92ac6b157e2fc49"
+          env:
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "true"
+            - name: GF_AUTH_ANONYMOUS_ORG_ROLE
+              value: Viewer
+            - name: GF_AUTH_DISABLE_LOGIN_FORM
+              value: "true"
+            - name: GF_USERS_ALLOW_SIGN_UP
+              value: "false"
+          ports:
+            - name: http
+              containerPort: 3000
+          readinessProbe:
+            httpGet: {path: /api/health, port: http}
+          livenessProbe:
+            httpGet: {path: /api/health, port: http}
+            initialDelaySeconds: 15
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {cpu: 500m, memory: 512Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 472
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: provisioning, mountPath: /etc/grafana/provisioning/datasources/datasources.yaml, subPath: datasources.yaml, readOnly: true}
+            - {name: provisioning, mountPath: /etc/grafana/provisioning/dashboards/dashboards.yaml, subPath: dashboards.yaml, readOnly: true}
+            - {name: dashboards, mountPath: /var/lib/grafana/dashboards, readOnly: true}
+            - {name: data, mountPath: /var/lib/grafana}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - {name: provisioning, configMap: {name: grafana-provisioning}}
+        - {name: dashboards, configMap: {name: grafana-capacity-dashboard}}
+        - {name: data, emptyDir: {}}
+        - {name: tmp, emptyDir: {}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: monitoring
+spec:
+  selector:
+    app.kubernetes.io/name: grafana
+  ports:
+    - {name: http, port: 3000, targetPort: http}

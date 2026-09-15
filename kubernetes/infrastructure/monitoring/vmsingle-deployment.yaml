@@ -58,7 +58,9 @@ spec:
           image: "victoriametrics/victoria-metrics:v1.152.0@sha256:58e70086a0eae76562c759ec71ae18af225e57d1986dd2fd357e759349439c4c"
           args:
             - --storageDataPath=/victoria-metrics-data
-            - --retentionPeriod=15d
+            # Thirty days spans multiple migration waves and captures weekly
+            # batch/ingestion peaks; 15 days was too short for trend sizing.
+            - --retentionPeriod=30d
             - --httpListenAddr=:8428
           ports:
             - name: http

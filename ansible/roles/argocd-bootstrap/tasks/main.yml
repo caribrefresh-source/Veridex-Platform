@@ -247,13 +247,29 @@
 # while every check for this gate reports "root app from main". Found during
 # Gate 10's own adversarial review (2026-09-15): the two would silently
 # diverge on any control node that isn't sitting exactly on main.
+#
+# Authenticated inline with the same credential already exported as
+# ARGOCD_REPO_PAT for the whole play, rather than relying on a git
+# credential helper: the control node (WSL) runs a separate git installation
+# from the operator's interactive shell, with no stored GitHub credential of
+# its own -- found live 2026-09-15, plain `git fetch origin main` failed
+# with "could not read Username for 'https://github.com'". no_log because
+# the header embeds the PAT.
 - name: Fetch the latest origin/main
-  ansible.builtin.command:
-    cmd: git fetch origin main
+  ansible.builtin.shell:
+    cmd: >-
+      set -euo pipefail &&
+      auth=$(printf '%s:%s' "$ARGOCD_REPO_USERNAME" "$ARGOCD_REPO_PAT" | base64 -w0) &&
+      git -c http.extraHeader="Authorization: Basic $auth" fetch origin main
     chdir: "{{ playbook_dir }}/../.."
+    executable: /bin/bash
+  environment:
+    ARGOCD_REPO_USERNAME: "{{ argocd_repo_username }}"
+    ARGOCD_REPO_PAT: "{{ argocd_repo_pat }}"
   delegate_to: localhost
   become: false
   run_once: true
+  no_log: true
   changed_when: true
 
 - name: Render the veridex AppProject from origin/main
@@ -286,8 +302,15 @@
   when: is_first_server | bool
 
 - name: Apply the veridex AppProject
+  # --server-side: once Argo CD itself starts reconciling this object (after
+  # the root app picks it up from gitops/projects/veridex.yaml on main),
+  # Argo's own field-manager and this task's plain client-side apply
+  # disagree about what changed on every subsequent run, even with
+  # byte-identical desired content -- found live 2026-09-15, same
+  # field-manager-conflict class as the repo-credential Secret and RBAC
+  # ConfigMap above.
   ansible.builtin.command:
-    cmd: k3s kubectl apply -f /tmp/veridex-project.yaml
+    cmd: k3s kubectl apply -f /tmp/veridex-project.yaml --server-side --force-conflicts
   environment:
     KUBECONFIG: "{{ argocd_kubeconfig }}"
   register: _veridex_project

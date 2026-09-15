@@ -139,6 +139,46 @@ data:
               class: etcd-snapshot
             annotations:
               summary: "etcd snapshot sync to Backblaze B2 has not succeeded in over 2 hours"
+      # etcd server health. Only possible since k3s_etcd_expose_metrics
+      # (roles/k3s-server) made etcd's own listener reachable -- before that
+      # the platform's most critical stateful component had no first-party
+      # observability at all, and none of these could be written.
+      - name: etcd
+        interval: 30s
+        rules:
+          - alert: EtcdNoLeader
+            expr: etcd_server_has_leader == 0
+            for: 1m
+            labels:
+              severity: P0
+              class: etcd
+            annotations:
+              summary: "etcd member {{ $labels.node }} reports no leader -- the cluster cannot commit writes"
+          - alert: EtcdInsufficientMembers
+            expr: count(etcd_server_has_leader) < 3
+            for: 2m
+            labels:
+              severity: P0
+              class: etcd
+            annotations:
+              summary: "Fewer than 3 etcd members are reporting -- quorum (2 of 3) is at risk"
+          - alert: EtcdFrequentLeaderChanges
+            expr: increase(etcd_server_leader_changes_seen_total[15m]) > 3
+            labels:
+              severity: P1
+              class: etcd
+            annotations:
+              summary: "etcd has changed leader more than 3 times in 15m -- usually disk or network latency"
+          - alert: EtcdHighFsyncLatency
+            expr: >-
+              histogram_quantile(0.99,
+                sum by (le, node) (rate(etcd_disk_wal_fsync_duration_seconds_bucket[5m]))) > 0.5
+            for: 10m
+            labels:
+              severity: P2
+              class: etcd
+            annotations:
+              summary: "etcd WAL fsync p99 above 500ms on {{ $labels.node }} -- storage is too slow for stable quorum"
       - name: cilium
         interval: 30s
         rules:

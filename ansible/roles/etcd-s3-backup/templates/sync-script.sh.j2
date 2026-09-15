@@ -10,16 +10,20 @@
 # hourly snapshots.
 set -euo pipefail
 
+# Redirect first, before anything that could fail -- the log directory
+# already exists (Ansible's own task creates it), so this is safe as the
+# very first executable line. A failure in the credential source below now
+# lands in the log too, instead of vanishing before the log file is even
+# open (found in independent review).
+exec >> {{ etcd_s3_backup_log_dir }}/sync.log 2>&1
+echo "--- $(date -u +%Y-%m-%dT%H:%M:%SZ) sync start ---"
+
 # shellcheck disable=SC1091
 source {{ etcd_s3_backup_cred_dir }}/credentials
 export B2_APPLICATION_KEY_ID B2_APPLICATION_KEY
 
-mkdir -p {{ etcd_s3_backup_log_dir }}
-
-exec >> {{ etcd_s3_backup_log_dir }}/sync.log 2>&1
-echo "--- $(date -u +%Y-%m-%dT%H:%M:%SZ) sync start ---"
 {{ etcd_s3_backup_cli_bin }} sync --no-progress \
-  {{ etcd_s3_backup_snapshot_dir }} \
+  "{{ etcd_s3_backup_snapshot_dir }}" \
   "b2://{{ etcd_s3_backup_bucket }}/{{ etcd_s3_backup_folder }}/"
 # set -e means a sync failure exits before this line -- its absence in the
 # log for a given run IS the failure signal, not a printed non-zero code.

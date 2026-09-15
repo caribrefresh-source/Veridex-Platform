@@ -179,18 +179,45 @@ data:
               class: etcd
             annotations:
               summary: "etcd WAL fsync p99 above 500ms on {{ $labels.node }} -- storage is too slow for stable quorum"
+      # Rewritten once cilium_* metrics existed. The previous rule asked
+      # kube-state-metrics whether the cilium POD was Ready, which is a
+      # different question from whether the datapath works -- on 2026-09-15
+      # the pods were Running and passing probes while agent nodes could not
+      # reach the API server. These ask Cilium directly.
       - name: cilium
         interval: 30s
         rules:
           - alert: CiliumAgentDown
-            expr: >-
-              kube_pod_status_ready{namespace="kube-system", condition="true", pod=~"^cilium-[a-z0-9]{5}$"} == 0
+            expr: up{job="cilium-agent"} == 0
             for: 2m
             labels:
               severity: P1
               class: cilium
             annotations:
-              summary: "Cilium agent pod {{ $labels.pod }} is not Ready"
+              summary: "Cilium agent on {{ $labels.node }} is not scrapeable -- the agent itself, not just its pod"
+          - alert: CiliumUnreachableHealthEndpoints
+            expr: cilium_unreachable_health_endpoints > 0
+            for: 5m
+            labels:
+              severity: P1
+              class: cilium
+            annotations:
+              summary: "Cilium on {{ $labels.node }} cannot reach {{ $value }} health endpoints -- node-to-node datapath is broken"
+          - alert: CiliumBPFMapPressureHigh
+            expr: cilium_bpf_map_pressure > 0.8
+            for: 10m
+            labels:
+              severity: P2
+              class: cilium
+            annotations:
+              summary: "Cilium BPF map {{ $labels.map_name }} on {{ $labels.node }} is over 80% full"
+          - alert: CiliumEndpointRegenerationFailing
+            expr: increase(cilium_endpoint_regenerations_total{outcome="fail"}[15m]) > 0
+            labels:
+              severity: P2
+              class: cilium
+            annotations:
+              summary: "Cilium endpoint regeneration failing on {{ $labels.node }} -- policy changes are not landing"
       - name: dns
         interval: 30s
         rules:

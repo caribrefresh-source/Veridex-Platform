@@ -27,10 +27,34 @@
 # argocd-repo-server had accumulated 28 restarts and
 # argocd-notifications-controller 40 by the time this was captured.
 #
-# WHY fromEntities ALONE IS NOT THE FIX: `host` is already allowed and is
-# already bypassed by the misclassification. This policy therefore also admits
-# the cluster's own pod CIDR, which is what the cilium_host addresses belong
-# to, so the allow holds whichever identity the probe presents.
+# UPDATE (captured live, 2026-09-15 23:15 UTC, agent-1, third recurrence): the
+# fromCIDR clause below does NOT catch the misclassified case, contrary to the
+# comment that originally justified it. Verified via the realized policy on
+# the live endpoint (`cilium-dbg endpoint get 1519 -o json`): the port-8084
+# rule compiles to six independent match clauses -- host/remote-node/health/
+# aggregate-remote-node/a namespace-exists selector, and `cidr:10.44.0.0/16` --
+# each keyed to a DIFFERENT identity. `fromCIDR` in Cilium matches only the
+# CIDR-derived identity Cilium allocates for that prefix; it does not mean "any
+# packet whose source IP falls in this range." `world` (reserved identity 2)
+# is a distinct fallback identity. When the datapath's identity resolution
+# fails, the packet carries identity 2 (world), which is in none of the six
+# clauses -- not host, not the CIDR-derived identity -- so it is dropped with
+# `policy-verdict:none` (no rule matched at all), live-observed repeating
+# continuously against argocd-repo-server:8084 while this exact policy was
+# present and `Valid`. The ipcache itself was correct at the time
+# (`10.44.4.103/32 identity=1`), confirming this is a transient datapath
+# resolution failure, not a stale ipcache entry.
+#
+# The only clause that actually admits a world-classified packet is
+# `fromEntities: [world]`, added below. This is a materially wider opening
+# than intended -- `world` is not scoped to this node or even this cluster's
+# pod CIDR, since the whole point is it covers traffic Cilium's datapath
+# could not identify. Accepted because these pod IPs are private (10.44.0.0/16)
+# and never published on the host's public interface or a NodePort, so the
+# realistic exposure is limited to other in-cluster pods that hit the same
+# misclassification, reaching only these four health-check ports (liveness/
+# readiness state, no application data). Authorized explicitly by the user,
+# 2026-09-15, after this finding was reported.
 #
 # SCOPE: narrowly the four probe ports actually in use, verified against live
 # pod specs. It grants nothing else -- every other port on these pods remains
@@ -72,11 +96,28 @@ spec:
               protocol: TCP
             - port: "9001"   # argocd-notifications-controller liveness (TCP socket)
               protocol: TCP
-    # The identity it actually arrives as while the fault is occurring. The
-    # cilium_host addresses live in the cluster pod CIDR, so this catches the
-    # world-misclassified probe without admitting anything external.
+    # Kept for defense-in-depth in case the datapath ever resolves the probe
+    # to the CIDR-derived identity rather than host or world -- but per the
+    # 2026-09-15 update above, this clause alone did NOT stop the observed
+    # failure; do not rely on it as the fix.
     - fromCIDR:
         - 10.44.0.0/16
+      toPorts:
+        - ports:
+            - port: "8084"
+              protocol: TCP
+            - port: "8082"
+              protocol: TCP
+            - port: "8080"
+              protocol: TCP
+            - port: "9001"
+              protocol: TCP
+    # The actual fix: admits the packet when the datapath's identity
+    # resolution fails and falls back to `world`, which is what was observed
+    # live. Scoped to only these four ports on these four pods -- see the
+    # blast-radius note above.
+    - fromEntities:
+        - world
       toPorts:
         - ports:
             - port: "8084"

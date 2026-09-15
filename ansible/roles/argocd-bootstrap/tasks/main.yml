@@ -31,6 +31,21 @@
       on {{ argocd_repo_url }} and nothing else.
   when: is_first_server | bool
 
+- name: Reject a GitHub credential with repository write or classic PAT scope
+  ansible.builtin.command:
+    argv:
+      - python3
+      - "{{ playbook_dir }}/../../scripts/validate-github-readonly-token.py"
+      - --repository
+      - "{{ argocd_repo_name }}"
+  environment:
+    ARGOCD_REPO_PAT: "{{ argocd_repo_pat }}"
+  delegate_to: localhost
+  become: false
+  run_once: true
+  changed_when: false
+  no_log: true
+
 - name: Ensure the Argo CD namespace exists
   # Mirrors gitops/bootstrap/namespace.yaml. That manifest stays the
   # declarative source of truth; this only covers the bootstrap window

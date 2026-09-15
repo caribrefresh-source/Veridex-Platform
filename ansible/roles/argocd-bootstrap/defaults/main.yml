@@ -53,6 +53,7 @@ argocd_ready_delay: 10
 # leaves the Application unauthenticated. The failure surfaces as a generic
 # "repository not accessible", naming neither the credential nor the mismatch.
 argocd_repo_url: https://github.com/caribrefresh-source/Veridex-Platform.git
+argocd_repo_name: caribrefresh-source/Veridex-Platform
 
 argocd_repo_secret_name: argocd-repo-veridex-platform
 

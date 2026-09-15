@@ -67,6 +67,8 @@
     owner: root
     group: root
     mode: "0600"
+  no_log: true
+  diff: false
   when: is_first_server | bool
 
 - name: Create the log directory

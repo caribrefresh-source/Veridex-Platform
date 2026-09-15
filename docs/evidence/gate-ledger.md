@@ -30,9 +30,18 @@ finding in `docs/evidence/gates/gate-09/native-uploader-incompatibility.txt`).
 With the repository owner's explicit authorization, a sidecar uploader
 (`roles/etcd-s3-backup`, built on the already-proven-working `b2` CLI)
 replaces it. Gate 9's substantive acceptance evidence is met in full; the
-specific tool is not the one the plan's prose names. `audit`/future gates
-should treat this as the actual implemented mechanism, not the plan's literal
-text, until the plan document itself is amended.
+specific tool is not the one the plan's prose names.
+
+**Resolved 2026-09-15:** the plan document has now been amended to describe
+the implemented sidecar rather than the native uploader — Gate 9's End
+state, the "Highest-priority unresolved issue" section, the k3s/etcd row of
+the Recovery objectives table, and the immediate implementation backlog
+(which now says explicitly: "The etcd producer is the pinned b2-CLI
+sidecar; do not substitute the failed native k3s path in its evidence
+row"). Gate 9's row below names the pre-amendment plan commit, which
+remains valid: the amendment corrects prose to match what Gate 9 actually
+proved and changes no decision it recorded. Gate 17 must assess the
+sidecar path.
 
 The plan blob advanced from `4ebc8de` to `64d80e6` at Gate 7's closure (the
 Gates 32-35 amendment, Part D; hardening backlog renumbered to Part E). Gates

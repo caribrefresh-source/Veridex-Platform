@@ -59,10 +59,20 @@ firewall_trusted_pod_networks:
 #     this one port -- not published to any node's public interface. It serves
 #     operational telemetry only: quorum, leader, WAL latency, database size.
 #     Never key or value data.
+#
+#   9962 Cilium agent metrics, 9963 Cilium operator metrics -- added at Gate 11
+#     with cilium_prometheus_enabled. Both run hostNetwork (their pod IP IS the
+#     node IP), so vmagent reaches them with a pod-CIDR source and the
+#     default-drop INPUT policy eats the scrape, exactly as it did for 9100.
+#     Verified: a pod got 0 metric lines from 9962 before this, while the
+#     endpoint itself answered 200 on the node. Read-only telemetry -- endpoint
+#     state, BPF map pressure, drop counts by reason, IP allocation.
 firewall_trusted_pod_ports:
   - "{{ api_port }}"
   - 9100
   - 2381
+  - 9962
+  - 9963
 
 # Published on the PUBLIC interface. Only 32537 (Traefik's websecure
 # NodePort, kubernetes/infrastructure/ingress/service.yaml) is open so far --

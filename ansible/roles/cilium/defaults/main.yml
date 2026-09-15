@@ -43,3 +43,12 @@ cilium_hubble_relay_enabled: true
 # Set it to true for one authorised run when the restart is actually intended.
 cilium_prometheus_enabled: true
 cilium_allow_disruptive_upgrade: false
+
+# Cilium's chart ships maxUnavailable: 2, which on this five-node cluster
+# takes 40% of the CNI down at once during any roll. Existing pods keep
+# working (the eBPF datapath survives without the agent) but policy updates
+# and new pod networking pause on every node whose agent is gone. During the
+# 2026-09-15 incident, having several agents down simultaneously is part of
+# what turned a bad config into a visible outage. One at a time is slower and
+# markedly less alarming.
+cilium_max_unavailable: 1

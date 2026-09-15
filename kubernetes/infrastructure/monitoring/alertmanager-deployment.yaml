@@ -101,6 +101,51 @@ spec:
     spec:
       serviceAccountName: alertmanager
       containers:
+        # Alertmanager has no config-file watcher of its own: a ConfigMap edit
+        # reaches the mounted file and is then ignored until the pod restarts,
+        # which GitOps never does on its own. This watches the file and POSTs
+        # to Alertmanager's /-/reload over pod-local loopback when it changes.
+        # It deliberately skips the first iteration -- startup already read
+        # the current file, so reloading then would be pointless churn.
+        # busybox is reused rather than adding a reloader image dependency.
+        - name: config-reload
+          image: "busybox:1.37.0@sha256:7a3ebe5bfd1a4a19797d20b0c0bb39d44393e9a03fd852c0865b0f540d868df0"
+          command:
+            - /bin/sh
+            - -c
+            - |
+              last=""
+              while :; do
+                cur=$(md5sum /etc/alertmanager/alertmanager.yml 2>/dev/null | cut -d' ' -f1)
+                if [ -n "$cur" ] && [ "$cur" != "$last" ]; then
+                  if [ -n "$last" ]; then
+                    wget -q -O- --post-data='' http://127.0.0.1:9093/-/reload >/dev/null 2>&1 \
+                      && echo "config changed -> reloaded alertmanager" \
+                      || echo "config changed -> reload FAILED"
+                  fi
+                  last="$cur"
+                fi
+                sleep 30
+              done
+          resources:
+            requests:
+              cpu: 5m
+              memory: 8Mi
+            limits:
+              cpu: 50m
+              memory: 32Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65534
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: config
+              mountPath: /etc/alertmanager
+              readOnly: true
         - name: alertmanager
           image: "prom/alertmanager:v0.34.0@sha256:268d4bf0e4bc0fe6dbdef6a59ce81a2918c88458bf8edf7dd0572ad372a093e6"
           args:

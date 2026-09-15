@@ -82,6 +82,8 @@
       --set bpf.masquerade=true
       --set MTU={{ cilium_mtu }}
       --set operator.replicas=2
+      --set prometheus.enabled={{ cilium_prometheus_enabled | string | lower }}
+      --set operator.prometheus.enabled={{ cilium_prometheus_enabled | string | lower }}
   environment:
     KUBECONFIG: "{{ cilium_kubeconfig }}"
   register: _cilium_install
@@ -281,6 +283,70 @@
       --set hubble.relay.enabled=false` and escalate before retrying.
     quiet: true
   when: _hubble_upgrade is defined and _hubble_upgrade is changed
+
+# Gate 11: agent/operator metrics on an EXISTING cluster. Unlike hubble-relay,
+# this necessarily rewrites the agent DaemonSet's pod template (it adds a
+# metrics port and its config keys), so it rolls every Cilium pod. That is the
+# restart CLAUDE.md Sections 9 and 15 prohibit without explicit authorisation,
+# which is why it is gated behind cilium_allow_disruptive_upgrade rather than
+# firing on a routine converge. A fresh install needs none of this -- the
+# install command above already carries the flags.
+- name: Check whether Cilium is already exposing metrics
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail;
+      k3s kubectl -n {{ cilium_namespace }} get configmap cilium-config -o yaml
+      | awk '/^  prometheus-serve-addr:/ {print $2}'
+    executable: /bin/bash
+  register: _cilium_metrics_addr
+  changed_when: false
+  when:
+    - is_first_server | bool
+    - cilium_prometheus_enabled | bool
+
+- name: Report that Cilium metrics need an authorised, disruptive upgrade
+  ansible.builtin.debug:
+    msg: >-
+      Cilium agent metrics are NOT enabled and cilium_allow_disruptive_upgrade
+      is false, so this run is leaving it alone. Enabling it rewrites the agent
+      DaemonSet pod template and rolls every Cilium pod. Re-run with
+      -e cilium_allow_disruptive_upgrade=true only when that restart is
+      intended and authorised (CLAUDE.md Sections 9 and 15).
+  when:
+    - is_first_server | bool
+    - cilium_prometheus_enabled | bool
+    - (_cilium_metrics_addr.stdout | default('') | trim) == ''
+    - not (cilium_allow_disruptive_upgrade | bool)
+
+- name: Enable Cilium agent and operator metrics (DISRUPTIVE - rolls the DaemonSet)
+  ansible.builtin.command:
+    cmd: >-
+      {{ cilium_cli_bin }} upgrade
+      --namespace {{ cilium_namespace }}
+      --reuse-values
+      --set prometheus.enabled=true
+      --set operator.prometheus.enabled=true
+      --set k8sServiceHost={{ cilium_k8s_service_host }}
+      --set k8sServicePort={{ cilium_k8s_service_port }}
+      --set MTU={{ cilium_mtu }}
+  environment:
+    KUBECONFIG: "{{ cilium_kubeconfig }}"
+  register: _cilium_metrics_upgrade
+  changed_when: _cilium_metrics_upgrade.rc == 0
+  timeout: "{{ cilium_install_timeout }}"
+  when:
+    - is_first_server | bool
+    - cilium_prometheus_enabled | bool
+    - (_cilium_metrics_addr.stdout | default('') | trim) == ''
+    - cilium_allow_disruptive_upgrade | bool
+
+- name: Wait for the Cilium rollout to finish after enabling metrics
+  ansible.builtin.command:
+    cmd: >-
+      k3s kubectl -n {{ cilium_namespace }} rollout status daemonset/cilium
+      --timeout=600s
+  changed_when: false
+  when: _cilium_metrics_upgrade is defined and _cilium_metrics_upgrade is changed
 
 - name: Wait for hubble-relay to become ready
   ansible.builtin.command:

@@ -50,9 +50,19 @@ firewall_trusted_pod_networks:
 #     exporter itself answered 200 on the node's own loopback. Read-only
 #     metrics endpoint, no authentication surface, and scoped to this one
 #     port rather than widening the pod CIDR to a blanket accept.
+#
+#   2381 etcd metrics -- added at Gate 11 alongside k3s_etcd_expose_metrics.
+#     Same shape as 9100: the listener is on the host, vmagent is an ordinary
+#     pod, so without this the default-drop INPUT policy eats the scrape. The
+#     endpoint is unauthenticated by design in k3s, which is exactly why it is
+#     reachable only from the vLAN (already trusted) and this one pod CIDR on
+#     this one port -- not published to any node's public interface. It serves
+#     operational telemetry only: quorum, leader, WAL latency, database size.
+#     Never key or value data.
 firewall_trusted_pod_ports:
   - "{{ api_port }}"
   - 9100
+  - 2381
 
 # Published on the PUBLIC interface. Only 32537 (Traefik's websecure
 # NodePort, kubernetes/infrastructure/ingress/service.yaml) is open so far --

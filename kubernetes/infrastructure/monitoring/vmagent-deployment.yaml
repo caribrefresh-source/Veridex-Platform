@@ -84,6 +84,11 @@ spec:
           args:
             - --promscrape.config=/etc/vmagent/scrape.yml
             - --remoteWrite.url=http://vmsingle.monitoring.svc:8428/api/v1/write
+            # Must point at the mounted emptyDir. vmagent's persistent
+            # remote-write queue defaults to /vmagent-remotewrite-data, which
+            # is on the root filesystem -- and readOnlyRootFilesystem is true,
+            # so it panics in MustMkdirIfNotExist on startup.
+            - --remoteWrite.tmpDataPath=/vmagentdata
             - --httpListenAddr=:8429
           ports:
             - name: http

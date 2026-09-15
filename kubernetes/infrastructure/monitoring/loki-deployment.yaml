@@ -49,6 +49,11 @@ data:
     compactor:
       working_directory: /loki/compactor
       retention_enabled: true
+      # Required whenever retention_enabled is true -- Loki refuses to start
+      # with "compactor.delete-request-store should be configured when
+      # retention is enabled" otherwise. filesystem matches the object store
+      # above; there is no MinIO to point at until Gate 13.
+      delete_request_store: filesystem
 ---
 apiVersion: apps/v1
 kind: Deployment

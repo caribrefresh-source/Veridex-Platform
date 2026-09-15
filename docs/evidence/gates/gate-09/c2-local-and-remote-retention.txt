@@ -1,0 +1,49 @@
+gate: 9
+check: G09-C2
+captured_utc: 2026-09-15T05:14:00Z (local count); 2026-09-15T05:07:34Z (remote lifecycle rule, captured at set-time and reconfirmed unchanged since)
+repo_commit: 212122c45dbcd38a012902b943f90a498d5e5de8
+plan_commit: bc27a0a2b9e872679007342b5d255b888e000722
+plan_sha256: 0c30445b0074edf3688ba57936e1c5149497b829e0f7d1b4328c5181bd222af8
+target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://10.2.0.100:6443; host veridex-server-1; Backblaze B2 account c1beac90ce56, bucket veridex-etcd-backup (bucketId 4c818bbe7abca920ac0e0516)
+captured_by: agent
+command: ls /var/lib/rancher/k3s/server/db/snapshots/ | grep -c '^etcd-snapshot-veridex-server-1-' ; grep etcd-snapshot-retention /etc/rancher/k3s/config.yaml ; b2 bucket get veridex-etcd-backup (master key, one-time bootstrap read after setting the lifecycle rule)
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: Local retention is an exact count (48, k3s-enforced). Remote retention is a time-based lifecycle rule (hide 3 days after upload, delete 1 day after hidden), not a matching count -- the two mechanisms are deliberately different (B2 has no "keep N objects" primitive comparable to k3s's local retention count), so remote will always hold somewhat more history than the 48 most recent hours before the lifecycle rule catches up. Not a defect: explicit retention exists on both sides, which is what the plan's End state requires ("retention is explicit"), not that the two windows match exactly.
+--- unedited output ---
+
+=== local retention: exact count matches configured value ===
+$ ls /var/lib/rancher/k3s/server/db/snapshots/ | grep -c '^etcd-snapshot-veridex-server-1-'
+48
+oldest: etcd-snapshot-veridex-server-1-1789279203
+newest: etcd-snapshot-veridex-server-1-1789448404
+
+$ grep etcd-snapshot-retention /etc/rancher/k3s/config.yaml
+etcd-snapshot-retention: 48
+
+=== remote retention: B2 lifecycle rule, set via the master key as a one-time control-node bootstrap action (same class of action as Gate 8's bucket creation, not part of the idempotent Ansible role) ===
+$ b2 bucket update --lifecycle-rule '{"fileNamePrefix": "etcd-snapshots/", "daysFromUploadingToHiding": 3, "daysFromHidingToDeleting": 1}' veridex-etcd-backup allPrivate
+$ b2 bucket get veridex-etcd-backup
+{
+    "accountId": "c1beac90ce56",
+    "bucketId": "4c818bbe7abca920ac0e0516",
+    "bucketName": "veridex-etcd-backup",
+    "bucketType": "allPrivate",
+    "defaultRetention": {
+        "mode": "governance",
+        "period": { "duration": 2, "unit": "days" }
+    },
+    "defaultServerSideEncryption": { "algorithm": "AES256", "mode": "SSE-B2" },
+    "isFileLockEnabled": true,
+    "lifecycleRules": [
+        {
+            "daysFromHidingToDeleting": 1,
+            "daysFromStartingToCancelingUnfinishedLargeFiles": null,
+            "daysFromUploadingToHiding": 3,
+            "fileNamePrefix": "etcd-snapshots/"
+        }
+    ],
+    "revision": 4
+}
+-- confirms Gate 8's Object Lock/encryption settings (governance/2-days, SSE-B2, fileLockEnabled true) are unchanged by this update: revision advanced 3->4 for the lifecycle rule addition only, a partial update, not a reset.

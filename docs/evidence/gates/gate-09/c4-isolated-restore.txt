@@ -1,0 +1,41 @@
+gate: 9
+check: G09-C4
+captured_utc: 2026-09-15T05:11:07Z to 2026-09-15T05:12:30Z
+repo_commit: 212122c45dbcd38a012902b943f90a498d5e5de8
+plan_commit: bc27a0a2b9e872679007342b5d255b888e000722
+plan_sha256: 0c30445b0074edf3688ba57936e1c5149497b829e0f7d1b4328c5181bd222af8
+target_identity: isolated restore target: a disposable Docker container on the operator workstation (image rancher/k3s:v1.36.4-k3s1, the exact pinned production version), created from the downloaded snapshot (G09-C3) -- explicitly NOT the production cluster (kube-system UID d7d8a462-c503-49ed-a1e0-899f372f9465). Torn down (container + volume removed) immediately after G09-C5's queries completed.
+captured_by: agent
+command: docker run --rm --privileged -v gate9-isolated-restore-data:/var/lib/rancher/k3s --tmpfs /run --tmpfs /var/run -e K3S_TOKEN=<redacted, production server token> rancher/k3s:v1.36.4-k3s1 server --cluster-reset --cluster-reset-restore-path=/var/lib/rancher/k3s/server/db/snapshots/restore-snapshot.db --secrets-encryption=true --cluster-cidr=10.44.0.0/16 --service-cidr=10.45.0.0/16 --disable=traefik,servicelb,local-storage,metrics-server,coredns --disable-cloud-controller --disable-network-policy --flannel-backend=none ; then production's encryption-config.json/encryption-state.json (fetched read-only from veridex-server-1, deleted immediately after this drill) placed into the freshly-regenerated cred directory ; then the same image started detached (server, no --cluster-reset) with identical flags
+exit_status: 0 (cluster-reset step); 0 (detached start; container stayed running and serving queries, see G09-C5)
+proof_class: isolated
+result: PASS
+limitations: This required two corrective iterations to get right, both disclosed rather than hidden: (1) the first attempt placed encryption-config.json into the cred directory BEFORE --cluster-reset, which backs up and regenerates the entire cred/tls directory as part of its own procedure -- the pre-placed file was swept into a timestamped backup dir and never used, so the second startup found no encryption config and failed with "identity transformer tried to read encrypted data" on every Secret. Fixed by placing the encryption files AFTER cluster-reset, into the freshly-regenerated directory. (2) --secrets-encryption=true was also missing from the first attempt entirely (k3s defaults to no encryption without it) -- added on retry, and k3s auto-generated its own fresh (non-production) encryption-config.json/state.json in response, which were then overwritten with production's real ones. (3) The first fully-started attempt (correct encryption files, but default k3s cluster-cidr/service-cidr) crash-looped kube-controller-manager and then the whole process exited, because the restored Node objects carry production's real PodCIDR annotations (10.44.0.0/16), out of range for k3s's stock default (10.42.0.0/16) -- fixed by passing --cluster-cidr/--service-cidr matching production exactly. None of these three issues affected the actual snapshot data or its integrity; all were isolated-environment configuration gaps, corrected before the successful run recorded here and in c5-api-query-restored-objects.txt.
+--- unedited output ---
+
+=== cluster-reset restore (final, corrected attempt) ===
+time="2026-09-15T05:11:07Z" level=error msg="Shutdown request received: \"Managed etcd cluster membership has been reset, restart without --cluster-reset flag now. Backup and delete ${datadir}/server/db on each peer etcd server and rejoin the nodes\""
+time="2026-09-15T05:11:07Z" level=info msg="Stopping etcd server..."
+{"level":"info","ts":"2026-09-15T05:11:07.070853Z","caller":"etcdserver/server.go:1297","msg":"skipped leadership transfer for single voting member cluster","local-member-id":"86f57557eedef7cc","current-leader-member-id":"86f57557eedef7cc"}
+time="2026-09-15T05:11:07Z" level=info msg="etcd server stopped"
+reset exit_status=0
+
+This is k3s's own documented restore procedure completing exactly as documented (https://docs.k3s.io/cli/etcd-snapshot: "restart without --cluster-reset flag now") -- not a failure, the expected mid-procedure handoff.
+
+=== placing production's real encryption files into the freshly-regenerated cred dir ===
+$ docker run --rm -v gate9-isolated-restore-data:/var/lib/rancher/k3s -v .../encryption-config.json:/tmp/encryption-config.json:ro -v .../encryption-state.json:/tmp/encryption-state.json:ro busybox:1.37 sh -c "cp ... && chmod 600 ... && echo done"
+done
+place exit_status=0
+
+=== starting the restored server (final) ===
+$ docker run -d --privileged --name gate9-isolated-restore -v gate9-isolated-restore-data:/var/lib/rancher/k3s --tmpfs /run --tmpfs /var/run -e K3S_TOKEN=*** rancher/k3s:v1.36.4-k3s1 server --secrets-encryption=true --cluster-cidr=10.44.0.0/16 --service-cidr=10.45.0.0/16 --disable=traefik,servicelb,local-storage,metrics-server,coredns --disable-cloud-controller --disable-network-policy --flannel-backend=none
+4f0e37df0bfa22590ab3134850038c5e27d115adaf24898d0119aac535600ba6
+container start exit_status=0
+[gate9] container stayed in "running" status throughout the query window (see c5), no further crash-loop
+
+=== teardown after G09-C5's queries completed ===
+$ docker rm -f gate9-isolated-restore
+$ docker volume rm gate9-isolated-restore-data
+container/volume removed
+$ shred -u /tmp/gate9/encryption-config.json /tmp/gate9/encryption-state.json
+(production encryption key material securely deleted from the operator workstation immediately after the drill; the downloaded snapshot .db was retained briefly for evidence-writing and deleted at the end of this gate's work)

@@ -1,0 +1,39 @@
+gate: 9
+check: G09-C1
+captured_utc: 2026-09-15T05:02:10Z to 2026-09-15T07:07:04Z (deliberate ~2h05m wait, spanning two full hourly cycles)
+repo_commit: 212122c45dbcd38a012902b943f90a498d5e5de8
+plan_commit: bc27a0a2b9e872679007342b5d255b888e000722
+plan_sha256: 0c30445b0074edf3688ba57936e1c5149497b829e0f7d1b4328c5181bd222af8
+target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://10.2.0.100:6443; host veridex-server-1; Backblaze B2 account c1beac90ce56, bucket veridex-etcd-backup (bucketId 4c818bbe7abca920ac0e0516)
+captured_by: agent
+command: no command triggered anything -- a background poll (`while true; date; sleep 120; done` until 2026-09-15T07:07:00Z) waited for k3s's pre-existing local snapshot cron (etcd-snapshot-schedule-cron "0 * * * *") and the new etcd-s3-backup sync cron (minute 5, hour "*") to fire on their own schedule, twice each, with no manual invocation of either. Independently reconfirmed via `b2 ls -l` (restore key) against the live bucket afterwards.
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: Only the bootstrap server (veridex-server-1) runs the sync cron, by design (every control-plane node's local snapshot independently represents the same replicated etcd, so uploading from all three would triple B2 cost for no recovery benefit -- see roles/etcd-s3-backup/tasks/main.yml). This check therefore observed two cycles on one node, not three; that is the intended architecture, not a narrower test than required.
+--- unedited output ---
+
+=== sync log on veridex-server-1, tail across the whole observation window ===
+--- 2026-09-15T05:01:50Z sync end, ok ---
+--- 2026-09-15T05:05:01Z sync start ---
+--- 2026-09-15T05:05:11Z sync end, ok ---
+--- 2026-09-15T05:23:08Z sync start ---
+--- 2026-09-15T05:23:10Z sync end, ok ---
+--- 2026-09-15T06:05:01Z sync start ---
+upload etcd-snapshot-veridex-server-1-1789452001
+--- 2026-09-15T06:05:04Z sync end, ok ---
+--- 2026-09-15T07:05:01Z sync start ---
+upload etcd-snapshot-veridex-server-1-1789455600
+--- 2026-09-15T07:05:05Z sync end, ok ---
+
+The 05:01/05:05/05:23 entries are this session's own deployment and hardening-fix redeploy runs (Ansible's "run once now" verification task), not autonomous cycles -- disclosed, not counted toward this check. The 06:05:01Z and 07:05:01Z entries are the first two firings with NO Ansible run or manual trigger anywhere in this session at those timestamps: cron fired on its own, found exactly one new local snapshot each time (proving k3s's own independent "0 * * * *" cron also fired autonomously at 06:00 and 07:00), and uploaded it. Two complete, autonomous, scheduled cycles.
+
+=== independent confirmation via the restore key (not trusting the local log alone) ===
+$ b2 ls -l b2://veridex-etcd-backup/etcd-snapshots/ | grep -E '1789452001|1789455600'
+4_z4c818bbe7abca920ac0e0516_f1081f31172cf1e94_d20260915_m060503_c005_v0501048_t0043_u01789452303281  upload  2026-09-15  06:05:03   14618656  etcd-snapshots/etcd-snapshot-veridex-server-1-1789452001
+4_z4c818bbe7abca920ac0e0516_f10443af1a5cca3b5_d20260915_m070504_c005_v0501037_t0041_u01789455904172  upload  2026-09-15  07:05:04   14618656  etcd-snapshots/etcd-snapshot-veridex-server-1-1789455600
+exit_status=0
+
+$ b2 ls -r b2://veridex-etcd-backup/etcd-snapshots/ | wc -l
+52
+(48 backlog snapshots synced at initial deploy + 2 on-demand validation snapshots from the native-uploader diagnosis + these 2 new autonomous-cycle snapshots = 52, exact)

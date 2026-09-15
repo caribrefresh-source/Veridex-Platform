@@ -1,0 +1,67 @@
+gate: 9
+check: G09-C5
+captured_utc: 2026-09-15T05:12:15Z to 2026-09-15T05:12:30Z
+repo_commit: 212122c45dbcd38a012902b943f90a498d5e5de8
+plan_commit: bc27a0a2b9e872679007342b5d255b888e000722
+plan_sha256: 0c30445b0074edf3688ba57936e1c5149497b829e0f7d1b4328c5181bd222af8
+target_identity: isolated restore target (same disposable Docker container as c4-isolated-restore.txt) -- explicitly NOT the production cluster
+captured_by: agent
+command: docker exec gate9-isolated-restore kubectl get namespaces ; docker exec gate9-isolated-restore kubectl get secrets -A ; docker exec gate9-isolated-restore kubectl get nodes ; docker exec gate9-isolated-restore kubectl get configmaps -n kube-system
+exit_status: 0 (all four)
+proof_class: isolated
+result: PASS
+limitations: Secret NAMES, TYPEs and DATA counts are shown; no Secret VALUES were ever displayed, read, or logged at any point in this drill -- proving decryption succeeded (the API server could list and serve them without error) does not require or involve viewing their contents, and none were viewed. Restored nodes show NotReady, expected and correct: this isolated single-container instance has no real kubelets for the five production node names, which is fine since this drill's purpose is proving etcd/API data recovery, not full cluster functionality.
+--- unedited output ---
+
+=== namespaces: real production namespaces, with real historical ages from the restored etcd data ===
+$ kubectl get namespaces
+NAME              STATUS   AGE
+cilium-secrets    Active   2d7h
+default           Active   2d7h
+kube-node-lease   Active   2d7h
+kube-public       Active   2d7h
+kube-system       Active   2d7h
+
+("cilium-secrets" only exists because Cilium's WireGuard setup created it in production at Gate 6 -- this is restored history, not a fresh-cluster default namespace set.)
+
+=== secrets: successful decryption proof (compare to native-uploader-incompatibility.txt's unrelated but structurally similar earlier error class -- an EARLIER isolated-restore attempt, before the encryption-config fix, failed here with "identity transformer tried to read encrypted data" on every one of these; this corrected run lists them all cleanly) ===
+$ kubectl get secrets -A
+NAMESPACE     NAME                                 TYPE                          DATA   AGE
+kube-system   4f0e37df0bfa.node-password.k3s       k3s.cattle.io/node-password   1      2m39s
+kube-system   cilium-ca                            Opaque                        2      2d7h
+kube-system   hubble-server-certs                  kubernetes.io/tls             3      2d7h
+kube-system   k3s-serving                          kubernetes.io/tls             2      2d7h
+kube-system   sh.helm.release.v1.cilium.v1         helm.sh/release.v1            1      2d7h
+kube-system   sh.helm.release.v1.cilium.v2         helm.sh/release.v1            1      2d6h
+kube-system   sh.helm.release.v1.cilium.v3         helm.sh/release.v1            1      2d6h
+kube-system   sh.helm.release.v1.cilium.v4         helm.sh/release.v1            1      2d6h
+kube-system   sh.helm.release.v1.cilium.v5         helm.sh/release.v1            1      2d6h
+kube-system   sh.helm.release.v1.cilium.v6         helm.sh/release.v1            1      46h
+kube-system   veridex-agent-1.node-password.k3s    k3s.cattle.io/node-password   1      47h
+kube-system   veridex-agent-2.node-password.k3s    k3s.cattle.io/node-password   1      47h
+kube-system   veridex-server-1.node-password.k3s   k3s.cattle.io/node-password   1      2d7h
+kube-system   veridex-server-2.node-password.k3s   k3s.cattle.io/node-password   1      2d7h
+kube-system   veridex-server-3.node-password.k3s   k3s.cattle.io/node-password   1      2d7h
+
+=== nodes: all five real production node names present with real historical ages ===
+$ kubectl get nodes
+NAME               STATUS     ROLES                AGE     VERSION
+4f0e37df0bfa       NotReady   control-plane,etcd   2m43s   v1.36.4+k3s1
+veridex-agent-1    NotReady   worker               47h     v1.36.4+k3s1
+veridex-agent-2    NotReady   worker               47h     v1.36.4+k3s1
+veridex-server-1   NotReady   control-plane,etcd   2d7h    v1.36.4+k3s1
+veridex-server-2   NotReady   control-plane,etcd   2d7h    v1.36.4+k3s1
+veridex-server-3   NotReady   control-plane,etcd   2d7h    v1.36.4+k3s1
+
+("4f0e37df0bfa" is the isolated container's own hostname-derived node, added when it restored and re-formed as a single-node cluster; the other five are the restored production Node objects.)
+
+=== configmaps: cluster configuration state present ===
+$ kubectl get configmaps -n kube-system
+NAME                                                   DATA   AGE
+cilium-config                                          164    2d7h
+cilium-envoy-config                                    1      2d7h
+cluster-dns                                            2      2d7h
+coredns                                                1      18h
+extension-apiserver-authentication                     6      2d7h
+kube-apiserver-legacy-service-account-token-tracking   1      2d7h
+kube-root-ca.crt                                       1      2d7h

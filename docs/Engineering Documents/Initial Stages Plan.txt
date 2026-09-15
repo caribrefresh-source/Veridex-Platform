@@ -41,7 +41,7 @@ Amended 13 September 2026 — gap closure: network policy and namespace articula
 Four gaps found in review of this document's network‑policy and identity content and of Gate 29 — unresolved namespace naming, the Wave 5/Wave 6 NATS‑Temporal overlap, thin per‑namespace Kubernetes RBAC, and an undeclared tenant‑to‑namespace model — are closed by new Gates 32–35 (Part D). This is still Revision 3; the amendment adds gates and cross‑references only and changes no decision already recorded for Gates 0–31. Source: docs/Engineering Documents/Gap Closure Plan — Network Policy.txt, whose four phases this amendment incorporates. That source document is superseded by this amendment and is retained only for provenance. Gates 32–35 follow this plan's own convention of not pre‑assigning deliverable (D) or exit‑gate (EG) numbers in gate text — the gate ledger (docs/evidence/gate-ledger.md) assigns those cumulatively, only when a gate reaches PASS, continuing from its recorded position at that time.
 
 Highest‑priority unresolved issue
-Proving each producer's actual path to Backblaze B2 against its exact pinned version. B2 exposes a first‑party S3‑compatible API, not a cross‑cloud interoperability workaround, so the protocol risk that existed under GCS mostly disappears — CloudNativePG, Longhorn and k3s etcd all have native, documented S3‑compatible backup‑target support, and B2 accepts both path‑style and virtual‑hosted addressing, which removes the specific addressing mismatch that bites some S3‑compatible backends. What is not yet proven is B2‑specific behavior under this exact stack: multipart limits, request‑rate and throttling behavior during a full restore, and whether a full restore's egress exceeds the free allowance (3× average monthly storage) and at what cost. B2's S3‑compatible API also does not implement object ACLs, IAM roles, bucket policies or object tagging — any producer or tool that assumes those must be identified before it is trusted. See Gate 17.
+Proving each producer's actual path to Backblaze B2 against its exact pinned version. CloudNativePG and Longhorn have native S3-compatible integrations. The pinned k3s native uploader was proven incompatible with the Object-Lock-enabled B2 bucket because it did not send a checksum header; the implemented etcd path is the pinned b2-CLI sidecar owned by Ansible (Gate 9 evidence and O3). B2 accepts both path-style and virtual-hosted addressing, but multipart limits, request-rate throttling during a full restore, restore egress against the free allowance, and omitted S3 features remain producer-specific risks. See Gate 17.
 
 Part A — Foundation
 Decision summary
@@ -205,7 +205,7 @@ Cluster‑local‑only backup, administrator can silently remove retention, shar
 GATE 9
 etcd recovery
 End state
-Hourly local and off‑cluster snapshots are explicit, retention is explicit, and a snapshot restores successfully in isolation with protected server token and encryption material. The off‑cluster path uses k3s's native S3‑compatible snapshot target pointed at Backblaze B2 — proof is still required against the exact pinned k3s version, not assumed from protocol compatibility alone — see Gate 17, veridex-etcd-backup in Gate 18.
+Hourly local and off-cluster snapshots are explicit, retention is explicit, and a snapshot restores successfully in isolation with protected server token and encryption material. k3s creates local snapshots; the pinned b2-CLI sidecar uploads them to Backblaze B2 because the pinned native uploader was proven incompatible with Object Lock. Gate 17 assesses this implemented path, not the superseded native-uploader assumption.
 
 Acceptance evidence
 Observe two scheduled cycles; verify local and remote retention; download; isolated restore; API query of restored objects.
@@ -579,7 +579,7 @@ Recovery objectives and proof
 There is no single combined RTO/RPO figure for this platform. The former single target of a complete rebuild within 30 minutes and no more than one hour of loss is replaced by subsystem objectives, each proven independently. Initial values remain proposed until a drill measures them; measured results govern the accepted service objective.
 
 Subsystem	Provisional RPO	RTO measured from	Mandatory proof
-k3s and etcd	≤ 1 hour	Recovery authorization to healthy API and etcd quorum.	Restore external snapshot from veridex-etcd-backup via k3s's native S3 target (Gate 17) and validate representative Kubernetes resources.
+k3s and etcd	≤ 1 hour	Recovery authorization to healthy API and etcd quorum.	Download the sidecar-uploaded external snapshot from veridex-etcd-backup, restore it with k3s, and validate representative Kubernetes resources (Gate 17).
 GitOps services	Near zero for Git state	Healthy Argo reconciliation from clean cluster.	Recreate pinned services from main without hand patches.
 SOPS or sealing keys	Zero	Recovery authorization to successful secret reconciliation.	Restore independently escrowed key from veridex-recovery-keys and decrypt approved test secret.
 CloudNativePG	Defined by WAL archive objective	Recovery authorization to consistent promoted database.	Base backup plus WAL recovery from veridex-cnpg-backup and application consistency queries.
@@ -673,7 +673,7 @@ Not yet specified as full gates. Each needs an explicit owner and deadline befor
 13	Evidence retention and independent review.	TBD	TBD
 14	Explicit owner and deadline assigned for every unresolved item in this backlog.	TBD	TBD
 Immediate implementation backlog
-Prove each producer's actual path to Backblaze B2 against its exact pinned version (Gate 17) — every path is a native S3‑compatible integration, so the remaining risk is B2‑specific behavior under this stack (multipart limits, request‑rate throttling during a full restore, restore egress against the 3× free allowance, and the S3 features B2's API omits), not protocol incompatibility.
+Prove each producer's actual path to Backblaze B2 against its exact pinned version (Gate 17). The etcd producer is the pinned b2-CLI sidecar; do not substitute the failed native k3s path in its evidence row. Test multipart behavior, throttling, restore egress and omitted S3 features separately for every producer.
 Close the MINIO_KMS_SECRET_KEY incident end to end (Gate 22) before MinIO is approved for production.
 Resolve the §6 conflict below (SOPS + age vs. SealedSecrets and Longhorn) before Gate 13 or Gate 24 close.
 Commit outstanding documentation and group‑variable corrections in a focused commit.

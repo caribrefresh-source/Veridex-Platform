@@ -49,7 +49,16 @@ spec:
               drop:
                 - ALL
               add:
+                # CHOWN alone is enough only on the very first run, when the
+                # directory is still empty and root-owned. Once the app has
+                # written, the tree contains 0700 subdirectories owned by
+                # 65534, and root cannot traverse or re-own those without
+                # DAC_OVERRIDE and FOWNER -- the init container failed with
+                # "chown: /victoria-metrics-data/cache/...: Permission denied"
+                # on every restart after the first.
                 - CHOWN
+                - DAC_OVERRIDE
+                - FOWNER
           volumeMounts:
             - name: data
               mountPath: /victoria-metrics-data

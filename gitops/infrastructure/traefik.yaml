@@ -1,0 +1,27 @@
+---
+# Makes Argo CD (and later, other services) reachable over HTTPS from
+# outside the private vLAN. Pinned Traefik v3.7.13
+# (kubernetes/infrastructure/ingress/), GitOps-managed like everything else
+# under gitops/ -- unlike Cilium/CoreDNS, Traefik has no bootstrap circular
+# dependency on Argo CD (see docs/security/cilium-coredns-ownership.md for
+# why those two stay Ansible-owned; Traefik does not need that exception).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: traefik
+  namespace: argocd
+spec:
+  project: veridex
+  source:
+    repoURL: https://github.com/caribrefresh-source/Veridex-Platform.git
+    targetRevision: main
+    path: kubernetes/infrastructure/ingress
+    directory:
+      recurse: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

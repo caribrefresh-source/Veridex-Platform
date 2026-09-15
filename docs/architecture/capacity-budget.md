@@ -60,11 +60,11 @@ This is Cilium, CoreDNS, kube-vip, the Argo CD control plane, and Traefik only �
 
 Running total once Gate 11 is applied: **1.42 vCPU / ~1.5Gi** requested, against 24 vCPU / ~49.5Gi allocatable — under 6% of either dimension. Gate 11 does not meaningfully move the needle.
 
-## 4. What has to move — real production reference, `VERIFIED` (K3s-HA source platform, live, read-only, 2026-09-15)
+## 4. What has to move — real production reference, `VERIFIED` (source reference cluster source platform, live, read-only, 2026-09-15)
 
-No sizing numbers exist yet in this repository for CNPG, NATS, Temporal, Redis, or MinIO on netcup — Gates 12-14 haven't run. Rather than assume, I queried the actual running requests on the K3s-HA source platform via its own kubeconfig (read-only reference per this environment's existing scope rule; no mutation, no context switch performed on it). This is the same cluster `docs/Engineering Documents/Workload Migration Assessment.md` §3 already draws its Application/service inventory from.
+No sizing numbers exist yet in this repository for CNPG, NATS, Temporal, Redis, or MinIO on netcup — Gates 12-14 haven't run. Rather than assume, I queried the actual running requests on the source reference cluster source platform via its own kubeconfig (read-only reference per this environment's existing scope rule; no mutation, no context switch performed on it). This is the same cluster `docs/Engineering Documents/Workload Migration Assessment.md` §3 already draws its Application/service inventory from.
 
-`kubectl describe nodes` on K3s-HA confirms the 24 vCPU / ~48Gi aggregate the assessment's §4.2 cited for GPBRMS's own sizing basis: six nodes, each reporting 4 vCPU / ~7.8Gi allocatable — the same *aggregate* total as the Veridex fleet, distributed evenly instead of 3-small-plus-2-large.
+`kubectl describe nodes` on source reference cluster confirms the 24 vCPU / ~48Gi aggregate the assessment's §4.2 cited for GPBRMS's own sizing basis: six nodes, each reporting 4 vCPU / ~7.8Gi allocatable — the same *aggregate* total as the Veridex fleet, distributed evenly instead of 3-small-plus-2-large.
 
 Summed real requests (`Running` pods only) by namespace:
 
@@ -94,14 +94,14 @@ Representative per-component requests, `VERIFIED` live (used to sanity-check the
 |---|---|---|
 | Current Veridex baseline (§3) | 0.9 vCPU | 0.45Gi |
 | Gate 11 observability (§3) | 0.52 vCPU | 1.09Gi |
-| Governance GP-0..GP-4 (already built, K3s-HA `governance-service` Application) | not separately measured here — folded into `data-plane` total below | |
+| Governance GP-0..GP-4 (already built, source reference cluster `governance-service` Application) | not separately measured here — folded into `data-plane` total below | |
 | Migrating workload (§4, `data-plane` + `docintel`) | 13.0 vCPU | 23.3Gi |
 | **Subtotal** | **~14.4 vCPU** | **~24.8Gi** |
 | Veridex allocatable (§2) | 24 vCPU | ~49.5Gi |
 | **Headroom at request level** | **~9.6 vCPU (40%)** | **~24.7Gi (50%)** |
 
 **Not included, `ASSUMED`/`UNKNOWN` pending later gates:**
-- Longhorn's own manager/engine overhead (instance-manager DaemonSet + per-volume engine and replica processes). Not measured because Longhorn does not run on the K3s-HA reference (it uses Hetzner CSI) and does not exist yet on Veridex. Longhorn's own documentation states modest per-node reserved overhead; get a real number from Gate 12's own build rather than carrying an unverified figure here.
+- Longhorn's own manager/engine overhead (instance-manager DaemonSet + per-volume engine and replica processes). Not measured because Longhorn does not run on the source reference cluster reference (it uses Hetzner CSI) and does not exist yet on Veridex. Longhorn's own documentation states modest per-node reserved overhead; get a real number from Gate 12's own build rather than carrying an unverified figure here.
 - GPBRMS GP-5..GP-8 (`decision-service`, `compliance-service`, `governance-portal`, `governance-worker`): the assessment's own §4.2 table gives 800m / 1024Mi at request floor, itself flagged by its source spec as "asserted, not measured." Not included in the subtotal above; would bring headroom to roughly 8.8 vCPU (37%) / 23.7Gi (48%) if built as specified.
 - The gap between *request* and actual *working-set* usage (§4's CNPG-throttling note). Aggregate request-level headroom of 37-40% CPU is adequate but not generous once real usage (not just requests) is accounted for — this is a reason to measure early in Gate 12/13, not a reason to expect a squeeze from Gate 11's own footprint.
 

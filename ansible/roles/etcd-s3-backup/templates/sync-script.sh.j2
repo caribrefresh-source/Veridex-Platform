@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# MANAGED BY ANSIBLE -- roles/etcd-s3-backup/templates/sync-script.sh.j2
+# Manual edits are overwritten on the next run. Change the role instead.
+#
+# Uploads new local etcd snapshots to Backblaze B2 via the b2 CLI. Plain
+# `sync` with neither --delete nor --keep-days: upload-only, never deletes or
+# hides a B2-side file because it aged out of the LOCAL retention window --
+# B2-side retention is the lifecycle rule set on the bucket (Gate 9 control-
+# node bootstrap), a separate, deliberately looser window than local's 48
+# hourly snapshots.
+set -euo pipefail
+
+# shellcheck disable=SC1091
+source {{ etcd_s3_backup_cred_dir }}/credentials
+export B2_APPLICATION_KEY_ID B2_APPLICATION_KEY
+
+mkdir -p {{ etcd_s3_backup_log_dir }}
+
+exec >> {{ etcd_s3_backup_log_dir }}/sync.log 2>&1
+echo "--- $(date -u +%Y-%m-%dT%H:%M:%SZ) sync start ---"
+{{ etcd_s3_backup_cli_bin }} sync --no-progress \
+  {{ etcd_s3_backup_snapshot_dir }} \
+  "b2://{{ etcd_s3_backup_bucket }}/{{ etcd_s3_backup_folder }}/"
+# set -e means a sync failure exits before this line -- its absence in the
+# log for a given run IS the failure signal, not a printed non-zero code.
+echo "--- $(date -u +%Y-%m-%dT%H:%M:%SZ) sync end, ok ---"

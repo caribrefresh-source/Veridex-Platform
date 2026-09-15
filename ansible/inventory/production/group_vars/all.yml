@@ -128,6 +128,16 @@ verify_cluster_expected_kube_system_uid: "d7d8a462-c503-49ed-a1e0-899f372f9465"
 k3s_version: "v1.36.4+k3s1"
 k3s_token: "{{ lookup('env', 'K3S_TOKEN') | default('', true) }}"
 
+# k3s's native --etcd-s3 uploader is NOT used against veridex-etcd-backup --
+# see roles/k3s-server/defaults/main.yml for why (Content-MD5/Object-Lock
+# incompatibility, confirmed live at Gate 9, 2026-09-15). etcd_s3_endpoint/
+# bucket are deliberately left at their role defaults (blank) here rather
+# than set to the real values, so a future operator exporting
+# ETCD_S3_ACCESS_KEY/SECRET_KEY (Gate 8, registered `active`) before running
+# install-k3s-servers.yml does not silently re-trigger the same broken
+# upload path. The real bucket/region live in roles/etcd-s3-backup/defaults
+# instead, which Gate 9 actually uses.
+
 # TLS SANs for the API server certificate. The VIP must be present or every
 # client reaching the API through kube-vip fails certificate validation.
 #

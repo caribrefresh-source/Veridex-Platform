@@ -1,0 +1,119 @@
+---
+# etcd-s3-backup role tasks
+#
+# Deployed to the bootstrap server only: every k3s_servers node takes its own
+# independent local etcd snapshot on the same schedule (any one member's
+# snapshot fully represents the cluster, since etcd is replicated), so
+# uploading from all three would triple B2 storage and egress for no
+# recovery benefit -- one off-cluster copy is enough.
+
+- name: Load k3s_data_dir from roles/k3s-server's own defaults
+  # Read-only: this play does not run the k3s-server role, so its defaults
+  # are not otherwise in scope. Same pattern as roles/verify-cluster (Gate 7)
+  # -- read the owning role's own intended value rather than a second,
+  # independently-drifting copy of it.
+  ansible.builtin.include_vars:
+    file: "{{ role_path }}/../k3s-server/defaults/main.yml"
+
+- name: Identify the bootstrap server
+  ansible.builtin.set_fact:
+    is_first_server: "{{ inventory_hostname == (groups['k3s_servers'] | sort | first) }}"
+
+- name: Fail loudly if the B2 writer credentials are not present
+  # Matches roles/k3s-server's own stated principle: a missing credential
+  # must stop the play, not silently deploy a sync job that can never
+  # authenticate.
+  ansible.builtin.assert:
+    that:
+      - etcd_s3_backup_access_key | length > 0
+      - etcd_s3_backup_secret_key | length > 0
+    fail_msg: >-
+      ETCD_S3_ACCESS_KEY / ETCD_S3_SECRET_KEY are not set in the environment
+      running this playbook. Export them from the operator credential file
+      (docs/security/secret-register.yml) before rerunning.
+    quiet: true
+  when: is_first_server | bool
+
+- name: Install python3-venv and python3-pip
+  ansible.builtin.apt:
+    name:
+      - python3-venv
+      - python3-pip
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  when: is_first_server | bool
+
+- name: Install the pinned b2 CLI into a dedicated venv
+  ansible.builtin.pip:
+    name: "b2=={{ etcd_s3_backup_cli_version }}"
+    virtualenv: "{{ etcd_s3_backup_venv }}"
+    virtualenv_command: python3 -m venv
+  when: is_first_server | bool
+
+- name: Create the credentials directory (root-only)
+  ansible.builtin.file:
+    path: "{{ etcd_s3_backup_cred_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  when: is_first_server | bool
+
+- name: Render the B2 credentials file
+  ansible.builtin.template:
+    src: credentials.j2
+    dest: "{{ etcd_s3_backup_cred_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+  when: is_first_server | bool
+
+- name: Create the log directory
+  ansible.builtin.file:
+    path: "{{ etcd_s3_backup_log_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  when: is_first_server | bool
+
+- name: Render the sync script
+  ansible.builtin.template:
+    src: sync-script.sh.j2
+    dest: "{{ etcd_s3_backup_script }}"
+    owner: root
+    group: root
+    mode: "0700"
+  when: is_first_server | bool
+
+- name: Schedule the sync, offset past k3s's own local snapshot cron
+  ansible.builtin.cron:
+    name: "etcd-s3-backup sync"
+    minute: "{{ etcd_s3_backup_cron_minute }}"
+    hour: "*"
+    job: "{{ etcd_s3_backup_script }}"
+    user: root
+  when: is_first_server | bool
+
+- name: Run the sync once now, to prove it works on this converge
+  ansible.builtin.command:
+    cmd: "{{ etcd_s3_backup_script }}"
+  register: _sync_now
+  changed_when: true
+  when: is_first_server | bool
+
+- name: Read back the sync log tail (no secret values are ever written to it)
+  ansible.builtin.command:
+    cmd: "tail -n 20 {{ etcd_s3_backup_log_dir }}/sync.log"
+  register: _sync_log
+  changed_when: false
+  when: is_first_server | bool
+
+- name: Assert the immediate sync run actually succeeded
+  ansible.builtin.assert:
+    that:
+      - "'sync end, ok' in _sync_log.stdout"
+    fail_msg: "etcd-s3-backup sync did not complete cleanly: {{ _sync_log.stdout }}"
+    quiet: true
+  when: is_first_server | bool

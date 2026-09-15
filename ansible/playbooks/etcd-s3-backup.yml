@@ -1,0 +1,11 @@
+---
+# Gate 9 (etcd recovery): off-cluster upload of k3s's local etcd snapshots to
+# Backblaze B2, via the b2 CLI -- not k3s's native --etcd-s3 uploader, which
+# is proven incompatible with an Object-Lock-enabled bucket (see
+# roles/k3s-server/defaults/main.yml and roles/etcd-s3-backup/defaults/main.yml
+# for the full finding).
+- name: Deploy etcd snapshot off-cluster backup
+  hosts: k3s_servers
+  become: true
+  roles:
+    - etcd-s3-backup

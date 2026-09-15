@@ -19,12 +19,22 @@ k3s_control_plane_taint: "node-role.kubernetes.io/control-plane=true:PreferNoSch
 k3s_etcd_snapshot_cron: "0 * * * *"
 k3s_etcd_snapshot_retention: 48
 
-# Off-cluster etcd snapshots. Deliberately unset for now: the template only
-# emits the etcd-s3 block when BOTH keys are actually present, so a missing
-# credential disables the block loudly (visible as `etcd-s3: true` absent from
-# the rendered config) rather than enabling S3 upload with blank credentials
-# and failing every upload silently -- which is exactly what happened on the
-# Hetzner cluster and went unnoticed until an audit found the bucket empty.
+# Off-cluster etcd snapshots via k3s's OWN native --etcd-s3 uploader.
+# Deliberately unset, and NOT the mechanism Gate 9 actually uses -- kept
+# blank on purpose, not merely unconfigured. Verified live 2026-09-15 against
+# this exact pinned k3s binary (v1.36.4+k3s1) with a real Object-Lock-enabled
+# Backblaze B2 bucket (veridex-etcd-backup, Gate 8): every upload fails with
+# "Content-MD5 OR x-amz-checksum- HTTP header is required for Put Object
+# requests with Object Lock parameters" -- k3s's built-in S3 client does not
+# send that header, and no flag adds it (confirmed against `k3s server --help`
+# and `k3s etcd-snapshot save --help`; no k3s-io/k3s GitHub issue exists for
+# it as of this check). B2's own CLI uploads to this same bucket without
+# issue (Gate 8's own evidence), so the incompatibility is k3s's S3 client
+# specifically, not B2 or the network. Gate 9 instead uses a sidecar uploader
+# (roles/etcd-s3-backup) built on the b2 CLI. If a future k3s release fixes
+# this (sends Content-MD5/x-amz-checksum- on snapshot PUT), re-enabling this
+# block is the smaller change -- check the upstream changelog for exactly
+# that fix before assuming it still doesn't work.
 etcd_s3_endpoint: ""
 etcd_s3_bucket: ""
 etcd_s3_folder: "etcd-snapshots"

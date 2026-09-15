@@ -28,16 +28,15 @@ table inet filter {
     ip saddr {{ net }} accept
 {% endfor %}
 
-    # The pod CIDR gets ONLY the port it needs, not a blanket trust like the
+    # The pod CIDR gets ONLY the ports it needs, not a blanket trust like the
     # vLAN above: a pod's traffic to a host-network service on a different
     # node (e.g. `kubernetes:443` -> Cilium DNATs to a real node:6443)
     # arrives with the pod's own address as source, which the vLAN rule
-    # above does not cover (Gate 6). Scoped to the API port only -- pods have
-    # no other reason to reach a host directly today, and widening this
-    # again needs its own justification, the same discipline as the public
-    # ports below.
+    # above does not cover (Gate 6). Every port in this set carries its own
+    # justification in the role's defaults -- widening it again needs the
+    # same discipline as the public ports below.
 {% for net in firewall_trusted_pod_networks %}
-    ip saddr {{ net }} tcp dport {{ firewall_trusted_pod_api_port }} accept
+    ip saddr {{ net }} tcp dport { {{ firewall_trusted_pod_ports | join(', ') }} } accept
 {% endfor %}
 
     # SSH on the public interface. Always allowed: locking this out costs a

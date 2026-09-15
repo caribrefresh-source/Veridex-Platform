@@ -47,13 +47,24 @@ data:
         K8S-Logging.Parser  Off
         K8S-Logging.Exclude Off
 
+    # Stamp each record with the node it came from. The kubernetes filter
+    # supplies pod/namespace/container but not the node, so without this
+    # there is no way to ask "show me logs from veridex-agent-1" -- which is
+    # exactly the question a node-specific problem raises -- and no way to
+    # prove the gate's own "logs cover all nodes" requirement by label.
+    # NODE_NAME comes from the downward API on the container below.
+    [FILTER]
+        Name   modify
+        Match  kube.*
+        Add    node ${NODE_NAME}
+
     [OUTPUT]
         Name    loki
         Match   kube.*
         Host    loki.monitoring.svc
         Port    3100
         Labels  job=fluentbit
-        Label_keys $kubernetes['namespace_name'],$kubernetes['pod_name'],$kubernetes['container_name']
+        Label_keys $kubernetes['namespace_name'],$kubernetes['pod_name'],$kubernetes['container_name'],$node
         Line_Format json
 ---
 apiVersion: apps/v1
@@ -78,6 +89,13 @@ spec:
       containers:
         - name: fluent-bit
           image: "fluent/fluent-bit:5.1.2@sha256:71cda445290efc2d45d565c12e0de4b15aa0182510276ad50c317aae1423d7ee"
+          env:
+            # Consumed by the `modify` filter above to label every record
+            # with its source node.
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
           ports:
             - name: http
               containerPort: 2020

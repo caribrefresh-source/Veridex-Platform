@@ -45,6 +45,7 @@ closure evidence; `docs/evidence/legacy/README.md` maps it to Revision 3 gates.
 | # | Date (UTC) | Conflict | Decision | Decided by |
 |---|---|---|---|---|
 | O1 | 2026-09-13 | Plan: "Execute each gate in order and stop on the first unmet dependency." Gate 13: the MINIO_KMS_SECRET_KEY incident "(Gate 22) is closed before this gate can pass", with scheduling "enforced per Gate 23" and "capacity thresholds per Gate 24", and a stop condition of "capacity below safety threshold". Gate 22: "must complete before … Gate 13 or Gate 24 can pass." In strict numeric order Gate 13 closes before Gate 22, so neither can close. | Gate 13 may be **built** (MinIO deployed, not approved for production) once Gates 0–12 are closed. Gates 22, 23 and 24 then close, in that order, before Gate 13 **closes**. Their dependencies are Gates 0–12 plus Gate 13's deployment — not Gates 14–21. Gate 14 is not built until Gate 13 closes. | Repository owner, 2026-09-13 session, adopting the resolution proposed there |
+| O2 | 2026-09-15 | Gate 8: "Exact bucket architecture, credential mechanism and Object Lock activation are specified in Gates 18–21." Gate 21: "One key per producer/bucket pairing" for producers (CloudNativePG, MinIO, Longhorn, k3s etcd) that do not exist until Gates 9, 12, 13 and 14 close. Neither side can go first under strict numeric order: Gate 8 names Gates 18–21 as its own specification, and Gate 21 cannot fully close before producers built at Gates 9/12/13/14, which themselves follow Gate 8 in numeric order. | Gate 8 **builds and closes now** on its own self-contained acceptance evidence (one protected test bucket, Object Lock two-phase activation per Gate 19, one writer key + one restore key under the application-key model of Gates 20–21) — using Gates 18–21's text as design reference, not as a closure blocker. Gates 18–21 close later, incrementally, as their own fuller requirements become satisfiable: Gate 18 once all six buckets are formally defined, Gate 20 once full account isolation is audited, Gate 21 only once each producer exists (Gates 9/12/13/14) and gets its own scoped key. Mirrors O1's split exactly. | Repository owner, 2026-09-15 session, adopting the resolution proposed there |
 
 ## Open ordering conflicts
 
@@ -61,10 +62,6 @@ Gate 35's exit check — none of which are enumerated below. None involve Gates
 0-7, so none blocked Gate 7's closure; the re-derivation is owed before Gate 11
 closes.
 
-- **Gate 8 → Gates 18–21.** Gate 8: "Exact bucket architecture, credential
-  mechanism and Object Lock activation are specified in Gates 18–21." Gate 21
-  also covers producers that do not exist until Gates 9, 12, 13 and 14, so it
-  cannot simply move ahead of Gate 8 whole. Reached next, after Gate 7.
 - **Gate 9 → Gates 17 and 18.** Gate 9's stop condition includes "unproven
   Backblaze B2 behavior for the pinned k3s version" (Gate 17's k3s etcd row)
   and it uses `veridex-etcd-backup` from Gate 18.

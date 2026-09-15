@@ -104,6 +104,32 @@ data:
       - job_name: grafana
         static_configs:
           - targets: ["grafana.monitoring.svc:3000"]
+      # Traefik's metrics entrypoint (kubernetes/infrastructure/ingress/).
+      # ClusterIP only -- deliberately not published on the NodePort Service.
+      # No job for alert-sink: it is a webhook receiver, not an exporter, and
+      # serves no /metrics endpoint -- scraping it would just park a target in
+      # a permanent down state. Its health comes from kube-state-metrics pod
+      # readiness, and its output is in Loki.
+      - job_name: traefik
+        static_configs:
+          - targets: ["traefik-metrics.kube-system.svc:8082"]
+      # etcd's own metrics, exposed by k3s_etcd_expose_metrics (roles/k3s-server)
+      # and reachable through the pod-CIDR firewall allowance for 2381.
+      # Control-plane nodes only -- agents run no etcd. Without this the only
+      # etcd_* series available were the API server's client-side view, with no
+      # quorum, leader, WAL-latency or database-size signal at all.
+      - job_name: etcd
+        kubernetes_sd_configs:
+          - role: node
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_node_label_node_role_kubernetes_io_etcd]
+            regex: "true"
+            action: keep
+          - source_labels: [__meta_kubernetes_node_address_InternalIP]
+            target_label: __address__
+            replacement: "${1}:2381"
+          - source_labels: [__meta_kubernetes_node_name]
+            target_label: node
 ---
 apiVersion: apps/v1
 kind: Deployment

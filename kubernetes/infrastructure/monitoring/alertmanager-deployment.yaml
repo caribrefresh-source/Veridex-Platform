@@ -75,12 +75,34 @@ data:
         target_matchers: ['severity=~"P2|P3"']
         equal: ["alertname", "class"]
 
+    # Every tier delivers to the alert sink, which writes one JSON line per
+    # alert to stdout -> Fluent Bit -> Loki. That makes alerts durable,
+    # searchable and retained for 14 days instead of living only in
+    # Alertmanager's in-memory state, which is what "actionable alert path"
+    # actually requires. When an external channel (Slack/email/PagerDuty) is
+    # authorized, add it alongside these -- the sink remains the audit trail.
+    # send_resolved so the log shows the full lifecycle, not just onset.
     receivers:
       - name: default
+        webhook_configs:
+          - url: http://alert-sink.monitoring.svc:9095/
+            send_resolved: true
       - name: page
+        webhook_configs:
+          - url: http://alert-sink.monitoring.svc:9095/
+            send_resolved: true
       - name: ops-urgent
+        webhook_configs:
+          - url: http://alert-sink.monitoring.svc:9095/
+            send_resolved: true
       - name: ops
+        webhook_configs:
+          - url: http://alert-sink.monitoring.svc:9095/
+            send_resolved: true
       - name: review
+        webhook_configs:
+          - url: http://alert-sink.monitoring.svc:9095/
+            send_resolved: true
 ---
 apiVersion: apps/v1
 kind: Deployment

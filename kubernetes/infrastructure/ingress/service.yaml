@@ -1,0 +1,27 @@
+---
+# NodePort (not LoadBalancer): roles/k3s-server disables servicelb with the
+# comment "no LoadBalancer implementation on netcup" -- there is no
+# LoadBalancer controller on this cluster. NodePort is reachable on every
+# node's public IP regardless of which node the pod is actually scheduled
+# on (Cilium's kube-proxy-replacement NodePort handling).
+#
+# Port 32537 is one of three ports roles/firewall/defaults/main.yml already
+# reserved for Traefik ("31742/32537/30051 ... when that role lands") --
+# used here for websecure. The other two (31742 web/HTTP, 30051 dashboard)
+# stay unused and unopened in the firewall until something needs them.
+apiVersion: v1
+kind: Service
+metadata:
+  name: traefik
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/name: traefik
+spec:
+  type: NodePort
+  selector:
+    app.kubernetes.io/name: traefik
+  ports:
+    - name: websecure
+      port: 443
+      targetPort: websecure
+      nodePort: 32537

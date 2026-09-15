@@ -37,9 +37,13 @@ firewall_trusted_pod_networks:
   - "{{ k3s_cluster_cidr }}"
 firewall_trusted_pod_api_port: "{{ api_port }}"
 
-# Published on the PUBLIC interface. Deliberately empty until Traefik exists;
-# its NodePorts (31742/32537/30051) get added when that role lands.
-firewall_public_tcp_ports: []
+# Published on the PUBLIC interface. Only 32537 (Traefik's websecure
+# NodePort, kubernetes/infrastructure/ingress/service.yaml) is open so far --
+# the minimum needed to reach Argo CD over HTTPS. 31742 (web/HTTP) and 30051
+# (dashboard) stay closed until something actually needs them; opening a
+# port nothing listens on yet is needless attack surface.
+firewall_public_tcp_ports:
+  - 32537
 firewall_public_udp_ports: []
 
 # Rate-limit NEW SSH connections. Not a substitute for key-only auth (already

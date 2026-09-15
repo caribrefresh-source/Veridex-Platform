@@ -1,0 +1,74 @@
+---
+# Traefik v3.7.13, image digest-pinned (not just tag-pinned -- a tag can move,
+# a digest cannot). Digest verified directly against Docker Hub's registry
+# API for the linux/amd64 manifest on 2026-09-15, matching this cluster's
+# node architecture.
+#
+# Scope note: this deployment exists to make Argo CD reachable over HTTPS
+# (the immediate need). It runs one entrypoint (websecure, TLS passthrough)
+# and watches IngressRouteTCP objects in the argocd namespace only
+# (--providers.kubernetescrd.namespaces). Widening to other namespaces, a
+# web/HTTP entrypoint, or the dashboard is real future work for whenever
+# another service needs exposing -- not built ahead of that need.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: traefik
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/name: traefik
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: traefik
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: traefik
+    spec:
+      serviceAccountName: traefik-ingress-controller
+      containers:
+        - name: traefik
+          image: "traefik:v3.7.13@sha256:96780238b1bbda5a9bb997f4307ce69e798ad1cf6eb7f2dcc0a440823467d199"
+          args:
+            - --entrypoints.websecure.address=:8443
+            - --providers.kubernetescrd
+            - --providers.kubernetescrd.namespaces=argocd
+            - --ping=true
+            - --log.level=INFO
+            - --api.dashboard=false
+            - --api.insecure=false
+          ports:
+            - name: websecure
+              containerPort: 8443
+            - name: ping
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: ping
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: ping
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            # Sized from this cluster's own measured utilization (8-18% CPU,
+            # 44-68% RAM on 4 vCPU / 8 GiB nodes), not a generic default --
+            # Traefik proxying a single low-traffic service needs very little.
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL

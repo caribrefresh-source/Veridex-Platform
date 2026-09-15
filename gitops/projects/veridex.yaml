@@ -24,16 +24,30 @@ spec:
   destinations:
     - server: https://kubernetes.default.svc
       namespace: "*"
-  # Only Namespace is cluster-scoped and pre-approved here: Gate 10's own
-  # gap-closure note schedules namespace enumeration (Gate 32) for "once
-  # GitOps can manage manifests" -- implying future namespaces are
-  # Argo-managed, unlike the argocd namespace itself (Ansible's sole
-  # bootstrap exception, gitops/bootstrap/namespace.yaml). Nothing else
-  # cluster-scoped (CRDs, ClusterRoles, ...) is pre-approved; a later gate
-  # that genuinely needs one extends this list explicitly, not by default.
+  # Only what a specific, justified need has required is pre-approved here --
+  # Gate 10's own rule: "a later gate that genuinely needs one extends this
+  # list explicitly, not by default."
+  #   - Namespace: Gate 10's own gap-closure note schedules namespace
+  #     enumeration (Gate 32) for "once GitOps can manage manifests" --
+  #     implying future namespaces are Argo-managed, unlike the argocd
+  #     namespace itself (Ansible's sole bootstrap exception).
+  #   - CustomResourceDefinition, ClusterRole, ClusterRoleBinding: added for
+  #     the pinned Traefik ingress controller (kubernetes/infrastructure/ingress/)
+  #     -- Traefik ships its own CRDs (IngressRoute, IngressRouteTCP, ...) and
+  #     needs a cluster-wide ClusterRole to watch Ingress/Service/Endpoints
+  #     across every namespace, the same way Cilium does outside GitOps
+  #     entirely. Unlike Cilium, Traefik has no bootstrap circular dependency
+  #     on Argo CD (Argo CD's own pods don't need external ingress to run),
+  #     so it is GitOps-managed rather than Ansible-managed.
   clusterResourceWhitelist:
     - group: ""
       kind: Namespace
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRole
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRoleBinding
   namespaceResourceWhitelist:
     - group: "*"
       kind: "*"

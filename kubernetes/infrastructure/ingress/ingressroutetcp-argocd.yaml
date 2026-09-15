@@ -1,0 +1,22 @@
+---
+# TLS passthrough, not termination: Traefik routes the raw TLS connection to
+# argocd-server, which keeps handling its own TLS exactly as it did over
+# port-forward -- no certificate management added here, no change to how
+# Argo CD serves TLS. HostSNI(`*`) because this entrypoint has no other
+# consumer yet and no real hostname is pointed at this cluster; scope this
+# to a specific hostname once one exists.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRouteTCP
+metadata:
+  name: argocd-server
+  namespace: argocd
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: HostSNI(`*`)
+      services:
+        - name: argocd-server
+          port: 443
+  tls:
+    passthrough: true

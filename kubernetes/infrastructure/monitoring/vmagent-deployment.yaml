@@ -79,15 +79,20 @@ data:
           - source_labels: [__meta_kubernetes_pod_ip]
             target_label: __address__
             replacement: "${1}:9153"
-        # GATE 11 ACCEPTANCE EVIDENCE -- TEMPORARY, REMOVE AFTER CAPTURE.
-        # The DNS alert is up{job="coredns"} == 0, i.e. "a CoreDNS target is
-        # not scrapeable". This adds one deliberately dead target to that same
-        # job so the real rule fires against real data, without touching port
-        # 53 or the running CoreDNS pods -- taking DNS down cluster-wide to
-        # prove an alert works would be a worse trade than any evidence is
-        # worth. The two genuine CoreDNS targets stay up throughout.
+      # GATE 11 ACCEPTANCE EVIDENCE -- TEMPORARY, REMOVE AFTER CAPTURE.
+      # A SEPARATE job, deliberately: bolting a static target onto the
+      # coredns job above does not work, because that job's relabel_configs
+      # keeps only targets whose __meta_kubernetes_pod_label_k8s_app matches
+      # "kube-dns" -- a static target carries no such label, fails the match,
+      # and is dropped before it is ever scraped (found live: it did not even
+      # appear as a target, "down" or otherwise). Still job="coredns", which
+      # is all up{job="coredns"} == 0 actually checks -- the alert rule
+      # cannot tell targets in one job_name block from two apart.
+      - job_name: coredns-alert-trigger
         static_configs:
           - targets: ["127.0.0.1:19153"]
+            labels:
+              job: coredns
       - job_name: argocd
         static_configs:
           - targets: ["argocd-metrics.argocd.svc:8082"]
@@ -136,6 +141,15 @@ data:
           - source_labels: [__meta_kubernetes_pod_label_k8s_app]
             regex: cilium
             action: keep
+          # role:pod SD emits one candidate per exposed container port
+          # (health 9879, peer-service 4244, prometheus 9962). Without this,
+          # all three get rewritten to the same "${ip}:9962" address and
+          # collide -- found live in vmagent's own logs ("skipping duplicate
+          # scrape target with identical labels"). Keep only the candidate
+          # whose own port is already 9962 before rewriting anything.
+          - source_labels: [__meta_kubernetes_pod_container_port_number]
+            regex: "9962"
+            action: keep
           - source_labels: [__meta_kubernetes_pod_ip]
             target_label: __address__
             replacement: "${1}:9962"
@@ -150,6 +164,11 @@ data:
         relabel_configs:
           - source_labels: [__meta_kubernetes_pod_label_io_cilium_app]
             regex: operator
+            action: keep
+          # Same duplicate-target fix as cilium-agent above (health 9234 vs
+          # prometheus 9963 on this pod).
+          - source_labels: [__meta_kubernetes_pod_container_port_number]
+            regex: "9963"
             action: keep
           - source_labels: [__meta_kubernetes_pod_ip]
             target_label: __address__

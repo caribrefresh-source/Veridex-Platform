@@ -1,0 +1,53 @@
+gate: 10
+check: G10-C4 (no duplicate Helm owner)
+captured_utc: 2026-09-15T08:20:00Z to 2026-09-15T08:22:00Z
+repo_commit: 145df11e4220e88c85c86952ae089a06bf9061a4
+plan_commit: bc27a0a2b9e872679007342b5d255b888e000722
+plan_sha256: 0c30445b0074edf3688ba57936e1c5149497b829e0f7d1b4328c5181bd222af8
+target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://127.0.0.1:6443
+captured_by: agent
+command: k3s kubectl -n argocd get application -o custom-columns=NAME:.metadata.name,DEST_NS:.spec.destination.namespace; k3s kubectl get secret -A -l owner=helm -o custom-columns=NS:.metadata.namespace,NAME:.metadata.name; k3s kubectl -n kube-system get daemonset cilium -o jsonpath='{.metadata.labels.app\.kubernetes\.io/managed-by}'; k3s kubectl -n kube-system get deployment coredns -o jsonpath='{.metadata.labels}'
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: >-
+  Proves the current state is not duplicated; it is not a standing
+  enforcement mechanism (nothing rejects a future PR that adds a
+  gitops/infrastructure/cilium/ path at CI time) -- see
+  docs/security/cilium-coredns-ownership.md's own Known Limitations for the
+  same caveat, which this check's evidence directly supports.
+--- unedited output ---
+
+=== the only Argo Application in the cluster, and its only destination ===
+$ k3s kubectl -n argocd get application -o custom-columns=NAME:.metadata.name,DEST_NS:.spec.destination.namespace
+NAME   DEST_NS
+root   argocd
+
+No Application targets kube-system. Nothing besides `root` exists to target
+Cilium or CoreDNS even indirectly.
+
+=== every Helm release history in the cluster ===
+$ k3s kubectl get secret -A -l owner=helm -o custom-columns=NS:.metadata.namespace,NAME:.metadata.name
+NS            NAME
+kube-system   sh.helm.release.v1.cilium.v1
+kube-system   sh.helm.release.v1.cilium.v2
+kube-system   sh.helm.release.v1.cilium.v3
+kube-system   sh.helm.release.v1.cilium.v4
+kube-system   sh.helm.release.v1.cilium.v5
+kube-system   sh.helm.release.v1.cilium.v6
+
+Six revisions, all `cilium` -- from roles/cilium's own installs/upgrades via
+the pinned `cilium` CLI (Ansible-driven). No second Helm release history for
+Cilium, and no Helm release at all named coredns.
+
+=== Cilium DaemonSet's own ownership label ===
+$ k3s kubectl -n kube-system get daemonset cilium -o jsonpath='{.metadata.labels.app\.kubernetes\.io/managed-by}'
+Helm
+
+=== CoreDNS: k3s's own bundled addon, not a Helm release at all ===
+$ k3s kubectl -n kube-system get deployment coredns -o jsonpath='{.metadata.labels}'
+{"k8s-app":"kube-dns","kubernetes.io/name":"CoreDNS","objectset.rio.cattle.io/hash":"b221aa07952a9e89947ab1223d4f383f2b093e8b"}
+
+`objectset.rio.cattle.io/hash` is k3s's own internal embedded-manifest
+tracking label (not Helm, not Argo CD) -- confirming CoreDNS's singular
+owner is k3s itself, driven by roles/k3s-server's startup flags.

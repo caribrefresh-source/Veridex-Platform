@@ -1,0 +1,62 @@
+gate: 10
+check: (supporting evidence, not a numbered acceptance-evidence check -- the finding behind this gate's stop-condition deviation, disclosed in full per closure.md)
+captured_utc: 2026-09-15T08:26:00Z to 2026-09-15T08:30:00Z
+repo_commit: 145df11e4220e88c85c86952ae089a06bf9061a4
+plan_commit: bc27a0a2b9e872679007342b5d255b888e000722
+plan_sha256: 0c30445b0074edf3688ba57936e1c5149497b829e0f7d1b4328c5181bd222af8
+target_identity: github.com API and git-over-HTTPS, authenticated as the ARGOCD_REPO_PAT deployed to Secret argocd-repo-veridex-platform in namespace argocd; kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465 for the read of the live Secret itself
+captured_by: agent
+command: curl -s -D - -u "$USERNAME:$PAT" https://api.github.com/repos/caribrefresh-source/Veridex-Platform (scope check); earlier attempts using -H "Authorization: token/Bearer $PAT" against the same endpoint returned 401 "Bad credentials" and are noted below as ruled-out red herrings, not evidence of an invalid token
+exit_status: 0
+proof_class: live
+result: FAIL (of the plan's "read-only" design intent for this credential, stated in ansible/roles/argocd-bootstrap/defaults/main.yml's own comment) -- this is a disclosed deviation, not a numbered acceptance-evidence check; see closure.md for its disposition
+limitations: >-
+  Confirms the token's OAuth scope grant as reported by GitHub's own
+  X-OAuth-Scopes header for Basic-Auth-authenticated requests specifically.
+  Two earlier header-based auth attempts (Authorization: token / Authorization:
+  Bearer) against the same REST endpoint returned 401 "Bad credentials" for
+  reasons never fully root-caused (classic PATs are documented to support
+  both schemes) -- superseded by the definitive Basic-Auth result below,
+  which GitHub's git-over-HTTPS protocol also uses and which Argo CD's own
+  successful, repeatedly-reconfirmed clone/sync independently corroborates.
+--- unedited output ---
+
+=== the operative, trusted result ===
+$ curl -s -D - -u "${USERNAME}:${PAT}" https://api.github.com/repos/caribrefresh-source/Veridex-Platform
+HTTP/2 200
+x-oauth-scopes: admin:enterprise, admin:gpg_key, admin:org, admin:org_hook, admin:public_key, admin:repo_hook, admin:ssh_signing_key, audit_log, codespace, copilot, delete:packages, delete_repo, gist, notifications, project, repo, user, workflow, write:discussion, write:network_configurations, write:packages
+github-authentication-token-expiration: 2027-09-12 04:00:00 UTC
+
+This is a classic PAT with near-full account-admin scope (org admin,
+enterprise admin, delete_repo, arbitrary repo write, workflow, package
+deletion, and more) -- not the "read-only contents on this one repository
+and nothing else" the role's own defaults/main.yml comment states as the
+requirement, and not what Argo CD needs (it only ever clones).
+
+=== provenance ===
+The token was not minted fresh for this gate. It was selected by the
+operator from an existing personal credentials file
+(C:\Users\Daniel\Downloads\user password.txt), on a line labelled
+"Veridex-Platform github", among several other unrelated credentials in
+that same file (a personal email password, another site's admin password,
+a Backblaze B2 key already in use since Gate 8). Its expiration is set to
+2027-09-12, over a year out.
+
+=== disposition ===
+This is Gate 10's own stop condition ("writable repo key") on its plain
+reading. The operator was shown this exact scope list and asked how to
+proceed (create a new, properly-scoped fine-grained PAT vs. keep the
+existing broad-scope one); asked a second time after being told explicitly
+that keeping it means the stop condition is triggered and the plan's own
+rule makes a triggered stop condition an automatic FAIL. The operator's
+final, explicit instruction both times was to keep using the existing token
+and close Gate 10 as PASS with the scope gap recorded as a residual risk
+rather than a blocking failure. See closure.md Section 6 (Exit Gate) and
+Section 8 (Known Limitations) for how this is recorded, and
+docs/security/secret-register.yml for the credential's own entry.
+
+Recommended follow-up, not performed here: mint a fine-grained PAT scoped to
+Contents: Read-only on this one repository, swap it into the Secret, and
+consider revoking the current broad-scope token given it has now been
+deployed (even briefly, even though Argo CD itself only ever exercises its
+read/clone capability) to a workload identity.

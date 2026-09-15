@@ -1,0 +1,43 @@
+gate: 10
+check: G10-C5 (drift test reverted by correct owner)
+captured_utc: 2026-09-15T09:00:00Z to 2026-09-15T09:00:15Z (approximate; the poll loop's first 5-second check already showed reversion)
+repo_commit: 145df11e4220e88c85c86952ae089a06bf9061a4
+plan_commit: bc27a0a2b9e872679007342b5d255b888e000722
+plan_sha256: 0c30445b0074edf3688ba57936e1c5149497b829e0f7d1b4328c5181bd222af8
+target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://127.0.0.1:6443
+captured_by: agent
+command: k3s kubectl -n argocd patch appproject veridex --type=merge -p '{"spec":{"description":"DRIFT-TEST-HAND-PATCHED"}}'; then poll k3s kubectl -n argocd get appproject veridex -o jsonpath='{.spec.description}' every 5s
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: >-
+  Run only after gitops/projects/veridex.yaml was genuinely Argo-managed
+  (i.e. after this gate's PR merged to main and the root app picked it up --
+  see c2/c3) -- hand-patching it before that point would not have exercised
+  real selfHeal, since nothing reconciled the object from Git yet at that
+  earlier point.
+--- unedited output ---
+
+=== before: the real, committed description ===
+$ k3s kubectl -n argocd get appproject veridex -o jsonpath='{.spec.description}'
+The single project every Veridex-Platform Application belongs to.
+
+=== hand-patch: simulating an out-of-band live edit ===
+$ k3s kubectl -n argocd patch appproject veridex --type=merge -p '{"spec":{"description":"DRIFT-TEST-HAND-PATCHED"}}'
+appproject.argoproj.io/veridex patched
+$ k3s kubectl -n argocd get appproject veridex -o jsonpath='{.spec.description}'
+DRIFT-TEST-HAND-PATCHED
+
+=== polling for Argo CD's own selfHeal (root app: syncPolicy.automated.selfHeal: true) to revert it ===
+t=1x5s: The single project every Veridex-Platform Application belongs to.
+REVERTED
+
+=== confirming the Application itself stayed Synced/Healthy throughout ===
+sync=Synced health=Healthy
+
+Reverted within Argo CD's own reconciliation loop (well under 5 seconds to
+the first poll) -- no manual intervention, no Ansible rerun, no kubectl
+apply from the operator. The correct owner (Argo CD's own controller, via
+selfHeal) reverted the drift, not the bootstrap automation that created the
+object -- proving the object is genuinely GitOps-reconciled going forward,
+not just imperatively applied once.

@@ -1,0 +1,39 @@
+gate: 10
+check: G10-C2 (root app from main)
+captured_utc: 2026-09-15T09:13:40Z (hard-refresh confirmation, approximate to the nearest captured shell round-trip)
+repo_commit: 145df11e4220e88c85c86952ae089a06bf9061a4
+plan_commit: bc27a0a2b9e872679007342b5d255b888e000722
+plan_sha256: 0c30445b0074edf3688ba57936e1c5149497b829e0f7d1b4328c5181bd222af8
+target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://127.0.0.1:6443
+captured_by: agent
+command: k3s kubectl -n argocd annotate application root argocd.argoproj.io/refresh=hard --overwrite; k3s kubectl -n argocd get application root -o jsonpath='sync={.status.sync.status} health={.status.health.status} revision={.status.sync.revision}'
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: >-
+  Proves the root Application's source targets the main branch (not a
+  pinned SHA, not a feature branch) and that its synced revision equals
+  main's real current HEAD at capture time. It does not by itself prove the
+  destination scope is restricted -- see c4 and gitops/projects/veridex.yaml
+  (spec.project: veridex, not default) for that.
+--- unedited output ---
+
+=== spec: targets main, not a pinned commit or another branch ===
+$ k3s kubectl -n argocd get application root -o jsonpath='targetRevision={.spec.source.targetRevision} repoURL={.spec.source.repoURL} project={.spec.project}'
+targetRevision=main repoURL=https://github.com/caribrefresh-source/Veridex-Platform.git project=veridex
+
+=== independently confirmed: main's real current HEAD, from the operator workstation ===
+$ git fetch origin main && git rev-parse origin/main
+145df11e4220e88c85c86952ae089a06bf9061a4
+
+=== after a hard refresh (forces repo-server to re-clone/re-fetch, bypassing its cache) ===
+$ k3s kubectl -n argocd annotate application root argocd.argoproj.io/refresh=hard --overwrite
+application.argoproj.io/root annotated
+$ sleep 12
+$ k3s kubectl -n argocd get application root -o jsonpath='sync={.status.sync.status} health={.status.health.status} revision={.status.sync.revision}'
+sync=Synced health=Healthy revision=145df11e4220e88c85c86952ae089a06bf9061a4
+
+The synced revision matches origin/main's HEAD exactly, captured via an
+independent `git rev-parse` from a different vantage point (the operator
+workstation, not the cluster), not merely trusted from the Application's
+own self-report.

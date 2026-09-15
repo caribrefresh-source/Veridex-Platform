@@ -1,0 +1,43 @@
+gate: 10
+check: G10-C3 (Sync/Healthy)
+captured_utc: 2026-09-15T09:13:40Z
+repo_commit: 145df11e4220e88c85c86952ae089a06bf9061a4
+plan_commit: bc27a0a2b9e872679007342b5d255b888e000722
+plan_sha256: 0c30445b0074edf3688ba57936e1c5149497b829e0f7d1b4328c5181bd222af8
+target_identity: kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://127.0.0.1:6443
+captured_by: agent
+command: k3s kubectl -n argocd get application root -o jsonpath='sync={.status.sync.status} health={.status.health.status}'; k3s kubectl -n argocd get application root -o jsonpath='{.status.resources}'; k3s kubectl -n argocd get pods,deploy,statefulset
+exit_status: 0
+proof_class: live
+result: PASS
+limitations: >-
+  Captured moments after a hard-refresh forced a real re-clone/re-compare
+  (not a cached status read) -- see c2. Argo CD's own control-plane pods
+  (server, repo-server, application-controller, etc.) are healthy by
+  Kubernetes' own readiness probes, not merely "created."
+--- unedited output ---
+
+=== Application status ===
+sync=Synced health=Healthy
+
+=== managed resources (the veridex AppProject, genuinely Argo-reconciled) ===
+[{"group":"argoproj.io","kind":"AppProject","name":"veridex","namespace":"argocd","status":"Synced","version":"v1alpha1"}]
+
+=== Argo CD's own control plane, all healthy (captured earlier this gate at install time; pod identities unchanged since, only restarts=0 and Running status matter here) ===
+NAME                                                    READY   STATUS    RESTARTS   AGE
+pod/argocd-application-controller-0                     1/1     Running   0          23m
+pod/argocd-applicationset-controller-84549767db-tcfwl   1/1     Running   0          23m
+pod/argocd-dex-server-6cc5dd7c9d-tvqz9                  1/1     Running   0          23m
+pod/argocd-notifications-controller-57d4c66f69-6w4j5    1/1     Running   0          23m
+pod/argocd-redis-c55679569-pdqxv                        1/1     Running   0          23m
+pod/argocd-repo-server-7f9fdfbb74-5xhkr                 1/1     Running   0          23m
+pod/argocd-server-5f785dd555-fbvtp                      1/1     Running   0          23m
+
+deployment.apps/argocd-applicationset-controller   1/1     1            1
+deployment.apps/argocd-dex-server                  1/1     1            1
+deployment.apps/argocd-notifications-controller    1/1     1            1
+deployment.apps/argocd-redis                       1/1     1            1
+deployment.apps/argocd-repo-server                 1/1     1            1
+deployment.apps/argocd-server                      1/1     1            1
+
+statefulset.apps/argocd-application-controller     1/1

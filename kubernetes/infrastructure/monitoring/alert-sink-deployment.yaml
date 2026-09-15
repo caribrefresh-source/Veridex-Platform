@@ -1,0 +1,191 @@
+# Alert delivery sink.
+#
+# Gate 11's stop condition is "No actionable alert path". Until this existed,
+# a firing alert reached Alertmanager and stopped there -- visible only in its
+# in-memory state and API, lost on restart, queryable only by polling. That is
+# receipt, not delivery.
+#
+# This is a deliberately minimal webhook receiver: it accepts Alertmanager's
+# POST and writes one JSON line per alert to stdout, which Fluent Bit already
+# ships to Loki from every node. The result is that alerts become durable,
+# searchable and retained for 14 days alongside the logs of whatever caused
+# them -- `{namespace_name="monitoring", pod_name=~"alert-sink.*"}` in Loki,
+# correlatable with the same time range in Grafana.
+#
+# It is NOT a replacement for paging. No Slack/email/PagerDuty credential is
+# approved for this platform yet, and inventing one here would be worse than
+# this: an unapproved external egress carrying alert content. When a real
+# channel is authorized, add it as another receiver alongside this one --
+# this sink stays useful as the audit trail either way.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: alert-sink
+  namespace: monitoring
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alert-sink-app
+  namespace: monitoring
+data:
+  sink.py: |
+    """Alertmanager webhook -> one structured JSON log line per alert."""
+    import json
+    import sys
+    from datetime import datetime, timezone
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    MAX_BODY = 1 << 20  # 1 MiB; Alertmanager batches are small, and an
+                        # unbounded read is a trivial memory exhaustion vector.
+
+
+    def emit(payload):
+        """One line per alert, not per batch -- so Loki can filter by label."""
+        common = {
+            "receiver": payload.get("receiver"),
+            "status": payload.get("status"),
+            "externalURL": payload.get("externalURL"),
+        }
+        for alert in payload.get("alerts", []) or []:
+            labels = alert.get("labels", {}) or {}
+            record = {
+                "ts": datetime.now(timezone.utc).isoformat(),
+                "event": "alert",
+                "alertname": labels.get("alertname"),
+                "severity": labels.get("severity"),
+                "class": labels.get("class"),
+                "status": alert.get("status"),
+                "startsAt": alert.get("startsAt"),
+                "endsAt": alert.get("endsAt"),
+                "labels": labels,
+                "annotations": alert.get("annotations", {}) or {},
+                "batch": common,
+            }
+            # flush: without it the line can sit in a pipe buffer and never
+            # reach the container log, which would defeat the whole point.
+            print(json.dumps(record, sort_keys=True), flush=True)
+
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                self.send_response(400)
+                self.end_headers()
+                return
+            if length <= 0 or length > MAX_BODY:
+                self.send_response(413 if length > MAX_BODY else 400)
+                self.end_headers()
+                return
+            try:
+                emit(json.loads(self.rfile.read(length)))
+            except (ValueError, TypeError) as exc:
+                print(
+                    json.dumps({
+                        "ts": datetime.now(timezone.utc).isoformat(),
+                        "event": "alert_parse_error",
+                        "error": type(exc).__name__,
+                    }),
+                    flush=True,
+                )
+                self.send_response(400)
+                self.end_headers()
+                return
+            self.send_response(200)
+            self.end_headers()
+
+        def do_GET(self):
+            # Liveness/readiness. Kept trivially cheap on purpose.
+            self.send_response(200 if self.path in ("/healthz", "/") else 404)
+            self.end_headers()
+
+        def log_message(self, *args):
+            # Silence per-request access logging: every POST already produces
+            # its own structured record above, and duplicating it as unstructured
+            # text would double Loki ingestion for no added signal.
+            return
+
+
+    if __name__ == "__main__":
+        ThreadingHTTPServer(("", 9095), Handler).serve_forever()
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alert-sink
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: alert-sink
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: alert-sink
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: alert-sink
+    spec:
+      serviceAccountName: alert-sink
+      containers:
+        - name: alert-sink
+          # Digest-pinned like every other image here. Stdlib only -- no pip
+          # install at runtime, so there is no network dependency on start.
+          image: "python:3.12-slim@sha256:2fe5997d249a808b8eeea52c58a1dbffbba28754dc11699ef5c029f2d818ce79"
+          command: ["python3", "/app/sink.py"]
+          ports:
+            - name: http
+              containerPort: 9095
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 96Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65534
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: app
+              mountPath: /app
+              readOnly: true
+      volumes:
+        - name: app
+          configMap:
+            name: alert-sink-app
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alert-sink
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: alert-sink
+spec:
+  selector:
+    app.kubernetes.io/name: alert-sink
+  ports:
+    - name: http
+      port: 9095
+      targetPort: http

@@ -25,3 +25,23 @@ spec:
       port: 443
       targetPort: websecure
       nodePort: 32537
+---
+# Separate ClusterIP Service for metrics, deliberately NOT added as another
+# port on the NodePort Service above: that would publish Traefik's metrics on
+# every node's public IP. Scraping is in-cluster only, so a ClusterIP is both
+# sufficient and the smaller attack surface. No firewall change is needed.
+apiVersion: v1
+kind: Service
+metadata:
+  name: traefik-metrics
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/name: traefik
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: traefik
+  ports:
+    - name: metrics
+      port: 8082
+      targetPort: metrics

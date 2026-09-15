@@ -39,11 +39,28 @@ spec:
             - --log.level=INFO
             - --api.dashboard=false
             - --api.insecure=false
+            # Prometheus metrics on their own entrypoint, bound to a port that
+            # is NOT published by the NodePort Service and NOT opened in the
+            # firewall -- reachable only from inside the cluster, by vmagent.
+            # addRoutersLabels/addServicesLabels give per-route and per-service
+            # request counts and durations, which is what D06 needs; entryPoint
+            # labels alone would only show totals.
+            - --metrics.prometheus=true
+            - --metrics.prometheus.entryPoint=metrics
+            - --metrics.prometheus.addRoutersLabels=true
+            - --metrics.prometheus.addServicesLabels=true
+            # 8082, not 9100: node-exporter already owns 9100 on the host
+            # network, and reusing the number here would make scrape configs
+            # and dashboards needlessly ambiguous even though the two live in
+            # different network namespaces and cannot actually collide.
+            - --entrypoints.metrics.address=:8082
           ports:
             - name: websecure
               containerPort: 8443
             - name: ping
               containerPort: 8080
+            - name: metrics
+              containerPort: 8082
           readinessProbe:
             httpGet:
               path: /ping

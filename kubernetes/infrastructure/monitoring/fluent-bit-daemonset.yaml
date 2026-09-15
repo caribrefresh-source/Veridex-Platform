@@ -81,6 +81,15 @@ spec:
           ports:
             - name: http
               containerPort: 2020
+          # Liveness and readiness deliberately test different things.
+          # /api/v1/health reflects OUTPUT DELIVERY health -- it turns
+          # unhealthy when retries to Loki accumulate. Using it for liveness
+          # means a temporarily unreachable Loki kills every log shipper in
+          # the cluster, which is what happened here: Loki was restarting,
+          # fluent-bit's health check went unhealthy, and all five pods went
+          # into CrashLoopBackOff while tailing logs perfectly well.
+          # Liveness therefore tests only that the process answers at all;
+          # delivery health is a readiness concern.
           readinessProbe:
             httpGet:
               path: /api/v1/health
@@ -89,7 +98,7 @@ spec:
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /api/v1/health
+              path: /
               port: http
             initialDelaySeconds: 15
             periodSeconds: 15

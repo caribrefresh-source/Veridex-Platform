@@ -24,6 +24,10 @@ data:
         HTTP_Server   On
         HTTP_Listen   0.0.0.0
         HTTP_Port     2020
+        # Without this the /api/v1/health endpoint the probes use is not
+        # registered and returns 404, so every pod sits 0/1 Ready while
+        # actually tailing logs correctly.
+        Health_Check  On
 
     [INPUT]
         Name              tail

@@ -34,16 +34,21 @@ spec:
               containerPort: 8080
             - name: telemetry
               containerPort: 8081
+          # Probes go to the main metrics port, not telemetry: kube-state-metrics
+          # serves /healthz, /livez and /readyz on 8080. Probing them on the
+          # telemetry port (8081, which only carries the process's own metrics)
+          # 404s, so the container was being killed and restarted despite
+          # having started correctly.
           readinessProbe:
             httpGet:
-              path: /healthz
-              port: telemetry
+              path: /readyz
+              port: metrics
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /healthz
-              port: telemetry
+              path: /livez
+              port: metrics
             initialDelaySeconds: 10
             periodSeconds: 15
           resources:

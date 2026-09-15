@@ -79,6 +79,15 @@ data:
           - source_labels: [__meta_kubernetes_pod_ip]
             target_label: __address__
             replacement: "${1}:9153"
+        # GATE 11 ACCEPTANCE EVIDENCE -- TEMPORARY, REMOVE AFTER CAPTURE.
+        # The DNS alert is up{job="coredns"} == 0, i.e. "a CoreDNS target is
+        # not scrapeable". This adds one deliberately dead target to that same
+        # job so the real rule fires against real data, without touching port
+        # 53 or the running CoreDNS pods -- taking DNS down cluster-wide to
+        # prove an alert works would be a worse trade than any evidence is
+        # worth. The two genuine CoreDNS targets stay up throughout.
+        static_configs:
+          - targets: ["127.0.0.1:19153"]
       - job_name: argocd
         static_configs:
           - targets: ["argocd-metrics.argocd.svc:8082"]

@@ -37,7 +37,7 @@ data:
             expr: kube_node_status_condition{condition="Ready", status="true"} == 0
             for: 2m
             labels:
-              severity: critical
+              severity: P1
               class: node
             annotations:
               summary: "Node {{ $labels.node }} is not Ready"
@@ -50,7 +50,7 @@ data:
               / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs"} * 100 < 15
             for: 5m
             labels:
-              severity: warning
+              severity: P2
               class: disk
             annotations:
               summary: "Filesystem {{ $labels.mountpoint }} on {{ $labels.node }} below 15% free"
@@ -98,7 +98,7 @@ data:
               and on (namespace, pod, container)
               kube_pod_container_status_last_terminated_reason{reason="OOMKilled"} == 1
             labels:
-              severity: critical
+              severity: P1
               class: capacity
             annotations:
               summary: "Container {{ $labels.namespace }}/{{ $labels.pod }}/{{ $labels.container }} was OOMKilled"
@@ -106,7 +106,7 @@ data:
             expr: veridex:container_cpu_throttled_ratio:rate5m > 0.25
             for: 15m
             labels:
-              severity: warning
+              severity: P2
               class: capacity
             annotations:
               summary: "Container {{ $labels.namespace }}/{{ $labels.pod }}/{{ $labels.container }} is heavily CPU throttled"
@@ -114,7 +114,7 @@ data:
             expr: veridex:pvc_used_bytes / clamp_min(veridex:pvc_capacity_bytes, 1) > 0.75
             for: 15m
             labels:
-              severity: warning
+              severity: P2
               class: capacity
             annotations:
               summary: "PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} is over 75% used"
@@ -122,7 +122,7 @@ data:
             expr: absent(container_memory_working_set_bytes{container!="", image!=""})
             for: 10m
             labels:
-              severity: critical
+              severity: P2
               class: capacity
             annotations:
               summary: "kubelet/cAdvisor capacity metrics are missing"
@@ -135,7 +135,7 @@ data:
               or absent(etcd_snapshot_sync_last_success_timestamp_seconds)
             for: 0m
             labels:
-              severity: critical
+              severity: P1
               class: etcd-snapshot
             annotations:
               summary: "etcd snapshot sync to Backblaze B2 has not succeeded in over 2 hours"
@@ -147,7 +147,7 @@ data:
               kube_pod_status_ready{namespace="kube-system", condition="true", pod=~"^cilium-[a-z0-9]{5}$"} == 0
             for: 2m
             labels:
-              severity: critical
+              severity: P1
               class: cilium
             annotations:
               summary: "Cilium agent pod {{ $labels.pod }} is not Ready"
@@ -158,7 +158,7 @@ data:
             expr: up{job="coredns"} == 0
             for: 2m
             labels:
-              severity: critical
+              severity: P1
               class: dns
             annotations:
               summary: "CoreDNS target {{ $labels.instance }} is not scrapeable"
@@ -169,7 +169,7 @@ data:
             expr: argocd_app_info{health_status="Degraded"} == 1
             for: 5m
             labels:
-              severity: critical
+              severity: P1
               class: argo-reconciliation
             annotations:
               summary: "Argo CD application {{ $labels.name }} is Degraded"
@@ -177,7 +177,7 @@ data:
             expr: argocd_app_info{sync_status="OutOfSync"} == 1
             for: 30m
             labels:
-              severity: warning
+              severity: P2
               class: argo-reconciliation
             annotations:
               summary: "Argo CD application {{ $labels.name }} has been OutOfSync for over 30m"

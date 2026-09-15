@@ -91,6 +91,19 @@ data:
       - job_name: vmalert
         static_configs:
           - targets: ["vmalert.monitoring.svc:8880"]
+      # The observability stack must monitor itself completely. Without these
+      # two, alertmanager_* and loki_* were absent from storage entirely --
+      # meaning a silently failing Alertmanager (nothing delivered) or a Loki
+      # rejecting writes would not itself be alertable.
+      - job_name: alertmanager
+        static_configs:
+          - targets: ["alertmanager.monitoring.svc:9093"]
+      - job_name: loki
+        static_configs:
+          - targets: ["loki.monitoring.svc:3100"]
+      - job_name: grafana
+        static_configs:
+          - targets: ["grafana.monitoring.svc:3000"]
 ---
 apiVersion: apps/v1
 kind: Deployment

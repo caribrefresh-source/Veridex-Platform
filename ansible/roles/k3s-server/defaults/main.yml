@@ -47,11 +47,14 @@ k3s_etcd_snapshot_retention: 48
 # those is a leading indicator for the failure modes Gate 4's own stop
 # condition names.
 #
-# Setting this to true binds that listener on 0.0.0.0:2381. The endpoint is
-# unauthenticated, which is why access is constrained at the firewall instead
-# (roles/firewall: the vLAN is already trusted, and 2381 is added to the
-# pod-CIDR allowlist for vmagent specifically). It exposes operational
-# telemetry -- database size, key count, latency -- never key or value data.
+# Setting this to true adds a second listener on the node's own node-ip --
+# VERIFIED live 2026-09-15: 10.2.1.11:2381 alongside the existing
+# 127.0.0.1:2381, i.e. the private vLAN address, NOT 0.0.0.0 and never the
+# public interface. The endpoint is unauthenticated, which is why access is
+# further constrained at the firewall (roles/firewall: the vLAN is already
+# trusted, and 2381 is added to the pod-CIDR allowlist for vmagent
+# specifically). It exposes operational telemetry -- database size, key
+# count, latency -- never key or value data.
 #
 # CHANGING THIS RESTARTS k3s ON EVERY SERVER NODE (the role's `restart k3s`
 # handler). That is a control-plane and etcd restart: high-risk under

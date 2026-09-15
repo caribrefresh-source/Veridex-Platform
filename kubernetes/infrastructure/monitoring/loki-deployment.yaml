@@ -88,7 +88,15 @@ spec:
               drop:
                 - ALL
               add:
+                # Same as vmsingle: CHOWN alone only suffices on a first run
+                # against an empty root-owned directory. After Loki has
+                # written, /loki/wal and friends are 0700 owned by 10001, and
+                # root needs DAC_OVERRIDE and FOWNER to traverse and re-own
+                # them -- otherwise every restart fails with
+                # "chown: /loki/wal: Permission denied".
                 - CHOWN
+                - DAC_OVERRIDE
+                - FOWNER
           volumeMounts:
             - name: data
               mountPath: /loki

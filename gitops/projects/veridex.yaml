@@ -1,0 +1,57 @@
+---
+# The one AppProject every Application in this repo belongs to.
+#
+# sourceRepos is this repo only -- Argo CD refuses to sync an Application
+# whose repoURL is not listed here, so a compromised or mistaken Application
+# spec cannot pull from an arbitrary Git host.
+#
+# destinations is restricted to this cluster's own in-cluster API server
+# (never an external/attacker-registered cluster Secret -- the plan's
+# "unrestricted destinations" stop condition). Namespace stays '*' within
+# that one server: Gate 10 closes before every namespace name used by later
+# rollout waves has been enumerated (that enumeration is Gate 32, which the
+# plan explicitly places after GitOps exists to manage it). Narrow this list
+# once Gate 32 closes.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: veridex
+  namespace: argocd
+spec:
+  description: The single project every Veridex-Platform Application belongs to.
+  sourceRepos:
+    - https://github.com/caribrefresh-source/Veridex-Platform.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: "*"
+  # Only Namespace is cluster-scoped and pre-approved here: Gate 10's own
+  # gap-closure note schedules namespace enumeration (Gate 32) for "once
+  # GitOps can manage manifests" -- implying future namespaces are
+  # Argo-managed, unlike the argocd namespace itself (Ansible's sole
+  # bootstrap exception, gitops/bootstrap/namespace.yaml). Nothing else
+  # cluster-scoped (CRDs, ClusterRoles, ...) is pre-approved; a later gate
+  # that genuinely needs one extends this list explicitly, not by default.
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"
+  roles:
+    - name: readonly
+      description: >-
+        Read-only verification identity (Gate 10 End State: bootstrap,
+        verification, Argo controller and emergency identities are separate).
+        Can view Applications in this project; cannot sync, delete or
+        override anything. Used to produce the Gate 10 denied-action RBAC
+        matrix and for any later read-only auditing.
+      policies:
+        - p, proj:veridex:readonly, applications, get, veridex/*, allow
+        - p, proj:veridex:readonly, applications, sync, veridex/*, deny
+        - p, proj:veridex:readonly, applications, delete, veridex/*, deny
+        - p, proj:veridex:readonly, applications, override, veridex/*, deny
+        - p, proj:veridex:readonly, applications, action/*, veridex/*, deny
+      # JWT tokens are issued live (`argocd proj role create-token`) and are
+      # never committed -- see docs/evidence/gates/gate-10/ for the redacted
+      # evidence of a token being issued, used, and revoked.
+      jwtTokens: []

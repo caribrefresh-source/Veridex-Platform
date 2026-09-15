@@ -8,11 +8,19 @@ metadata:
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
-  project: default
+  project: veridex
   source:
     repoURL: https://github.com/caribrefresh-source/Veridex-Platform.git
     targetRevision: main
     path: gitops
+    directory:
+      recurse: true
+      # bootstrap/ holds this Application's own manifest plus the argocd
+      # Namespace, which is Ansible's sole bootstrap exception (see
+      # gitops/bootstrap/namespace.yaml) -- excluded so the root app never
+      # tries to reconcile the object that creates it, or take ownership of
+      # a namespace Ansible deliberately owns instead.
+      exclude: "bootstrap/**"
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd

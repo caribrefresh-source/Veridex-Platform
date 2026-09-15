@@ -211,8 +211,12 @@ spec:
             - --rule=/etc/vmalert/rules.yml
             # Same reason as vmagent: without a config check, edited rules
             # reach the mounted file but are never re-read, so a rule change
-            # silently does nothing until the pod restarts.
-            - --rule.configCheckInterval=30s
+            # silently does nothing until the pod restarts. vmalert's own help
+            # is explicit -- "By default, the checking is disabled."
+            # Note the flag is -configCheckInterval, NOT -rule.configCheckInterval
+            # (which vmagent's -promscrape.configCheckInterval spelling invites);
+            # vmalert rejects the unknown flag outright and CrashLoops.
+            - --configCheckInterval=30s
             - --evaluationInterval=30s
             - --httpListenAddr=:8880
           ports:

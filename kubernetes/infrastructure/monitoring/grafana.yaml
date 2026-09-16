@@ -1,6 +1,11 @@
-# Grafana OSS 13.2.1. Internal ClusterIP only; anonymous access is Viewer-only
-# because no secret delivery mechanism is approved yet. There is no Ingress.
+# Grafana OSS 13.2.1. Internal ClusterIP only; there is no Ingress.
 # Dashboards and data sources are immutable, Git-provisioned configuration.
+# Anonymous Viewer access stays on for dashboard browsing. Admin login is
+# enabled via the grafana-admin-credentials Secret, applied directly to the
+# cluster (kubectl) rather than through GitOps -- the repo-wide SOPS+age vs
+# Sealed Secrets decision (docs/Engineering Documents/Initial Stages
+# Plan.txt, the "§6 conflict") is still open, gated behind Gate 22. See
+# docs/security/secret-register.yml for where the value is held.
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -87,10 +92,15 @@ spec:
               value: "true"
             - name: GF_AUTH_ANONYMOUS_ORG_ROLE
               value: Viewer
-            - name: GF_AUTH_DISABLE_LOGIN_FORM
-              value: "true"
             - name: GF_USERS_ALLOW_SIGN_UP
               value: "false"
+            - name: GF_SECURITY_ADMIN_USER
+              value: admin
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-admin-credentials
+                  key: admin-password
           ports:
             - name: http
               containerPort: 3000

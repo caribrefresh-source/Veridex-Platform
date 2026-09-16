@@ -1,5 +1,5 @@
 gate: 11
-check: G11-C2
+check: EG58 (gate-local G11-C2)
 captured_utc: 2026-09-15T23:49:35Z
 repo_commit: f7d76c9824a571ae7c1a4ef5e38d8cdbc7295278
 plan_commit: 4f591e3e5f954bd7829c19c938d0f5eb29d00430

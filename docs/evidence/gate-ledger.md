@@ -9,8 +9,25 @@ Plan: `docs/Engineering Documents/Initial Stages Plan.txt`
 
 ## Position
 
-Last deliverable **D53**, last exit-gate check **EG56** (Gate 10, closed
-2026-09-15). The next closed gate starts at **D54** and **EG57**.
+Last deliverable **D62**, last exit-gate check **EG67** (Gate 11, closed
+2026-09-16). The next closed gate starts at **D63** and **EG68**.
+
+**Gate 11 tracked exception.** Gate 11 closed **PASS** with one disclosed,
+user-accepted exception rather than a fully clean hardening pass:
+`kubernetes/cluster/policies/argocd-health-probes.yaml` admits ports
+8080/8082/8084 by L4 port alone (not path-restricted), which over-grants
+the full ArgoCD UI/API/gRPC surface on those ports, not just the /healthz
+probe, to any source matching host/remote-node/health, the pod CIDR, or
+(compensating for a separate, still-unfixed Cilium identity-
+misclassification bug) the `world` entity. An L7 fix was implemented and
+rolled out live, immediately caused a real production regression
+(argocd-server/repo-server/application-controller probe failures with
+climbing restart counts), and was reverted within minutes — see
+`docs/evidence/gates/gate-11/closure.md` Sec.7.2 for the full finding,
+attack, and revert record. Accepted as a tracked exception by the
+repository owner, 2026-09-15, rather than holding closure for a safer L7
+approach. Any gate that later touches Argo CD's network exposure should
+revisit this.
 
 **Gate 10 stop-condition deviation.** Gate 10 closed **PASS** despite its own
 stop condition ("writable repo key") being triggered: the deployed
@@ -68,6 +85,7 @@ closure evidence; `docs/evidence/legacy/README.md` maps it to Revision 3 gates.
 | 8 | Backup foundation | D38–D40 | EG42–EG46 | 2026-09-15 | `bc27a0a` | `f287056` | Backblaze B2 account c1beac90ce56; bucket veridex-etcd-backup, bucketId 4c818bbe7abca920ac0e0516 | `docs/evidence/gates/gate-08/closure.md` |
 | 9 | etcd recovery | D41–D47 | EG47–EG51 | 2026-09-15 | `bc27a0a` | `212122c` | kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://10.2.0.100:6443; Backblaze B2 bucket veridex-etcd-backup, bucketId 4c818bbe7abca920ac0e0516 | `docs/evidence/gates/gate-09/closure.md` |
 | 10 | Argo CD handover | D48–D53 | EG52–EG56 | 2026-09-15 | `bc27a0a` | `145df11` | kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://127.0.0.1:6443 (local kubeconfig on veridex-server-1; same cluster, confirmed by UID match against Gates 4-9's VIP-addressed https://10.2.0.100:6443) | `docs/evidence/gates/gate-10/closure.md` (**PASS via explicit operator override of the plan's own stop-condition rule** — see Position note above) |
+| 11 | Baseline observability | D54–D62 | EG57–EG67 | 2026-09-16 | `4f591e3e` | `dfc225d7af1bd4c5306b8569f8cc98c08442e5ba` | kube-system namespace UID d7d8a462-c503-49ed-a1e0-899f372f9465; API https://127.0.0.1:6443 (local kubeconfig on veridex-server-1; same cluster, confirmed by UID match against Gates 4-10's VIP-addressed https://10.2.0.100:6443) | `docs/evidence/gates/gate-11/closure.md` (**PASS with one disclosed, user-accepted tracked exception** — see Position note above) |
 
 ## Reopen log
 

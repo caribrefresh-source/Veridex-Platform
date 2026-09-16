@@ -90,7 +90,7 @@ firewall_trusted_pod_ports:
 # Published on the PUBLIC interface.
 #   32537 -- Traefik's websecure NodePort (TLS passthrough to Argo CD's own
 #     TLS), kubernetes/infrastructure/ingress/service.yaml.
-#   32538 -- Traefik's grafana-websecure NodePort, added for public access to
+#   32538 -- Traefik's grafana-https NodePort, added for public access to
 #     Grafana on the netcup node IPs directly (no domain). Traefik terminates
 #     TLS here itself with its default self-signed certificate -- there is no
 #     domain to get a trusted cert for, and self-signed HTTPS was chosen over

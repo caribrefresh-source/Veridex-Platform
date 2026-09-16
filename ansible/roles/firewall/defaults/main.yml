@@ -87,13 +87,25 @@ firewall_trusted_pod_ports:
   - 9963
   - 4244
 
-# Published on the PUBLIC interface. Only 32537 (Traefik's websecure
-# NodePort, kubernetes/infrastructure/ingress/service.yaml) is open so far --
-# the minimum needed to reach Argo CD over HTTPS. 31742 (web/HTTP) and 30051
-# (dashboard) stay closed until something actually needs them; opening a
-# port nothing listens on yet is needless attack surface.
+# Published on the PUBLIC interface.
+#   32537 -- Traefik's websecure NodePort (TLS passthrough to Argo CD's own
+#     TLS), kubernetes/infrastructure/ingress/service.yaml.
+#   32538 -- Traefik's grafana-websecure NodePort, added for public access to
+#     Grafana on the netcup node IPs directly (no domain). Traefik terminates
+#     TLS here itself with its default self-signed certificate -- there is no
+#     domain to get a trusted cert for, and self-signed HTTPS was chosen over
+#     plain HTTP specifically so the Grafana admin password (see
+#     docs/security/secret-register.yml, grafana-admin-credentials) is never
+#     sent in cleartext over the public internet. Deliberately its own
+#     NodePort, not a reuse of 32537: keeps this fully independent of Argo
+#     CD's TLS-passthrough catch-all route (see
+#     kubernetes/infrastructure/ingress/deployment.yaml's scope note).
+# 31742 (web/HTTP) and 30051 (Traefik's own dashboard) stay closed until
+# something actually needs them; opening a port nothing listens on yet is
+# needless attack surface.
 firewall_public_tcp_ports:
   - 32537
+  - 32538
 firewall_public_udp_ports: []
 
 # Rate-limit NEW SSH connections. Not a substitute for key-only auth (already

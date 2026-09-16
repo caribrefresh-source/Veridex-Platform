@@ -7,8 +7,15 @@
 #
 # Port 32537 is one of three ports roles/firewall/defaults/main.yml already
 # reserved for Traefik ("31742/32537/30051 ... when that role lands") --
-# used here for websecure. The other two (31742 web/HTTP, 30051 dashboard)
-# stay unused and unopened in the firewall until something needs them.
+# used here for websecure. The other two (31742 web/HTTP, 30051 Traefik's
+# own dashboard) stay unused and unopened in the firewall, reserved for
+# their original intended purposes.
+#
+# 32538 is a new port, not a repurposing of either reserved-but-unused one:
+# neither fits Grafana (31742 was earmarked for a shared plain-HTTP
+# entrypoint; 30051 for Traefik's own --api.dashboard). Grafana gets its own
+# NodePort so its TLS-terminating entrypoint stays fully independent of Argo
+# CD's TLS-passthrough one -- see the scope note in deployment.yaml.
 apiVersion: v1
 kind: Service
 metadata:
@@ -25,6 +32,10 @@ spec:
       port: 443
       targetPort: websecure
       nodePort: 32537
+    - name: grafana-websecure
+      port: 8443
+      targetPort: grafana-websecure
+      nodePort: 32538
 ---
 # Separate ClusterIP Service for metrics, deliberately NOT added as another
 # port on the NodePort Service above: that would publish Traefik's metrics on

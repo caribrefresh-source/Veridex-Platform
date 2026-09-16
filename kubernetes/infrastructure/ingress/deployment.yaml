@@ -4,12 +4,20 @@
 # API for the linux/amd64 manifest on 2026-09-15, matching this cluster's
 # node architecture.
 #
-# Scope note: this deployment exists to make Argo CD reachable over HTTPS
-# (the immediate need). It runs one entrypoint (websecure, TLS passthrough)
-# and watches IngressRouteTCP objects in the argocd namespace only
-# (--providers.kubernetescrd.namespaces). Widening to other namespaces, a
-# web/HTTP entrypoint, or the dashboard is real future work for whenever
-# another service needs exposing -- not built ahead of that need.
+# Scope note: this deployment originally existed only to make Argo CD
+# reachable over HTTPS, on one entrypoint (websecure, TLS passthrough),
+# watching IngressRouteTCP objects in the argocd namespace only. Grafana is
+# now a second consumer: a dedicated grafana-websecure entrypoint (its own
+# NodePort, kubernetes/infrastructure/ingress/service.yaml) keeps it fully
+# separate from Argo CD's TLS-passthrough catch-all (HostSNI(`*`) on
+# websecure) rather than trying to share that entrypoint -- there is no real
+# hostname yet for either service (raw-IP access), so SNI-based routing
+# between them on one entrypoint isn't workable. Grafana doesn't terminate
+# its own TLS (unlike Argo CD), so this entrypoint terminates TLS itself
+# using Traefik's default self-signed certificate (the monitoring
+# namespace's IngressRoute sets tls: {} with no secretName) -- no real
+# domain exists for a trusted cert; browsers will warn. Widening further is
+# still real future work for whenever another service needs exposing.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -33,8 +41,9 @@ spec:
           image: "traefik:v3.7.13@sha256:96780238b1bbda5a9bb997f4307ce69e798ad1cf6eb7f2dcc0a440823467d199"
           args:
             - --entrypoints.websecure.address=:8443
+            - --entrypoints.grafana-websecure.address=:8444
             - --providers.kubernetescrd
-            - --providers.kubernetescrd.namespaces=argocd
+            - --providers.kubernetescrd.namespaces=argocd,monitoring
             - --ping=true
             - --log.level=INFO
             - --api.dashboard=false
@@ -57,6 +66,8 @@ spec:
           ports:
             - name: websecure
               containerPort: 8443
+            - name: grafana-websecure
+              containerPort: 8444
             - name: ping
               containerPort: 8080
             - name: metrics

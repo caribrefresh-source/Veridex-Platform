@@ -7,7 +7,7 @@
 # Scope note: this deployment originally existed only to make Argo CD
 # reachable over HTTPS, on one entrypoint (websecure, TLS passthrough),
 # watching IngressRouteTCP objects in the argocd namespace only. Grafana is
-# now a second consumer: a dedicated grafana-websecure entrypoint (its own
+# now a second consumer: a dedicated grafana-https entrypoint (its own
 # NodePort, kubernetes/infrastructure/ingress/service.yaml) keeps it fully
 # separate from Argo CD's TLS-passthrough catch-all (HostSNI(`*`) on
 # websecure) rather than trying to share that entrypoint -- there is no real
@@ -18,6 +18,10 @@
 # namespace's IngressRoute sets tls: {} with no secretName) -- no real
 # domain exists for a trusted cert; browsers will warn. Widening further is
 # still real future work for whenever another service needs exposing.
+#
+# Named grafana-https, not grafana-websecure: Kubernetes port names cap at
+# 15 characters (IANA_SVC_NAME) and the longer form failed live validation
+# ("spec.ports[1].targetPort: ... must be no more than 15 characters").
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -41,7 +45,7 @@ spec:
           image: "traefik:v3.7.13@sha256:96780238b1bbda5a9bb997f4307ce69e798ad1cf6eb7f2dcc0a440823467d199"
           args:
             - --entrypoints.websecure.address=:8443
-            - --entrypoints.grafana-websecure.address=:8444
+            - --entrypoints.grafana-https.address=:8444
             - --providers.kubernetescrd
             - --providers.kubernetescrd.namespaces=argocd,monitoring
             - --ping=true
@@ -66,7 +70,7 @@ spec:
           ports:
             - name: websecure
               containerPort: 8443
-            - name: grafana-websecure
+            - name: grafana-https
               containerPort: 8444
             - name: ping
               containerPort: 8080

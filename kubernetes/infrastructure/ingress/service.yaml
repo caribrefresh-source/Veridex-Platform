@@ -15,7 +15,9 @@
 # neither fits Grafana (31742 was earmarked for a shared plain-HTTP
 # entrypoint; 30051 for Traefik's own --api.dashboard). Grafana gets its own
 # NodePort so its TLS-terminating entrypoint stays fully independent of Argo
-# CD's TLS-passthrough one -- see the scope note in deployment.yaml.
+# CD's TLS-passthrough one -- see the scope note in deployment.yaml. Named
+# grafana-https, not grafana-websecure: Kubernetes port names cap at 15
+# characters (IANA_SVC_NAME) and the longer form failed live validation.
 apiVersion: v1
 kind: Service
 metadata:
@@ -32,9 +34,9 @@ spec:
       port: 443
       targetPort: websecure
       nodePort: 32537
-    - name: grafana-websecure
+    - name: grafana-https
       port: 8443
-      targetPort: grafana-websecure
+      targetPort: grafana-https
       nodePort: 32538
 ---
 # Separate ClusterIP Service for metrics, deliberately NOT added as another

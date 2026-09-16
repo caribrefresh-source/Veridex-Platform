@@ -1,6 +1,6 @@
 # Public access to Grafana on the netcup node IPs directly -- no domain
 # exists yet, so this is IP-only access, not a hostname. Traefik terminates
-# TLS on its own dedicated grafana-websecure entrypoint (NodePort 32538,
+# TLS on its own dedicated grafana-https entrypoint (NodePort 32538,
 # kubernetes/infrastructure/ingress/service.yaml) using its default
 # self-signed certificate: tls: {} below with no secretName or certResolver
 # triggers that fallback. Browsers will warn about the untrusted cert --
@@ -17,7 +17,7 @@ metadata:
   namespace: monitoring
 spec:
   entryPoints:
-    - grafana-websecure
+    - grafana-https
   routes:
     - match: PathPrefix(`/`)
       kind: Rule

@@ -61,24 +61,29 @@
 # governed by the upstream default-deny, and no other namespace is touched.
 # Health endpoints expose liveness state, not application data.
 #
-# HARDENING (2026-09-15, Gate 11 closure adversarial review): the three
-# clauses below were originally scoped by L4 port alone. That was a real
-# over-grant on 8080/8082/8084: each of those ports is not a dedicated
-# health-only listener -- verified live, argocd-server's own Service maps
-# BOTH its http (80) and https (443) ports to the SAME targetPort 8080 that
-# serves /healthz, and the same is true of repo-server's 8084 (the
-# gRPC/reflection port, per Argo CD's upstream chart) and the application-
-# controller's 8082. An L4-only allow on those ports therefore admitted
-# whichever full service that port carries -- the UI/API/gRPC surface, not
-# only the probe -- to any source matching host/remote-node/health, the
-# 10.44.0.0/16 CIDR, or (worst case) the world entity. Fixed by adding an L7
-# HTTP rule restricting those three ports to the /healthz path actually
-# probed (Cilium's Envoy-backed L7 proxy is confirmed active on this
-# cluster: `cilium-dbg status --verbose` -> "Proxy Status: OK ... Envoy:
-# external"). Port 9001 (notifications-controller) is excluded from the L7
-# rule and kept as a separate plain L4 entry: its own liveness probe is a
-# raw TCP socket check, not HTTP, so there is no path to restrict, and this
-# was already the entire surface on that port.
+# HARDENING ATTEMPTED AND REVERTED (2026-09-15, Gate 11 closure adversarial
+# review): the three clauses below are scoped by L4 port alone, which is a
+# real over-grant on 8080/8082/8084 -- verified live, argocd-server's own
+# Service maps BOTH its http (80) and https (443) ports to the SAME
+# targetPort 8080 that serves /healthz, and the same is true of repo-
+# server's 8084 and the application-controller's 8082, so an L4-only allow
+# admits the full UI/API/gRPC surface on those ports, not only the probe, to
+# any source matching host/remote-node/health, the 10.44.0.0/16 CIDR, or
+# (worst case) world. An L7 HTTP rule restricting those three ports to GET
+# /healthz(.*) was implemented and rolled out live -- and immediately caused
+# a real regression: argocd-server (on veridex-agent-2, a node uninvolved in
+# the original identity-misclassification bug), repo-server, and
+# application-controller all began failing their OWN liveness/readiness
+# probes with "context deadline exceeded", with restart counts climbing
+# continuously rather than stabilizing, for as long as the L7 rule was live.
+# Root cause not fully diagnosed before revert (most likely candidate:
+# Cilium's Envoy-proxy redirect adds latency the probes' tight timeouts
+# (1-5s) don't tolerate, though this was not confirmed) -- REVERTED
+# immediately rather than left to "wait and see" against a live production
+# control plane. Left as a disclosed, not-yet-solved finding: the L4-only
+# over-grant on these three ports is real and unresolved. Any future attempt
+# at L7 scoping here needs its own careful validation (proxy warm-up time,
+# probe timeout headroom) before being treated as safe to roll out live.
 #
 # REMOVE THIS once the identity misclassification itself is fixed upstream or
 # by configuration; it is a targeted compensating control, not a design.
@@ -113,12 +118,7 @@ spec:
               protocol: TCP
             - port: "8080"   # argocd-server liveness + readiness
               protocol: TCP
-          rules:
-            http:
-              - method: "GET"
-                path: "/healthz.*"
-        - ports:
-            - port: "9001"   # argocd-notifications-controller liveness (TCP socket, no HTTP layer)
+            - port: "9001"   # argocd-notifications-controller liveness (TCP socket)
               protocol: TCP
     # Kept for defense-in-depth in case the datapath ever resolves the probe
     # to the CIDR-derived identity rather than host or world -- but per the
@@ -134,18 +134,12 @@ spec:
               protocol: TCP
             - port: "8080"
               protocol: TCP
-          rules:
-            http:
-              - method: "GET"
-                path: "/healthz.*"
-        - ports:
             - port: "9001"
               protocol: TCP
     # The actual fix: admits the packet when the datapath's identity
     # resolution fails and falls back to `world`, which is what was observed
     # live. Scoped to only these four ports on these four pods -- see the
-    # blast-radius note above -- and, as of the L7 hardening pass, further
-    # scoped to the /healthz path alone on the three HTTP ports.
+    # blast-radius note above.
     - fromEntities:
         - world
       toPorts:
@@ -156,10 +150,5 @@ spec:
               protocol: TCP
             - port: "8080"
               protocol: TCP
-          rules:
-            http:
-              - method: "GET"
-                path: "/healthz.*"
-        - ports:
             - port: "9001"
               protocol: TCP

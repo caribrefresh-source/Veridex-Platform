@@ -1,58 +1,132 @@
-# Emergency (break-glass) admin access
+# Emergency (break-glass) administrative access
 
-Closes Gate 1 G01-C5 — "administrative access is recoverable." Before this
-existed, every node had exactly one authorized SSH key
-(`~/.ssh/veridex_netcup_ed25519`, installed by netcup's provisioning API);
-losing it would have locked out all five nodes with no fallback.
+This policy governs the emergency SSH identity authorized as `root` on the
+five production nodes. It closes loss of the routine operator key; it does not
+replace provider-level recovery for a destroyed operating system.
 
-## What exists
+## Ownership and authorization
 
-A second ed25519 keypair, generated 2026-09-13, held only on the operator
-workstation:
+- **Policy owner:** Production Infrastructure Owner.
+- **Authorized user:** the on-call production operator designated by that
+  owner. Possession of a key component does not itself grant authorization.
+- **Approver:** Production Infrastructure Owner or Security Owner.
+- Prior approval is required when practical. An operator may act without it
+  only to prevent material service or data loss, and must obtain retrospective
+  review by the end of the next business day.
+- The key must not be used for routine administration, automation, convenience,
+  or an unapproved test.
 
-- Private half: `~/.ssh/veridex_breakglass_ed25519` — **never committed**,
-  registered in `docs/security/secret-register.yml`.
-- Public half: committed in
-  `ansible/inventory/production/group_vars/all.yml` (`admin_ssh_public_keys`,
-  second entry) and deployed to `/root/.ssh/authorized_keys` on all five
-  nodes by `roles/ssh-access`.
+## Credential and storage requirements
 
-`roles/ssh-access` refuses to run at all unless `admin_ssh_public_keys` has
-at least two entries, so this fallback cannot be silently removed by editing
-the primary key alone.
+The production inventory must contain exactly one Ed25519 primary key named
+`veridex-netcup-prod` and at least one cryptographically distinct Ed25519 key
+named `veridex-breakglass-YYYYMMDD`. CI and `roles/ssh-access` reject missing,
+malformed, undesignated, or duplicate key material.
 
-## When to use it
+Only public keys may enter Git. The emergency private key must be
+passphrase-protected and stored independently of the routine operator
+workstation, on encrypted offline media or a hardware-backed key. Its
+passphrase must be held separately. The secret register records the location,
+custody model, fingerprint, and review date without recording secret material.
 
-Only when the primary key (`~/.ssh/veridex_netcup_ed25519`) is lost,
-corrupted, or its workstation is unavailable, and administrative access to
-the nodes is otherwise needed.
+### Current exception
 
-```
-ssh -i ~/.ssh/veridex_breakglass_ed25519 root@<node public IP>
-```
+The key generated on 2026-09-13 is still held at
+`~/.ssh/veridex_breakglass_ed25519` on the same operator workstation as the
+primary key. It protects against loss of one file, but not loss or compromise
+of the workstation. Its passphrase protection has not been evidenced. This
+exception remains open in
+`docs/security/open-remediation-register.md`; do not describe administrative
+access as fully independent until replacement and revocation evidence exists.
 
-## After using it
+## Activation conditions
 
-1. Restore or regenerate the primary operator key.
-2. If the break-glass key's private half may have been exposed by the
-   incident that required using it, generate a replacement, update
-   `admin_ssh_public_keys` with the new public half, and rerun
-   `prepare-hosts.yml` to rotate it out. Never leave a break-glass key
-   committed anywhere but as a public key in the inventory.
-3. Record the incident (what happened, which key was used, whether it was
-   rotated) — this file does not track individual usages; that belongs in
-   the gate ledger or an incident record if one exists.
+Use emergency access only when administrative access is required and one of
+these conditions holds:
 
-## Known limitations
+1. the primary private key is unavailable, lost, or corrupted;
+2. use of the primary key is unsafe because compromise is suspected; or
+3. urgent recovery requires direct node access and the routine path has failed.
 
-- This closes "a single point of failure in *keys*." It does not provide a
-  recovery path if netcup itself is unreachable, or if a node's OS is
-  destroyed — that is out-of-band platform recovery, not covered by Gate 1.
-- **Both keys currently live on the same operator workstation.** This closes
-  the scenario Gate 1 asks about — one key file lost, corrupted, or
-  mistyped — but not the workstation itself being lost or compromised,
-  which would take out both at once (and every other workstation-held
-  credential in `docs/security/secret-register.yml`, not just these two).
-  Closing that fully means storing the break-glass private half somewhere
-  genuinely independent (an offline vault, a hardware token, a sealed
-  physical backup) — flagged here as a real gap, not fixed by this gate.
+If the node OS cannot accept SSH, use `provider-recovery.md` instead.
+
+## Access procedure
+
+1. Open an incident record from `emergency-access-record-template.md` in
+   `docs/security/incidents/`. Record approval or the reason prior approval
+   was impossible.
+2. Retrieve the emergency credential using the documented custody process.
+   Do not copy it to persistent storage on the routine operator workstation.
+3. Compare its public-key SHA-256 fingerprint with the value recorded in the
+   secret register or approved custody record.
+4. Verify the target host fingerprint against `ansible/files/known_hosts`.
+   Stop on any mismatch.
+5. Connect with only the intended identity enabled:
+
+   ```sh
+   ssh -o IdentitiesOnly=yes -o PasswordAuthentication=no \
+     -i <retrieved-emergency-key> root@<node-public-ip>
+   ```
+
+6. Perform only the work required to restore the routine administrative path.
+7. Record nodes accessed, commands or changes made, start/end time, and the
+   emergency key fingerprint. Never record a private key or passphrase.
+
+## Closeout and rotation
+
+Before closing the incident:
+
+1. restore or replace the primary operator credential;
+2. review SSH authentication logs for the incident window;
+3. remove temporary private-key copies and release custody components;
+4. complete the incident record and obtain approver review by the end of the
+   next business day; and
+5. decide whether rotation is mandatory under the rules below.
+
+Rotation is mandatory immediately after suspected workstation compromise,
+suspected emergency-key exposure, lost custody media/token, unexpected use,
+or departure of an authorized custodian. Target completion is four hours for
+a suspected exposure of this internet-reachable root credential.
+
+Use this add-test-remove sequence; never revoke the last proven access path:
+
+1. keep an authenticated SSH session open;
+2. generate a new passphrase-protected Ed25519 key in the approved independent
+   custody environment;
+3. add its public half to `admin_ssh_public_keys` with a dated break-glass
+   comment and run `prepare-hosts.yml` (the play is serial);
+4. retrieve and test the new key against all five nodes using the command
+   above, validating every host fingerprint;
+5. remove the superseded public key, rerun `prepare-hosts.yml`, and verify on
+   every node that the new key succeeds and the old key is rejected;
+6. update the secret register and attach non-secret evidence to the incident;
+7. securely dispose of the superseded private-key copies.
+
+Stop and preserve the old path if any node fails, a fingerprint changes, or
+independent retrieval cannot be completed.
+
+## Quarterly assurance drill
+
+At least once every 92 days, an authorized operator must:
+
+1. confirm custodians and independent storage remain correct;
+2. retrieve the credential through the documented custody process;
+3. validate its fingerprint and authenticate to all five nodes;
+4. run only `id` and `hostname`, then confirm the attempts in SSH/system logs;
+5. create an incident-format drill record and document discrepancies; and
+6. update `manual_only_reviewed` in the secret register.
+
+CI rejects a `manual_only_reviewed` date older than 92 days. The policy owner
+must also review this policy annually and after every activation.
+
+## Evidence required to close the current exception
+
+- approved independent storage method and named custodial roles;
+- new public-key fingerprint and inventory change;
+- successful retrieval and authentication on all five nodes;
+- confirmed rejection of the old emergency key on all five nodes;
+- updated secret register; and
+- completed, approved drill/rotation record.
+
+Private keys, passphrases, recovery codes, and credential fragments are never
+acceptable evidence.

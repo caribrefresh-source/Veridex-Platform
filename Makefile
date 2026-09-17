@@ -49,6 +49,9 @@ build: ## Render every environment kustomization
 .PHONY: lint
 lint: ## Lint ansible and kubernetes manifests
 	ansible-lint $(ANSIBLE_DIR)
+	python3 scripts/lint-secret-register.py
+	python3 scripts/lint-admin-ssh-keys.py --self-test
+	python3 scripts/lint-admin-ssh-keys.py
 	kubectl kustomize kubernetes/environments/$(ENV) | kubeconform -strict -summary -
 
 .PHONY: test

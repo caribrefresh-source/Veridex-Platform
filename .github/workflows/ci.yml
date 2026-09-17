@@ -169,3 +169,8 @@ jobs:
       # values, and fails on a literal assignment or a private key block.
       - name: Check every consumed secret has a registered destination
         run: python3 scripts/lint-secret-register.py
+
+      - name: Test and validate production admin SSH keys
+        run: |
+          python3 scripts/lint-admin-ssh-keys.py --self-test
+          python3 scripts/lint-admin-ssh-keys.py

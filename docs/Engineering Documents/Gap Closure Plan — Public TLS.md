@@ -1,655 +1,565 @@
-# Gap Closure Plan — Public TLS (Let's Encrypt) for Cluster Ingress
+# Gap Closure Plan — Public TLS and the veridexeai.com cutover
 
-Closes the gap between "Grafana is reachable from the internet on a self-signed
-certificate" (built ad hoc 2026-09-16, PRs #51/#52) and "cluster services are
-reachable over publicly-trusted TLS, issued and renewed automatically,
-declaratively, with evidence."
+Takes `veridexeai.com` from "a Squarespace marketing site, with the netcup
+cluster reachable only on obscure high ports behind a self-signed certificate"
+to "the netcup cluster serves the site on 443 under a Let's Encrypt certificate,
+and Squarespace is retired."
 
-**Status:** IN PROGRESS. **Phase 2 (cert-manager platform) is built** and
-awaiting merge; Phases 1, 3 and 4 are not started. Phase 1 is blocked on
-decision R2 and on the Squarespace `NS` check (§7 P2).
+**Status:** IN PROGRESS. Stage A (DNS) and the cert-manager platform are built;
+the website, low-port ingress, certificates and the Cilium host policy are not.
 
-**Revision 2 (2026-09-16).** Rewritten around **DNS-01** validation on a
-delegated subdomain, replacing Revision 1's HTTP-01 design. Revision 1 is
-superseded in full; §1.2 records why, because the reasoning matters more than
-the outcome.
+---
+
+## Revision history
+
+| Rev | Date | Change |
+|---|---|---|
+| 1 | 2026-09-16 | HTTP-01 design. Superseded — HTTP-01 is fixed to port 80, which is below this cluster's NodePort range, so it required low-port ingress surgery *before* any certificate could be issued. |
+| 2 | 2026-09-16 | Rewritten around **DNS-01** on a delegated subdomain. Decoupled certificate issuance from low-port ingress. Scope was one hostname, `grafana.k8s.veridexeai.com`, keeping Squarespace as the apex. |
+| **3** | **2026-09-17** | **This revision.** Scope changed by the repository owner: the website itself moves onto this cluster, the apex points at netcup, and Squarespace is retired. That makes ports 80/443 mandatory rather than deferred, so Revision 2's deliberate deferral of low-port ingress no longer holds. Also folds in the security work (D84–D87) that Revision 2 predates, and the low-port spike that removed its largest `UNKNOWN`. |
+
+Revision 2's central decision — **DNS-01, not HTTP-01** — still stands and still
+pays off. Certificate issuance remains independent of inbound ports. Low ports
+return only to *serve traffic*, which is a much smaller and better-understood
+problem than making ACME validation work.
 
 ---
 
 ## 0. Plan identity, numbering, and standing
 
 **This is not a numbered gate.** Gate 12 is Longhorn; cert-manager appears in the
-Revision 3 plan only inside Gate 32's workload-mapping list, never as a gate of
-its own. This document therefore follows the precedent of
-`Gap Closure Plan — Network Policy.txt`: phased gap-closure work that runs
-alongside the numbered gates rather than inside them.
+Revision 3 plan only inside Gate 32's workload-mapping list. This document
+follows the precedent of `Gap Closure Plan — Network Policy.txt`: phased
+gap-closure work running alongside the numbered gates.
 
-**Numbering — DECISION REQUIRED (see §8, R1).** This plan numbers deliverables
-`D63…` and exit gates `EG68…`, continuing the cumulative sequence the gate ledger
-maintains (`docs/evidence/gate-ledger.md` Position: last deliverable **D62**, last
-exit-gate check **EG67**, Gate 11 closed 2026-09-16 — `VERIFIED`, read from
-`origin/main`). Consequence: Gate 12 starts after this plan's last number, and
-the ledger Position line must be updated when this plan completes. **Every D/EG
-number below is contingent on R1**; if R1 is answered the other way they shift
-as a block.
+**Numbering.** Confirmed by the repository owner (R1, answered 2026-09-16): this
+plan consumes the gate ledger's cumulative sequence. **Append only, never
+renumber** — the ledger's own rule.
 
-> **Pre-existing defect found while writing this plan, not introduced by it:**
-> `Gap Closure Plan — Network Policy.txt` numbers itself `D1–D10 / EG1–EG10`,
-> which collides with the gate ledger's own D1–D10 (Gates 0–1). Two documents
-> claim the same identifiers. This plan does not silently pick a side
-> (CLAUDE.md §0); it is raised in §8 R1.
+| Range | Status |
+|---|---|
+| D63–D64 | Built (delegated DNS zone) |
+| D65–D67 | Allocated, not built (DNS credential + evidence) |
+| D68–D72 | **Built** (cert-manager platform) |
+| D73–D78 | Allocated, not built (first certificate) — re-scoped in this revision |
+| D79–D80 | **Built** (cert-manager metrics + alerts) |
+| D81–D83 | Allocated, not built (drift check, prior-drift record, closure) |
+| D84–D87 | **Built** (security work — see §3) |
+| **D88+** | **New in this revision** |
 
-**Template note.** Each phase carries: Objective, Scope, Processes Activated,
-Deliverables, Technical Detail, Exit Gate, Rollback. No SQL DDL or API contracts
-apply — this is DNS, certificate lifecycle and configuration only — so Technical
-Detail carries resource tables and decision rationale instead.
+Exit gates: EG68–EG89 allocated, EG73–EG77 passed. **New work starts at EG90.**
 
-**Evidence labels** (CLAUDE.md §1): `VERIFIED` = observed directly in this repo
-or the live system; `DOCUMENTED` = from official vendor docs, not confirmed
-here; `ASSUMED` / `UNKNOWN` = must be proven before being relied on.
+> Revision 2 §8 said "Gate 12 then begins at D84/EG90". That is now wrong —
+> D84–D87 were consumed by the security work. Gate 12 begins after this plan's
+> last number.
+
+**Evidence labels** (CLAUDE.md §1): `VERIFIED` = observed directly; `DOCUMENTED`
+= vendor docs, unconfirmed here; `ASSUMED`/`UNKNOWN` = must be proven.
 
 ---
 
 ## 1. Current state
 
+### 1.1 Built and verified
+
 | Fact | Evidence | Label |
 |---|---|---|
-| Traefik v3.7.13, digest-pinned, `Deployment`, 1 replica, `kube-system` | `kubernetes/infrastructure/ingress/deployment.yaml` | `VERIFIED` |
-| Entrypoints: `websecure` :8443 (TLS passthrough → Argo CD), `grafana-https` :8444 (TLS termination, Traefik default self-signed), `metrics` :8082 | same file + `service.yaml` | `VERIFIED` |
-| NodePorts 32537 → websecure, 32538 → grafana-https; firewall publishes only those two | `service.yaml`, `ansible/roles/firewall/defaults/main.yml` | `VERIFIED` |
-| Traefik providers: `kubernetescrd` only, namespaces `argocd,monitoring` | `deployment.yaml` args | `VERIFIED` |
-| k3s `--service-node-port-range` unset → default **30000–32767** | `k3s-server/templates/config.yaml.j2` | `VERIFIED` |
-| Platform DNS is `veridexeai.com` at **Squarespace** | `docs/evidence/gates/gate-00/closure.md:65` | `VERIFIED` |
-| Squarespace exposes **no DNS-record API**, and no cert-manager DNS-01 solver exists for it | vendor docs + ecosystem survey, 2026-09-16 | `DOCUMENTED` |
-| cert-manager vendored at **v1.21.2**, digest-pinned, Argo CD Application written (Phase 2, this branch); not yet applied to the cluster | `kubernetes/infrastructure/cert-manager/`, `gitops/infrastructure/cert-manager.yaml` | `VERIFIED` |
-| Observability catalogue D06: "Certificate panels need cert-manager (not yet deployed)" | `docs/architecture/observability-catalogue.md:75` | `VERIFIED` |
-| chrony synchronised on all 5 nodes (ACME requires sane clocks) | playbook run 2026-09-16 | `VERIFIED` |
-| Cluster API access from the operator workstation is **currently down** | this session | `VERIFIED` |
-| Whether Squarespace's DNS panel permits **`NS` records** on a subdomain | not checked — decides Phase 1's primary path | `UNKNOWN` |
-| Whether the apex `veridexeai.com` currently serves a live site / MX records that must not be disturbed | not checked | `UNKNOWN` |
-| `--enable-certificate-owner-ref` is **not set** in the vendored v1.21.2 manifest, so it takes the upstream default of `false` — deleting a `Certificate` does **not** delete its Secret | vendored `controller.yaml` args, checked 2026-09-16 | `VERIFIED` (flag absent) / `DOCUMENTED` (default is false) |
-
-### 1.1 Why DNS-01, and what it removes
-
-ACME offers two usable challenge types here. HTTP-01 is **fixed to port 80**;
-TLS-ALPN-01 is fixed to port 443. Both are **below** this cluster's NodePort
-range (30000–32767), so neither can simply be added to the Traefik NodePort
-Service the way 32538 was — HTTP-01 would first require a low-port ingress
-mechanism (a Traefik `DaemonSet` with `hostPort`, or nftables DNAT of uncertain
-compatibility with Cilium's eBPF NodePort path).
-
-**DNS-01 needs no inbound port at all.** Validation is proved by writing a TXT
-record, an outbound-only operation. Choosing it deletes an entire phase of work
-and its largest risk. Concretely, compared with Revision 1 this plan no longer
-needs:
-
-- any change to `kubernetes/infrastructure/ingress/deployment.yaml` — Traefik is
-  untouched except for the one route that consumes the certificate;
-- a `Deployment`→`DaemonSet` conversion, whose `kind` change has a window in
-  which no Traefik pod exists, taking Argo CD **and** Grafana down together;
-- `NET_BIND_SERVICE` on a container that currently drops all capabilities;
-- an nftables DNAT spike whose interaction with Cilium `kubeProxyReplacement`
-  was `UNKNOWN` and might simply not work;
-- `--providers.kubernetesingress` on Traefik. HTTP-01's solver creates a plain
-  `Ingress`, which Traefik's `kubernetescrd`-only configuration ignores
-  entirely — the failure would have been silent. DNS-01 creates no Ingress.
-
-It also removes the manual-DNS problem: records under the delegated zone become
-API-managed and therefore reconcilable, rather than a human editing a web panel.
-
-**Retained port suffix.** DNS-01 removes the requirement for port **80**. It does
-not, by itself, remove the requirement for port **443** *if portless URLs are
-wanted* — a certificate is valid for a hostname regardless of port, so
-`https://grafana.k8s.veridexeai.com:32538/` serves a fully trusted certificate
-with no browser warning. This plan deliberately accepts the port suffix and
-**defers portless URLs to their own plan** (§9 R4), because that is the only part
-that still needs low-port ingress surgery, and welding it to certificate issuance
-is what made Revision 1 large and risky.
-
-### 1.2 Corrections carried forward
-
-Two statements made earlier in this engagement were wrong and are corrected here
-rather than quietly dropped:
-
-1. **"Open port 80 the same way I opened 32538."** Not possible — 32538 is a
-   NodePort, 80 is below the NodePort range. This is what forced Revision 1's
-   large Phase 1 and, ultimately, this rewrite.
-2. **"Wildcards mean one certificate for everything."** Overstated. A wildcard
-   `*.k8s.veridexeai.com` is now *possible* (HTTP-01 cannot issue wildcards at
-   all), but Kubernetes Secrets are namespaced: a hostname in another namespace
-   still needs its own `Certificate` and Secret there, and issuing the *same*
-   wildcard in several namespaces creates duplicate certificates that consume a
-   Let's Encrypt rate limit. Wildcards help when many hostnames share one
-   namespace; they do not collapse a multi-namespace estate into one cert. This
-   plan therefore issues a **single-hostname certificate** first (§4, Technical
-   Detail) and records wildcard as available when it is actually justified.
-
----
-
-## 2. Phase 1 — Delegated DNS zone under API control
-
-**Objective** A subdomain of `veridexeai.com` is served by a DNS provider with a
-record API, under an API credential scoped to that subdomain alone, so
-cert-manager can complete DNS-01 challenges without any human editing records and
-without the apex domain being touched.
-
-**Scope**
-
-- *In-Scope:* choose the delegating mechanism and provider; create the delegated
-  zone; set the delegation at Squarespace; create a least-privilege API token;
-  deliver that token to the cluster out-of-band; register it.
-- *Out-of-Scope:* **any change to `veridexeai.com` apex records, its existing
-  website, or its MX/TXT records**; moving the domain's registrar; migrating the
-  apex nameservers (explicitly the last-resort fallback, not the plan).
-
-**Processes Activated**
-
-- *Delegated-zone DNS management* — owner: the chosen DNS provider's API, driven
-  by cert-manager — drift detection: Phase 4's zone drift check (EG88).
-- *Scoped DNS credential custody* — owner: operator workstation + out-of-band
-  `kubectl` delivery — drift detection: `scripts/lint-secret-register.py` both
-  ways, plus the token's own expiry if the provider supports one.
-
-**Deliverables**
-
-- **D63.** `docs/architecture/public-dns-delegation.md` — the chosen zone name,
-  provider, delegation mechanism, the exact `NS` (or `CNAME`) records set at
-  Squarespace, and why the apex was not moved. This is the reproduction
-  instructions for the one manual step in the plan.
-- **D64.** The delegated zone live at the provider, with `A` records for
-  `grafana.<zone>` pointing at all five node public IPs (values sourced from
-  `ansible/inventory/production/hosts.yml`, never retyped from memory).
-- **D65.** A DNS API token scoped to **edit DNS records in the delegated zone
-  only** — no account-wide, no other-zone, no non-DNS permission. Delivered to
-  the cluster as a Secret applied out-of-band by `kubectl`, never committed.
-- **D66.** `docs/security/secret-register.yml` — the token registered by name and
-  location, no value, following the `grafana-admin-credentials` precedent
-  (`manual_only: true` with a reviewed date, because no tracked file declares its
-  manifest).
-- **D67.** `docs/evidence/gap-closure/tls-public/phase1/` — delegation
-  verification output: authoritative nameserver trace, and a TXT record written
-  and read back **through the API**, proving cert-manager will be able to.
-
-**Technical Detail**
-
-**Delegation mechanism, in preference order.** The first that Squarespace
-actually supports wins; this is decided by observation, not by this document.
-
-| ID | Mechanism | What Squarespace must support | Consequence |
-|---|---|---|---|
-| **G1** | `NS` delegation of `k8s.veridexeai.com` to the provider | Adding `NS` records for a subdomain | Best outcome: everything under the subdomain is API-managed forever, including future hostnames. Apex untouched. |
-| **G2** | `CNAME` of `_acme-challenge.<host>` to a zone under API control | Adding `CNAME` records (certain) | Works, but needs one static CNAME per hostname, set by hand once each. Apex untouched. cert-manager follows it with `cnameStrategy: Follow`. |
-| **G3** | Move the whole domain's nameservers to the API-capable provider | — | **Last resort.** Every existing record (website, MX, verification TXT) must be recreated exactly or the site and email break. Largest blast radius in this plan. Requires its own authorization. |
-
-**Provider choice is a decision, not an assumption (§8 R2).** The requirement is:
-a free or near-free zone, a record API, a token that can be scoped to one zone,
-and first-class cert-manager support (a native solver or a maintained webhook).
-Candidates must be evaluated at build time against those criteria and the choice
-recorded in D63. The provider must not be one this repository's provider-drift
-policy excludes.
-
-**Zone naming.** `k8s.veridexeai.com` is proposed. It is a DNS name, not a
-Kubernetes namespace, so Gate 32 has no authority over it and there is no
-ordering conflict — but it is a naming decision the repository owner may wish to
-set differently, and it is cheap to change now and expensive later.
-
-**The credential re-entangles this work with the open secrets decision, and that
-must be stated plainly.** Revision 1's HTTP-01 design needed no credential at
-all. DNS-01 needs a provider API token, which is a Secret — and the repo-wide
-SOPS+age vs. Sealed Secrets decision is still open behind Gate 22's KMS incident
-(the "§6 conflict"). This plan does **not** unblock or pre-empt that decision. It
-uses the already-established out-of-band pattern: the value is applied with
-`kubectl`, never committed, and only its name and location are registered
-(exactly as `grafana-admin-credentials` was on 2026-09-16). EG87 asserts that no
-secret value enters Git.
-
-**Exit Gate**
-
-- **EG68.** The delegated zone resolves authoritatively at the chosen provider —
-  Method: trace delegation from the parent zone and confirm the provider's
-  nameservers answer authoritatively for the delegated name — Result: PASS/FAIL.
-- **EG69.** `grafana.<zone>` resolves to all five node public IPs, and returns
-  **no `AAAA` record** — Method: query a public resolver for both `A` and `AAAA`
-  — Result: PASS/FAIL. *(An `AAAA` record is not cosmetic: Let's Encrypt prefers
-  IPv6 when one exists and fails rather than falling back, and this cluster's
-  public path is IPv4-only.)*
-- **EG70.** A TXT record can be created and deleted in the delegated zone **using
-  the scoped token**, and the change is observable from a public resolver —
-  Method: write, read back, delete — Result: PASS/FAIL. *(This is the exact
-  capability DNS-01 needs; proving it here means a later challenge failure is
-  not a credential problem.)*
-- **EG71.** The token is **refused** when used against a zone or operation
-  outside its scope — Method: attempt a record write in a different zone and an
-  account-level read; both must be denied — Result: PASS/FAIL. *(CLAUDE.md §8:
-  security tests must attempt the bypass, not just the happy path.)*
-- **EG72.** The apex `veridexeai.com` is unchanged — Method: capture its full
-  record set before and after Phase 1 and diff them; the existing site and any
-  MX records must still resolve identically — Result: PASS/FAIL.
-
-**Rollback** Remove the delegation records at Squarespace (the subdomain stops
-resolving; nothing else is affected), revoke the API token at the provider, and
-delete the in-cluster Secret. The apex was never modified, so there is no
-data-loss surface and no path by which rollback can damage the existing website
-or email. D63–D67 are documentation and evidence; reverting them is a Git revert.
-
----
-
-## 3. Phase 2 — cert-manager platform install
-
-**Objective** cert-manager runs in the cluster, pinned and GitOps-reconciled,
-able to admit `Issuer` and `Certificate` objects.
-
-**Scope**
-
-- *In-Scope:* `cert-manager` namespace; CRDs; controller, webhook, cainjector;
-  Argo CD Application with correct ordering and apply strategy; digest pinning.
-- *Out-of-Scope:* issuing any certificate (Phase 3); `ClusterIssuer`; any change
-  to Traefik.
-
-**Processes Activated**
-
-- *Certificate lifecycle management* — owner: cert-manager in-cluster — drift
-  detection: Argo CD `selfHeal`; expiry alerting arrives in Phase 4 (EG86).
-
-**Deliverables**
-
-- **D68.** `kubernetes/cluster/namespaces/cert-manager.yaml` — the namespace.
-  Required here rather than in the vendored manifest so exactly one Argo CD path
-  owns it (CLAUDE.md §13), and because `scripts/lint-namespaces.py` fails CI on
-  a manifest targeting an undeclared namespace.
-
-  > **Corrected during build (2026-09-16).** This deliverable originally said
-  > the namespace would be created "plain and unlabeled" per the O4 precedent.
-  > That was wrong: the live `monitoring` namespace already carries
-  > `veridex.io/owner` and `veridex.io/purpose` annotations (both **required**
-  > by the namespace lint) plus `veridex.io/wave` and `veridex.io/role` labels.
-  > The namespace follows that actual convention instead. wave/role remain
-  > provisional — Gate 32 holds the authority to confirm or change them.
-- **D69.** `kubernetes/infrastructure/cert-manager/crds.yaml` — vendored from the
-  pinned upstream release, kept in its own file so it can occupy an earlier
-  sync-wave, mirroring the existing `ingress/crds.yaml` house pattern.
-- **D70.** `kubernetes/infrastructure/cert-manager/controller.yaml` — controller,
-  webhook, cainjector, RBAC, Services. All images **digest-pinned**, with the
-  digest verified against the registry at build time and the verification date
-  recorded in a comment, exactly as `ingress/deployment.yaml` documents Traefik.
-  v1.21.2 ships **no** `startupapicheck` Job, so there is none to remove
-  (this deliverable originally assumed there was).
-- **D71.** `gitops/infrastructure/cert-manager.yaml` — the Argo CD Application.
-
-  > **Corrected during build (2026-09-16).** Originally written as a file inside
-  > a `cert-manager/` subdirectory, "replacing the `.gitkeep` placeholder". On
-  > `main` there is no such directory and no placeholder — every Application
-  > under `gitops/infrastructure/` is a **flat file**. The subdirectory layout
-  > exists only on the unmerged `fix/monitoring-data-ownership` branch. Built to
-  > match `main`.
-- **D72.** PR/commit text carrying the written justification CLAUDE.md §13
-  requires for cluster-scoped resources (CRDs, ClusterRole, webhook
-  configurations).
-
-**Technical Detail**
-
-- **Version: v1.21.2**, resolved at build time (2026-09-16) and no longer
-  `UNKNOWN`. Chosen over the v1.20.4 patch published the same week because
-  v1.20.4's own notes state three `golang.org/x/crypto` findings remain unfixed
-  in the 1.20 line and direct users to 1.21 for a clean scan. 1.21.2 also carries
-  ACME fixes in this cluster's exact path: a renewal-window bug on 29 February
-  cron schedules, ACME response bodies capped against unbounded-body DoS, and
-  ACME response content no longer copied into Issuer status or Events. Upstream
-  manifest sha256 `e03b668e…79f`, recorded in the vendored files' headers.
-- **`ServerSideApply=true` is mandatory.** cert-manager's CRDs exceed the
-  262 144-byte limit on the `last-applied-configuration` annotation, so a
-  client-side apply fails outright:
-  ```yaml
-  syncPolicy:
-    syncOptions: [ServerSideApply=true]
-    automated: {prune: true, selfHeal: true}
-    retry: {limit: 5, backoff: {duration: 15s, factor: 2, maxDuration: 3m}}
-  ```
-  `retry` matters because `Issuer`/`Certificate` objects are rejected until the
-  webhook is serving; retry converges instead of failing the sync.
-- **Sync ordering.** The Application carries `sync-wave: "2"`. *Within* the
-  Application, CRD-before-controller ordering relies on Argo CD's built-in kind
-  ordering rather than per-resource `sync-wave` annotations — annotating the six
-  vendored CRDs would mean hand-editing ~1 MB of upstream content that is marked
-  DO-NOT-HAND-EDIT, and would have to be redone at every version bump. The
-  `retry` block is what makes this safe: if the controller is applied before its
-  CRDs are established, the sync retries and converges.
-- **`Issuer`, not `ClusterIssuer`.** CLAUDE.md §13 prefers namespace-scoped
-  resources and requires written justification for cluster-scoped ones. A
-  namespace-scoped `Issuer` in `monitoring` is sufficient for the first
-  certificate; promotion is deferred to the moment a second namespace needs one.
-  Note the consequence: the DNS token Secret must exist in each namespace that
-  holds an `Issuer`, which is a real cost of the namespace-scoped choice and is
-  accepted deliberately.
-
-**Exit Gate**
-
-- **EG73.** All cert-manager pods Ready and the webhook serving — Method:
-  `kubectl get pods -n cert-manager` plus a webhook admission probe — Result:
-  PASS/FAIL.
-- **EG74.** Argo CD reports the cert-manager Application `Synced`/`Healthy` at
-  the merge commit — Method: read `.status.sync.revision`, `.status.sync.status`
-  and `.status.health.status`, confirming the revision equals the merge commit —
-  Result: PASS/FAIL.
-- **EG75.** Every cert-manager image runs by **digest**, not tag — Method:
-  inspect the running pod specs — Result: PASS/FAIL.
-- **EG76.** CI passes: `lint-namespaces.py`, `lint-secret-register.py`,
-  `lint-provider-drift.py`, YAML lint — Method: the PR's CI run, with
-  provider-drift compared error-for-error against its count on `main` at the same
-  commit rather than against zero (see §8 R3) — Result: PASS/FAIL.
-- **EG77.** Deleting a cert-manager pod results in automatic recovery to Ready
-  with no manual action — Method: delete the controller pod and observe —
-  Result: PASS/FAIL. *(Named explicitly by `sequential-service-build-plan.md:81`:
-  "verify controller recovery".)*
-
-**Rollback** Revert D71 (Argo CD prunes controller, webhook, cainjector) then
-D68–D70. **Delete CRDs last and deliberately:** removing a CRD removes every
-`Certificate` object of that type.
-
-Executed in order — rolling Phase 2 back before Phase 3 has run — there is no
-data-loss surface, because no certificate exists yet. The CRD warning concerns
-the one genuinely dangerous case: rolling Phase 2 back **after** Phase 3 has
-issued. In that case complete Phase 3's rollback first, and back up every
-`kubernetes.io/tls` Secret to the operator workstation before starting, because
-losing a certificate and re-issuing consumes Let's Encrypt rate limit.
-
----
-
-## 4. Phase 3 — First Let's Encrypt certificate, staging then production
-
-**Objective** `grafana.k8s.veridexeai.com` serves a publicly-trusted Let's
-Encrypt certificate, issued by DNS-01, with no browser warning.
-
-**Scope**
-
-- *In-Scope:* ACME `Issuer` against Let's Encrypt **staging** first, then
-  production, both with a DNS-01 solver using the Phase 1 token; a `Certificate`
-  for the one hostname; the Grafana route updated to serve it.
-- *Out-of-Scope:* wildcard certificates (§1.2); certificates for Argo CD or any
-  other service; retiring NodePort 32538; portless URLs.
-
-**Processes Activated**
-
-- *ACME DNS-01 issuance and renewal* — owner: cert-manager — drift detection:
-  Phase 4's renewal proof (EG85), expiry alert (EG86) and zone drift check
-  (EG88).
-
-**Deliverables**
-
-- **D73.** `kubernetes/infrastructure/monitoring/acme-issuer-staging.yaml` — ACME
-  `Issuer`, Let's Encrypt **staging** endpoint, DNS-01 solver referencing the
-  Phase 1 token Secret by name.
-- **D74.** `kubernetes/infrastructure/monitoring/acme-issuer-prod.yaml` — the
-  same against the production endpoint.
-- **D75.** `kubernetes/infrastructure/monitoring/grafana-certificate.yaml` — a
-  `Certificate` for `grafana.k8s.veridexeai.com`, `secretName: grafana-tls`, in
-  `monitoring`.
-- **D76.** `kubernetes/infrastructure/monitoring/grafana-ingressroute.yaml` —
-  the existing route gains `Host(...)` matching and
-  `tls.secretName: grafana-tls`, replacing Traefik's default self-signed
-  certificate. It stays on the existing `grafana-https` entrypoint and NodePort
-  32538; no Traefik Deployment change is required anywhere in this plan.
-- **D77.** `docs/evidence/gap-closure/tls-public/phase3/` — staging order
-  transcript, production order transcript, the issued chain, and the
-  external verification output.
-- **D78.** The Let's Encrypt rate limits as published **on the build date**,
-  recorded verbatim, so a later reader knows which limits the plan was executed
-  under rather than inferring from a stale figure.
-
-**Technical Detail**
-
-- **Staging first is mandatory.** Production enforces rate limits
-  (`DOCUMENTED`); the ones a debugging loop hits are the duplicate-certificate
-  and failed-validation limits. Exact thresholds are deliberately not quoted in
-  this plan — they change, and a stale number invites a wrong decision. Read them
-  at build time and record them in D78. Production issuance happens only after
-  the identical configuration has succeeded against staging.
-- **Certificate and route must share a namespace.** A Traefik `IngressRoute`'s
-  `tls.secretName` resolves in its own namespace, so the `Certificate` is created
-  in `monitoring`, not `cert-manager`.
-- **Single hostname, not wildcard** — see §1.2. Wildcard is available under
-  DNS-01 and should be adopted when several hostnames genuinely share one
-  namespace, at which point the duplicate-certificate limit and the blast radius
-  of one private key covering every subdomain both need weighing.
-- **If EG79 fails, check propagation before retrying.** The usual DNS-01 failure
-  is not a bad credential but the challenge TXT record not yet visible to Let's
-  Encrypt's resolvers. cert-manager self-checks propagation before asking for
-  validation; repeated blind retries burn failed-validation quota. Confirm the
-  TXT record is externally visible first — EG70 already proved the token can
-  write it.
-- **No change to the Argo CD path.** Argo CD keeps its `HostSNI(*)` TLS
-  passthrough on 32537 throughout. This plan does not touch it, and EG84 proves
-  it.
-
-**Exit Gate**
-
-- **EG78.** The DNS-01 solver completes a challenge against **staging** —
-  Method: observe the `Challenge` object reach valid and the TXT record appear
-  and be cleaned up afterwards — Result: PASS/FAIL.
-- **EG79.** A certificate issues successfully against **staging** — Method: apply
-  the Certificate against the staging Issuer and observe `Ready=True` with Order
-  and Challenge both succeeding — Result: PASS/FAIL.
-- **EG80.** A certificate issues against **production**, and
-  `https://grafana.k8s.veridexeai.com:32538/` presents a chain that validates
-  against the system trust store — Method: `curl` **without** `-k`, plus one real
-  browser load — Result: PASS/FAIL.
-- **EG81.** The served certificate's issuer is Let's Encrypt and its SAN list is
-  exactly the one hostname — Method: inspect the served chain's issuer and SAN
-  list from outside the cluster; no extra names — Result: PASS/FAIL.
-- **EG82.** **Adversarial:** a `Certificate` for a hostname outside the delegated
-  zone fails to issue and produces no usable Secret — Method: request one against
-  **staging**, observe failure, delete it — Result: PASS/FAIL.
-- **EG83.** **Adversarial:** the challenge TXT record is removed after
-  validation, leaving no stale `_acme-challenge` record behind — Method: query
-  the zone after issuance — Result: PASS/FAIL. *(A solver that leaks records
-  accumulates them until the zone is unmanageable and leaks which hostnames
-  exist.)*
-- **EG84.** Argo CD on 32537 and Grafana's pre-existing behaviour are both
-  unaffected — Method: probe both and compare against the responses recorded
-  before the phase — Result: PASS/FAIL.
-
-**Rollback** Revert D76 — Traefik falls back to its default self-signed
-certificate on the same entrypoint and port, which is exactly the pre-plan state
-and is regenerated automatically — then D73–D75. Back up the `grafana-tls` Secret
-**before** the revert: cert-manager's `--enable-certificate-owner-ref` default
-must be confirmed at build time (`UNKNOWN` here), and if it is enabled, Argo CD
-pruning the `Certificate` takes the live certificate with it. The DNS records are
-left in place; they are harmless and removing them only lengthens the next
-attempt.
-
----
-
-## 5. Phase 4 — Renewal, observability, and drift control
-
-**Objective** The certificate demonstrably renews without human action, its
-expiry and the zone it depends on are both monitored, and the plan's record is
-closed.
-
-**Scope**
-
-- *In-Scope:* forced-renewal proof; cert-manager metrics and expiry alerting;
-  a zone drift check; recording the out-of-gate drift already introduced by
-  PRs #51/#52; the closure record.
-- *Out-of-Scope:* portless URLs (§9 R4); Gate 30 egress policy for cert-manager
-  (recorded as a forward dependency, not built here).
-
-**Processes Activated**
-
-- *Certificate expiry alerting* — owner: VictoriaMetrics/vmalert + Alertmanager —
-  drift detection: alert on approaching expiry or on renewal failure.
-- *Delegated-zone drift detection* — owner: a scheduled check — drift detection:
-  fails if the delegation or the `A` records stop matching what D63/D64 declare.
-
-**Deliverables**
-
-- **D79.** `kubernetes/infrastructure/monitoring/` — vmagent scrape config for
-  cert-manager metrics plus vmalert rules for approaching expiry and for
-  `certmanager_certificate_ready_status == 0`. Closes the known-partial D06 row
-  in the observability catalogue.
-- **D80.** `docs/architecture/observability-catalogue.md` — D06 updated from
-  **Partial** to what now exists.
-- **D81.** A scheduled check asserting the delegation still points at the
-  provider and `grafana.<zone>` still resolves to the five expected IPs, with
-  failures surfaced the same way other checks are.
-- **D82.** `docs/evidence/gap-closure/tls-public/prior-drift.md` — a dated record
-  that PRs #51/#52 changed Traefik and the host firewall **after** Gate 11
-  closed, outside any gate's evidence chain, including that the first Ansible run
-  of 2026-09-16 applied an unchanged ruleset (a no-op) because it ran against a
-  working tree lacking the merged change. Raises, without deciding, whether
-  Gate 11 warrants a reopen-log entry (§8 R5).
-- **D83.** `docs/evidence/gap-closure/tls-public/closure.md` — written **last**:
-  what was built, every EG with its method and result, residual risks, and the
-  plan commit plus repo commit tested.
-
-**Technical Detail**
-
-- **Renewal cannot be proven by waiting.** cert-manager renews at ~2/3 of a
-  90-day lifetime. Renewal is proven by forcing one against the **staging**
-  issuer and observing a new `notAfter` and a new Secret revision, leaving the
-  production rate limit untouched.
-- **Forward dependency, not built here:** when the P0–P6 NetworkPolicy promotion
-  reaches these namespaces (Gate 30), cert-manager will need explicit egress to
-  the ACME endpoints **and to the DNS provider's API**. DNS-01 adds the second of
-  those; recorded now so it is not discovered as an outage later.
-
-**Exit Gate**
-
-- **EG85.** A forced renewal against staging produces a new certificate with a
-  later `notAfter` and no manual intervention — Method: trigger reissue, then
-  compare `notAfter` and the Secret's resource version before and after —
-  Result: PASS/FAIL.
-- **EG86.** The expiry alert rule loads in vmalert and fires against a
-  deliberately-near-expiry condition — Method: evaluate the rule against a
-  synthetic series — Result: PASS/FAIL.
-- **EG87.** No secret value entered Git: `lint-secret-register.py` passes and no
-  `kind: Secret` manifest was added — Method: CI plus a diff review of every
-  commit in the plan — Result: PASS/FAIL.
-- **EG88.** The zone drift check fails against a deliberately wrong expectation
-  and passes against the real records — Method: run it twice, once with a
-  corrupted expected-IP list (must FAIL) and once as shipped (must PASS) —
-  Result: PASS/FAIL. *(A check never seen to fail is not known to work.)*
-- **EG89.** **IIR proof:** a full re-run — `prepare-hosts.yml`, plus an Argo CD
-  hard-refresh and re-sync of `traefik`, `monitoring` and `cert-manager` —
-  produces `changed=0` on Ansible, `Synced` with no diff on all three
-  Applications, and **no certificate re-issuance** — Method: compare the
-  certificate's `notAfter` and Secret resource version before and after; both
-  unchanged — Result: PASS/FAIL. *(A re-sync that recreates the `Certificate` and
-  triggers a new ACME order would be both non-idempotent and a rate-limit
-  consumer.)*
-
-**Rollback** D79–D81 and D82–D83 are additive rules and documentation; revert is
-a Git revert with no cluster data-loss surface.
-
----
-
-## 6. Cumulative deliverable and exit-gate index
-
-| Phase | Deliverables | Exit gates |
+| Route 53 public hosted zone `k8s.veridexeai.com` exists; NS delegation set at Squarespace | Resolves from both 1.1.1.1 and 8.8.8.8; AWS nameservers answer authoritatively | `VERIFIED` |
+| Apex `veridexeai.com` untouched — 4 Squarespace A records, `www` CNAME, SPF, DMARC all intact | Queried live 2026-09-17 | `VERIFIED` |
+| No MX records; SPF is `v=spf1 -all` — **email is not used on this domain** | Queried live; confirmed by the owner | `VERIFIED` |
+| cert-manager v1.21.2, digest-pinned, GitOps-reconciled, webhook serving | EG73–EG77 all PASS | `VERIFIED` |
+| cert-manager issues end-to-end | A self-signed `Certificate` reached `Ready=True` with a real `notAfter`, then was deleted | `VERIFIED` |
+| `--enable-certificate-owner-ref` unset → default `false`; deleting a Certificate does **not** delete its Secret | Confirmed live — the probe Secret survived and needed explicit deletion | `VERIFIED` |
+| cert-manager scraped; 4 certificate alerts loaded in vmalert, no rule errors | Live query of vmagent/vmalert | `VERIFIED` |
+| **Cilium serves `hostPort`** — `HostPort: Enabled` | Agent status, plus a real pod that bound host :80 and served traffic | `VERIFIED` |
+| **`NET_BIND_SERVICE` is NOT required** for hostPort 80/443 | Test pod ran `runAsNonRoot: true`, `capabilities: drop [ALL]`, containerPort 8080, hostPort 80 — served fine | `VERIFIED` |
+| Nodes have public IPv6 (`2a0a:4cc0:…` on eth0) | Cilium agent status | `VERIFIED` |
+| No website exists on this cluster | No `apps/` content on main; no application workloads running | `VERIFIED` |
+| The marketing site source is `old-site/frontend` — "EntrepEAI", 11 deps, prebuilt `dist/`, Dockerfiles | Local inspection | `VERIFIED` |
+| The application frontend (`dip-frontend`, 7 bundles, own SDK) needs the data plane — Gates 12–16, none built | Local inspection + cluster state | `VERIFIED` |
+
+### 1.2 Security layer state
+
+Closes the bypass found on 2026-09-17
+(`docs/security/nodeport-bypasses-host-firewall.md`).
+
+| Layer | State | What it does / doesn't |
 |---|---|---|
-| 1 — Delegated DNS zone | D63–D67 | EG68–EG72 |
-| 2 — cert-manager install | D68–D72 | EG73–EG77 |
-| 3 — First certificate | D73–D78 | EG78–EG84 |
-| 4 — Renewal, observability, drift | D79–D83 | EG85–EG89 |
+| **Admission policy** (D85) | **Live, enforcing** | Denies `hostPort` and Service `NodePort`/`LoadBalancer` outside `kube-system`. **Preventive only** — stops new exposure being created; does not filter traffic to anything already exposed. |
+| **Cilium host firewall — capability** (D87) | **Enabled, inert** | `Host firewall: Enabled [eth0, eth1]` in the running agent. Filters **nothing**: the host endpoint stays default-allow until a `CiliumClusterwideNetworkPolicy` selects it, and none exists. |
+| **Cilium host firewall — policy** | **Pending** (Stages D–E) | The actual network control. Not written. |
+| nftables (`roles/firewall`) | Live, but **does not gate Kubernetes service traffic** | Still genuinely enforces for SSH and host-bound listeners. Its comments now say so at the point the false claim was made. |
 
-**Totals:** D63–D83 (21 deliverables), EG68–EG89 (22 exit gates).
+**The residual gap, stated plainly:** every NodePort in this cluster remains
+reachable from the public internet on every node, regardless of the nftables
+allowlist. Admission control stops new exposure; it cannot retract existing
+exposure. Stages D–E close that.
 
----
+### 1.3 Corrections carried forward
 
-## 7. Preconditions before Phase 1 may start
+Recorded rather than quietly dropped, because the reasoning matters more than
+the outcome:
 
-- **P1.** Cluster API access restored from the operator workstation (currently
-  down — the kubeconfig targets `127.0.0.1:16443` with no tunnel running). Every
-  exit gate from Phase 2 onward requires it.
-- **P2.** Every `UNKNOWN` row in §1 resolved by observation, not inference —
-  in particular whether Squarespace permits `NS` records on a subdomain (which
-  decides G1 vs G2), and what the apex currently serves (which bounds EG72).
-- **P3.** Decisions R1–R3 in §8 answered.
-
----
-
-## 8. Decisions required from the repository owner
-
-- **R1 — Deliverable numbering.** Confirm this plan consumes D63–D83 /
-  EG68–EG89 (Gate 12 then begins at D84/EG90), or direct that gap-closure work
-  use a separate namespace of identifiers. Related: the pre-existing D1–D10
-  collision noted in §0 needs a ruling either way.
-- **R2 — DNS provider and zone name.** Which API-capable provider hosts the
-  delegated zone, and is `k8s.veridexeai.com` the name you want? Cheap now,
-  expensive after certificates and records exist.
-- **R3 — CI baseline.** `lint-provider-drift.py` currently fails on `main` with
-  36 pre-existing errors, all in `gitops/policies/README.md` and unrelated to
-  this plan. EG76 is written against that baseline. Confirm that is acceptable,
-  or that the baseline is fixed first.
-- **R4 — Portless URLs.** This plan accepts `:32538` in the URL. Removing it
-  needs low-port ingress (a Traefik `DaemonSet` with `hostPort`, or a DNAT
-  mechanism of unproven compatibility with Cilium here) and should be its own
-  plan with its own spike. Confirm that deferral.
-- **R5 — Gate 11 drift.** PRs #51/#52 modified Traefik and the host firewall
-  after Gate 11 closed. Reopen-log entry, or is recording it as gap-closure
-  drift (D82) sufficient?
-
----
-
-## 9. Residual risks
-
-1. **A new third-party dependency in the certificate path.** Certificate renewal
-   now depends on the DNS provider's API being reachable and the token still
-   valid, in addition to Let's Encrypt. Two external dependencies, not one.
-   Expiry alerting (D79) is what makes either failure visible before it becomes
-   an outage.
-2. **The DNS token is a standing credential.** It can edit records in the
-   delegated zone for as long as it exists. It is scoped to one zone (EG71 proves
-   the scoping), but it does not expire unless the provider supports expiry, and
-   there is no rotation process in this plan. Rotation belongs with the wider
-   secrets decision behind Gate 22.
-3. **This re-entangles the work with the open secrets decision.** Revision 1
-   needed no credential; this revision does. The out-of-band pattern keeps it out
-   of Git, but it is a step backwards on that axis and was chosen knowingly.
-4. **Public exposure is unchanged but now discoverable.** Grafana moves from an
-   obscure IP:port to a memorable hostname while keeping anonymous Viewer access.
-   Two mitigations exist and neither is taken here: set
-   `GF_AUTH_ANONYMOUS_ENABLED=false` so the hostname requires login, or accept
-   it. The cheap moment to decide is before the hostname is shared, not after.
-5. **Argo CD remains on a port with a catch-all route.** Giving it
-   `argocd.k8s.veridexeai.com` later means either moving it off TLS passthrough
-   onto Traefik-terminated TLS, or SNI-routing 443 between two TCP backends — and
-   its `HostSNI(*)` catch-all makes the second impossible until that route is
-   scoped to a hostname, which its own file already flags as owed work.
-6. **A from-scratch rebuild re-issues certificates** and can hit the
-   duplicate-certificate limit if rehearsed repeatedly in one week. Any rebuild
-   drill must point at the **staging** issuer. This belongs in the backup/DR
-   runbook when it is written (CLAUDE.md §2 records it as not yet written).
+1. **"Open port 80 the same way I opened 32538."** Wrong — 32538 is a NodePort,
+   80 is below the NodePort range. This forced Revision 1's large Phase 1 and
+   ultimately Revision 2.
+2. **"Wildcards mean one certificate for everything."** Overstated. Kubernetes
+   Secrets are namespaced, so a hostname in another namespace needs its own
+   `Certificate` and Secret regardless, and issuing the same wildcard in several
+   namespaces creates duplicate certificates against a rate limit.
+3. **The namespace would be "plain and unlabeled".** Wrong — the namespace lint
+   *requires* `veridex.io/owner` and `veridex.io/purpose`, and `monitoring` sets
+   the wave/role precedent.
+4. **"Remove the upstream `startupapicheck` Job."** v1.21.2 ships none.
+5. **The Argo CD Application would live in a `cert-manager/` subdirectory.** On
+   `main`, Applications under `gitops/infrastructure/` are flat files.
+6. **The Ansible run that "opened 32538 so Grafana could be reached" was a
+   no-op.** Grafana was already reachable. The change is retained — it documents
+   intent and becomes load-bearing once the bypass is closed — but its commit
+   message overstated what it achieved.
+7. **The Cilium role checked `cilium-config` instead of the running agent, and
+   never actually rolled the DaemonSet.** `cilium upgrade --set
+   hostFirewall.enabled=true` rewrites the ConfigMap but leaves the pod template
+   untouched, so nothing rolls and the agents keep running with the feature
+   **disabled**. The first authorised run left config and runtime diverged —
+   one unrelated pod restart away from silently activating a security feature at
+   an unpredictable moment. **The role now restarts the DaemonSet explicitly and
+   asserts the running agent's own status, not the ConfigMap.** Any future
+   Cilium feature flag must be verified the same way: *runtime, not config.*
 
 ---
 
-## 10. Immutability, idempotence, repeatability (IIR)
+## 2. Execution sequence
 
-CLAUDE.md §4 requires permanent changes to be declarative, version-controlled,
-reproducible and reversible. Stated per class, because "it's in Git" and "a
-rebuild reproduces it" are different claims:
+Stage A is done. The ordering constraint that governs everything after it:
+**the fallback cannot be dropped before the replacement works.** The cluster has
+no website today, so pointing the apex at netcup now would take the live site
+dark.
 
-| Class | Deliverables | Immutable | Idempotent | Repeatable on a rebuild |
-|---|---|---|---|---|
-| Delegation records at Squarespace | D63 (documents them) | No — a web panel | No | **No — manual, but set once and static** |
-| Records inside the delegated zone | D64 | Yes — API-managed | Yes — re-applying converges | Yes |
-| DNS API token | D65, D66 | Value never in Git; name registered | Re-applying the Secret converges | Manual re-issue at the provider |
-| cert-manager platform | D68–D72 | Yes — images digest-pinned (EG75), CRDs vendored at a fixed release | Yes — Argo CD sync converges; `retry` absorbs webhook-not-ready | Yes |
-| Issuers and Certificate | D73–D75 | Yes — declarative objects | Yes — EG89 requires a re-sync to cause **no** re-issuance | Partly — a rebuild re-issues (§9.6) |
-| Grafana route | D76 | Yes | Yes — Argo CD `selfHeal` | Yes |
-| Observability rules, drift check | D79–D81 | Yes | Yes | Yes |
-| Documentation and evidence | D63, D67, D77, D78, D82, D83 | Yes — append-only, repo evidence style | N/A | Yes |
+| Stage | What | State |
+|---|---|---|
+| **A** | Delegated DNS zone under API control | **Done** (zone + delegation). Credential outstanding. |
+| **B** | Website ported, rebranded, containerised, deployed | **Next** |
+| **C** | Traefik ingress on hostPort **80/443** | After B |
+| **D** | Cilium host policy in **audit mode** | After C — needs the final port shape |
+| **E** | Host policy switched to **enforce** | After D observes clean |
+| **F** | Apex certificate, DNS cutover, Squarespace retired | After C and E |
 
-**Where this plan is still not fully repeatable, stated plainly:**
+**Why D and E come after C:** the host policy must permit whatever Traefik ends
+up binding. Writing it before the ingress shape is settled means writing it
+twice. **Why E is separate from D:** audit mode logs what *would* be dropped
+without dropping it, and that observation window is the only thing standing
+between a wrong rule and a five-node lockout.
 
-1. **The delegation itself is manual** — `NS` (or `CNAME`) records set by hand at
-   Squarespace, because Squarespace has no API. This is a **one-time, static**
-   step, unlike Revision 1 where *every* record was manual and every new hostname
-   meant another human edit. Everything beneath the delegation is API-managed.
-   That is the single largest IIR improvement of this revision.
-2. **A rebuild re-issues certificates** (§9.6) — correct behaviour, but
-   rate-limited, so rehearsals use staging.
+---
 
-**No hand-run command is load-bearing.** Every change lands through Ansible or
-Argo CD. `kubectl` is used only to *observe*, to *deliver the DNS token
-out-of-band*, and to *back up a Secret before a destructive rollback* — never as
-the means of applying a permanent change (CLAUDE.md §15).
+## 3. Already built (D63–D87)
+
+Recorded here so the closure record (D83) has a single source.
+
+**Stage A — delegated DNS (D63–D64).** Route 53 public hosted zone
+`k8s.veridexeai.com`; four `NS` records at Squarespace. Verified from two
+independent public resolvers; apex diffed before and after and unchanged.
+*Outstanding:* D65 (scoped API token), D66 (secret-register entry), D67
+(evidence file).
+
+**cert-manager platform (D68–D72, EG73–EG77 all PASS).** v1.21.2, all four
+images digest-pinned, CRDs split for sync ordering, `ServerSideApply=true`
+(mandatory — the CRDs exceed the 262 144-byte annotation limit). Webhook proven
+*serving* by rejecting an invalid Issuer and accepting a valid one.
+
+**Observability (D79–D80).** cert-manager scraped; `certificates` alert group
+live. `certmanager_certificate_ready_status` emits one series **per condition
+value**, so the obvious `== 0` expression would have fired permanently for every
+healthy certificate; `{condition="True"} == 0` is load-bearing.
+
+**Security (D84–D87).** AppProject allowlist extended twice (webhook
+configurations for cert-manager; admission policy kinds), the host-exposure
+admission policies, and the Cilium host firewall capability. See §1.2.
+
+---
+
+## 4. Stage B — Website ported, rebranded and deployed
+
+**Objective** A Veridex-branded marketing site runs on this cluster, reachable
+in-cluster, built reproducibly from source held in this repository.
+
+**Scope**
+
+- *In-Scope:* port `old-site/frontend` into `apps/`; rebrand EntrepEAI → Veridex
+  in user-visible content; a pinned container image; Deployment + ClusterIP
+  Service + Argo CD Application; namespace declaration.
+- *Out-of-Scope:* the `dip-frontend` application (blocked behind Gates 12–16);
+  any public exposure (Stage C); any certificate (Stage F); CMS or backend.
+
+**Processes Activated**
+
+- *Site build and release* — owner: container build pipeline + Argo CD — drift
+  detection: Argo CD `selfHeal`; image pinned by digest.
+
+**Deliverables**
+
+- **D88.** `apps/site/` — the ported source. **Copied, not moved:** the source
+  repository it comes from is read-only reference under the repository owner's
+  scope rule, never a change target.
+- **D89.** Rebrand: every user-visible occurrence of the old brand name becomes
+  Veridex, and the old brand's hostname is removed. Not cosmetic —
+  `lint-provider-drift.py` **errors** on that hostname, so an unrebranded port
+  fails CI by design. (This plan deliberately avoids spelling either string, for
+  exactly the same reason.)
+- **D90.** A pinned container image, built reproducibly, digest recorded in the
+  manifest exactly as Traefik and cert-manager are.
+- **D91.** `kubernetes/cluster/namespaces/site.yaml` — namespace with the
+  `veridex.io/owner` and `veridex.io/purpose` annotations the lint requires.
+- **D92.** `kubernetes/applications/site/` + `gitops/applications/site.yaml` —
+  Deployment, **ClusterIP** Service (never NodePort — the admission policy
+  denies it), and the Argo CD Application.
+
+**Technical Detail**
+
+- The image must be digest-pinned. A `:latest` tag would make the deployment
+  non-reproducible and is the exact failure mode the repo pins against.
+- Service is **ClusterIP**. The admission policy (D85) denies NodePort outside
+  `kube-system`, and it is correct to do so — the site reaches the internet
+  through Traefik, not by publishing its own port.
+- Pod security: `runAsNonRoot`, `readOnlyRootFilesystem`, `drop: [ALL]`,
+  matching the Traefik and Grafana manifests. A static-content server needs
+  nothing more.
+
+**Exit Gate**
+
+- **EG90.** The site pod is Ready and serves HTTP 200 from a ClusterIP probe —
+  Method: `curl` from an in-cluster pod — Result: PASS/FAIL.
+- **EG91.** The image runs by **digest**, not tag — Method: inspect the running
+  pod spec — Result: PASS/FAIL.
+- **EG92.** CI passes, including `lint-provider-drift.py` against its
+  pre-existing baseline — Method: the PR's CI run, compared error-for-error with
+  `main` rather than against zero — Result: PASS/FAIL.
+- **EG93.** **Adversarial:** no old-brand hostname and no reference to the old
+  cluster survives in the ported tree — Method: run `lint-provider-drift.py`
+  over the tree and require zero new errors versus the `main` baseline —
+  Result: PASS/FAIL.
+- **EG94.** **Adversarial:** a Service of type NodePort in the site's namespace
+  is **denied** by admission — Method: server dry-run — Result: PASS/FAIL.
+  *(Proves D85 actually protects the new namespace.)*
+
+**Rollback** Revert D92 (Argo CD prunes the workload), then D88–D91. Nothing is
+public at this stage and no data is stored, so there is no data-loss surface and
+no user-visible effect — the Squarespace site is still serving the domain.
+
+---
+
+## 5. Stage C — Ingress on ports 80 and 443
+
+**Objective** Traefik answers on **80 and 443** on all five node public IPs, so
+the cluster can serve a website at a normal URL.
+
+**Scope**
+
+- *In-Scope:* Traefik `Deployment` → `DaemonSet` with `hostPort` 80 and 443; a
+  TLS-terminating entrypoint; an HTTP entrypoint; routing the site.
+- *Out-of-Scope:* the certificate itself (Stage F — until then 443 serves
+  Traefik's self-signed default); retiring 32537/32538; the host policy
+  (Stages D–E).
+
+**Processes Activated**
+
+- *Low-port ingress publication* — owner: GitOps `kubernetes/infrastructure/ingress`
+  — drift detection: Argo CD `selfHeal`; Stage D/E policy once written.
+
+**Deliverables**
+
+- **D93.** `kubernetes/infrastructure/ingress/deployment.yaml` — Traefik as a
+  `DaemonSet` with `hostPort: 80` and `hostPort: 443`, plus the two new
+  entrypoints.
+- **D94.** `kubernetes/infrastructure/ingress/service.yaml` — updated for the
+  DaemonSet; 32537 and 32538 retained unchanged throughout this stage.
+- **D95.** The site's `IngressRoute` on the new TLS entrypoint.
+- **D96.** `docs/architecture/low-port-ingress-decision.md` — the spike result
+  and the chosen mechanism, written from the real output already captured.
+- **D97.** `docs/evidence/gap-closure/tls-public/stage-c/` — per-node
+  reachability for all five IPs, before and after.
+
+**Technical Detail**
+
+- **Mechanism: M2, hostPort — decided by spike, not assumption** (§1.1). Cilium
+  reports `HostPort: Enabled` and a real pod bound host :80 and served traffic.
+  The nftables-DNAT alternative (M1) is moot and the k3s NodePort-range widening
+  (M3) stays rejected — it would let any Service claim 80/443 cluster-wide.
+- **No `NET_BIND_SERVICE`.** Verified: the container binds 8080 internally and
+  the datapath maps host :80. No privileged bind happens inside the container,
+  so `drop: [ALL]` and `runAsNonRoot: true` are kept.
+- **Port names are capped at 15 characters** (IANA_SVC_NAME). This already broke
+  a change in this repo — `grafana-websecure`, 18 characters, PR #52. Check
+  every new entrypoint name against 15 **before** committing.
+- **The `kind` change needs a cutover, not a push.** `Deployment`→`DaemonSet` is
+  not an in-place update: Argo CD prunes one and creates the other in an order
+  it does not guarantee, so there is a window with **no Traefik at all**, taking
+  Argo CD and Grafana down together. Create the DaemonSet under a different name
+  alongside the running Deployment, confirm it serves on all five nodes, then
+  remove the Deployment.
+- **Traefik must stay in `kube-system`.** It is the namespace the admission
+  policy exempts, and that exemption is deliberate: the ingress controller is
+  the one thing that should publish.
+- **hostPort bypasses nftables.** Opening 80/443 in `roles/firewall` is *not*
+  required for this to work and would be theatre if presented as the control.
+  The control is Stages D–E.
+
+**Exit Gate**
+
+- **EG95.** Port 80 answers on **each of the five** node public IPs — Method:
+  `curl` to all five from outside the cluster; all five must answer — Result:
+  PASS/FAIL.
+- **EG96.** Same for port 443 — Method: TLS connect to all five — Result:
+  PASS/FAIL. *(Reachability only. The certificate is still self-signed until
+  Stage F; a passing EG96 must not be read as "TLS is working".)*
+- **EG97.** Argo CD on 32537 stays reachable **before, during and after** the
+  DaemonSet cutover — Method: HTTPS probe at each of those three points,
+  compared against the pre-stage response — Result: PASS/FAIL.
+- **EG98.** Grafana on 32538 likewise — Method: same three-point probe —
+  Result: PASS/FAIL.
+- **EG99.** The site is served through Traefik on 443 on all five IPs — Method:
+  request with SNI set to the intended hostname; compare responses — Result:
+  PASS/FAIL.
+- **EG100.** **IIR:** re-sync of `traefik` produces no diff and no pod churn —
+  Method: hard-refresh, compare pod UIDs before and after — Result: PASS/FAIL.
+
+**Rollback** Restore the `Deployment` alongside the `DaemonSet`, confirm it
+serves, then remove the DaemonSet — the same cutover order in reverse, never a
+bare `git revert` letting Argo CD sequence a `kind` swap unattended. 32537 and
+32538 are untouched throughout, so Argo CD and Grafana keep working either way.
+
+---
+
+## 6. Stage D — Cilium host policy, audit mode
+
+**Objective** A host policy exists and is **observed** against real traffic
+without dropping anything, so it can be proven correct before it is enforced.
+
+**Scope**
+
+- *In-Scope:* a `CiliumClusterwideNetworkPolicy` selecting the host endpoint;
+  policy audit mode; an observation window; the flow evidence.
+- *Out-of-Scope:* enforcement (Stage E).
+
+**Processes Activated**
+
+- *Host network policy* — owner: Cilium — drift detection: Argo CD `selfHeal`
+  plus the audit log itself during this stage.
+
+**Deliverables**
+
+- **D98.** The candidate `CiliumClusterwideNetworkPolicy`, enumerating every
+  flow the host legitimately needs: **tcp/22 SSH**, tcp/6443 API, tcp/2379–2380
+  etcd, tcp/10250 kubelet, udp/8472 VXLAN, udp/51871 WireGuard, tcp/4240 Cilium
+  health, tcp/80 and tcp/443 (Stage C), 32537/32538 while they remain, plus the
+  vLAN `10.2.0.0/16` trusted in full, and egress for DNS, NTP, ACME, the Route 53
+  API and Backblaze B2.
+- **D99.** The audit-mode procedure and its evidence — what was observed, over
+  how long, under what traffic.
+- **D100.** `docs/evidence/gap-closure/tls-public/stage-d/` — the policy-verdict
+  output showing what *would* have been dropped.
+- **D101.** A written rollback drill result: the policy removed and re-added,
+  proving the escape hatch works **before** it is ever needed.
+
+**Technical Detail**
+
+> ⚠️ **This is the single highest-consequence change in this plan.** Both the
+> operational and the break-glass credentials are SSH keys on the same
+> workstation (`docs/security/emergency-access.md`), and there is no documented
+> console path. A host policy that drops **tcp/22** locks out all five nodes
+> simultaneously, and the only remaining route is reinstalling them.
+
+- **Audit mode first, always.** `cilium endpoint config <host-endpoint-id>
+  PolicyAuditMode=Enabled` logs what would be denied without denying it. The
+  policy is applied **only** with audit already on.
+- **Enable audit on every node before applying the policy**, not after. A policy
+  applied while one node is still enforcing is a lockout on that node.
+- **Observe under real traffic**, including an Ansible run and an Argo CD sync,
+  so node-to-node and control-plane flows are exercised rather than assumed.
+- The host endpoint is currently default-allow with the capability enabled
+  (D87), so this stage changes nothing until the policy is applied — and even
+  then, nothing while audit mode is on.
+
+**Exit Gate**
+
+- **EG101.** Audit mode is confirmed active on **all five** host endpoints
+  before the policy is applied — Method: query each agent — Result: PASS/FAIL.
+- **EG102.** With the policy applied in audit mode, the policy-verdict log shows
+  **zero** would-be drops for SSH, the API, etcd, kubelet, VXLAN, WireGuard and
+  ports 80/443/32537/32538 — Method: observe over a window that includes an
+  Ansible run and an Argo CD sync — Result: PASS/FAIL.
+- **EG103.** Everything still works during audit mode — Method: nodes Ready,
+  every Argo CD Application Synced/Healthy, and all external endpoints
+  answering, checked after the policy is applied — Result: PASS/FAIL.
+- **EG104.** The rollback drill succeeds — Method: delete the policy, confirm
+  the host endpoint returns to default-allow, re-apply it, and confirm the
+  cluster is unaffected throughout — Result: PASS/FAIL.
+
+**Rollback** Delete the `CiliumClusterwideNetworkPolicy`. The host endpoint
+returns to default-allow immediately; policies are dynamic, so no restart is
+involved. Audit mode is itself the safety net for this entire stage — nothing is
+dropped while it is on.
+
+---
+
+## 7. Stage E — Host policy enforcement
+
+**Objective** The host firewall actually filters, closing the bypass, so
+`roles/firewall`'s claim becomes true again.
+
+**Scope**
+
+- *In-Scope:* disabling audit mode, node by node; verification at each step.
+- *Out-of-Scope:* any change to the policy content — if a rule needs changing,
+  go back to Stage D.
+
+**Deliverables**
+
+- **D102.** The enforcement procedure, node by node with a verification gate
+  between each.
+- **D103.** `docs/evidence/gap-closure/tls-public/stage-e/` — proof that an
+  unlisted port is now actually refused, which is the whole point.
+- **D104.** `docs/security/nodeport-bypasses-host-firewall.md` updated: the
+  finding moves from "preventive control only" to closed, with the date.
+
+**Technical Detail**
+
+- **One node at a time, verifying SSH between each.** Enforce on node 1, confirm
+  SSH and the API still work from outside, then node 2. Four nodes remain
+  reachable if node 1 goes wrong — the difference between an incident and a
+  rebuild.
+- **Keep a second SSH session open** to the node being changed for the duration.
+  An already-established connection survives a policy that would block new ones,
+  which turns a lockout into a fixable mistake.
+- The real test is negative: a port that *should* be blocked must now actually
+  be refused. Confirming the good paths still work proves nothing about whether
+  the policy does anything.
+
+**Exit Gate**
+
+- **EG105.** After each node, SSH and the API still work from outside — Method:
+  test per node, before moving to the next — Result: PASS/FAIL.
+- **EG106.** **The bypass is closed:** a NodePort on a port not permitted by the
+  host policy is **refused** from the public internet — Method: repeat the exact
+  probe from the original finding (a NodePort on 31500) and require a timeout
+  where it previously returned 200 — Result: PASS/FAIL.
+- **EG107.** Intended public ports still answer on all five nodes — Method:
+  probe 80, 443, 32537 and 32538 on each of the five public IPs — Result:
+  PASS/FAIL.
+- **EG108.** **IIR:** an Ansible run and an Argo CD re-sync both complete
+  normally with enforcement on — Method: run `prepare-hosts.yml` (expect
+  `changed=0`) and hard-refresh every Application (expect Synced, no diff) —
+  Result: PASS/FAIL.
+
+**Rollback** Re-enable audit mode on the affected node, or delete the policy
+outright. Both take effect immediately without a restart. If SSH is already lost
+on a node, the remaining four still have `kubectl`, and the policy can be
+deleted through the API from any of them — which is why enforcement is staged
+one node at a time.
+
+---
+
+## 8. Stage F — Apex certificate and cutover (outline)
+
+Deferred in detail until Stages B–C land, because its shape depends on them.
+Recorded now so the sequence is not lost:
+
+1. Migrate the **whole** `veridexeai.com` zone to Route 53, records copied
+   exactly, still pointing at Squarespace. Nothing user-visible changes; fully
+   reversible by switching nameservers back. This is what makes DNS-01 possible
+   for the apex — Squarespace has no record API.
+2. Issue a Let's Encrypt certificate for `veridexeai.com` and `www`, **staging
+   first**, using the existing DNS-01 solver.
+3. Flip the apex A records to the five netcup IPs. This is the cutover; rollback
+   is flipping them back.
+4. Retire Squarespace **only after** the cluster has served the site
+   successfully.
+
+Email is not a constraint — no MX records, SPF is `-all` (§1.1).
+
+---
+
+## 9. Cumulative index
+
+| Stage | Deliverables | Exit gates |
+|---|---|---|
+| A — Delegated DNS | D63–D67 (D63–D64 built) | EG68–EG72 |
+| cert-manager platform | D68–D72 **built** | EG73–EG77 **passed** |
+| First certificate | D73–D78 | EG78–EG84 |
+| Observability / drift | D79–D83 (D79–D80 built) | EG85–EG89 |
+| Security | D84–D87 **built** | — |
+| **B — Website** | **D88–D92** | **EG90–EG94** |
+| **C — Ingress 80/443** | **D93–D97** | **EG95–EG100** |
+| **D — Host policy, audit** | **D98–D101** | **EG101–EG104** |
+| **E — Host policy, enforce** | **D102–D104** | **EG105–EG108** |
+
+New in Revision 3: **D88–D104** (17), **EG90–EG108** (19).
+
+---
+
+## 10. Decisions still open
+
+- **R2 (partial).** Provider and zone settled — Route 53, `k8s.veridexeai.com`,
+  delegated and verified. **Outstanding:** the scoped IAM credential (D65), which
+  blocks every certificate.
+- **R3 — CI baseline.** `lint-provider-drift.py` fails on `main` with 36
+  pre-existing errors, unrelated to this plan. Exit gates compare against that
+  baseline rather than zero. Accept, or fix the baseline first?
+- **R5 — Gate 11 drift.** PRs #51/#52 changed Traefik and the firewall after
+  Gate 11 closed. Reopen-log entry, or is the D82 drift record sufficient?
+- **R6 — new.** Grafana currently allows anonymous Viewer access. Once the
+  cluster serves a public website on 443, that becomes considerably more
+  discoverable. Set `GF_AUTH_ANONYMOUS_ENABLED=false`, or accept it? The cheap
+  moment to decide is before Stage C, not after.
+
+R1 and R4 are answered: numbering consumes the ledger sequence; portless URLs
+are no longer deferred — Stage C makes them mandatory.
+
+---
+
+## 11. Residual risks
+
+1. **The bypass is still open until Stage E.** Admission control prevents new
+   exposure; existing NodePorts remain internet-reachable regardless of nftables.
+2. **Stage D/E can lock out every node.** Both credentials are SSH keys, no
+   console path. Audit mode, node-at-a-time enforcement and a held-open SSH
+   session are the mitigations; none of them is a recovery path.
+3. **Two external dependencies in the certificate path** — Let's Encrypt and the
+   Route 53 API. Expiry alerting (D79) is what makes either failure visible
+   before it becomes an outage.
+4. **A standing DNS credential.** Scoped to one zone, but it does not expire and
+   there is no rotation process. Rotation belongs with the wider secrets decision
+   behind Gate 22.
+5. **Stage C changes Traefik's topology** from one replica to one per node —
+   the largest blast radius of any ingress change so far, and it takes Argo CD
+   and Grafana with it if the cutover is done carelessly.
+6. **A rebuild re-issues certificates** and can hit the duplicate-certificate
+   limit if rehearsed repeatedly in one week. Rebuild drills must use staging.
+7. **The site is a marketing page, not the platform.** `dip-frontend` still
+   needs Gates 12–16. Nothing here shortens that.
+
+---
+
+## 12. Immutability, idempotence, repeatability
+
+| Class | Immutable | Idempotent | Repeatable on a rebuild |
+|---|---|---|---|
+| Delegation records at Squarespace | No — a web panel | No | **No — manual, but set once and static** |
+| Records inside the delegated zone | Yes — API-managed | Yes | Yes |
+| DNS API token | Value never in Git | Re-apply converges | Manual re-issue |
+| cert-manager platform | Yes — digest-pinned | Yes — Argo CD converges | Yes |
+| Site image and manifests | Yes — digest-pinned | Yes | Yes |
+| Traefik topology | Yes | Yes — but `kind` changes need the cutover, not a blind re-apply | Yes |
+| Cilium host firewall flag | Yes — in the role | Yes — **now keyed off runtime, not config** (§1.3.7) | Yes |
+| Host policy | Yes — declarative | Yes — dynamic, no restart | Yes |
+| Admission policies | Yes | Yes | Yes |
+
+**Not fully repeatable, stated plainly:** the Squarespace delegation is manual —
+a one-time static step, unlike Revision 1 where every record was manual. A
+rebuild re-issues certificates, which is correct but rate-limited, so rehearsals
+use staging.
+
+**No hand-run command is load-bearing.** Everything lands through Ansible or
+Argo CD. `kubectl` is used only to observe, to deliver the DNS token
+out-of-band, and to back up a Secret before a destructive rollback.

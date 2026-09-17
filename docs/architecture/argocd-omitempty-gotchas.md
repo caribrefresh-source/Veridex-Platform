@@ -14,7 +14,7 @@ The dangerous part: this doesn't just make one Application look degraded. If the
 
 ### 1. `spec.syncPolicy.automated.prune: false`
 
-- **Where:** K3s-HA repo, `gitops/infra-app.yaml` (parent) vs. `gitops/infra/velero/velero-resources-app.yaml` (child, explicitly declared `prune: false`).
+- **Where:** K3s-HA repo, `gitops/infra-app.yaml` (parent) vs. `gitops/infra/velero/velero-resources-app.yaml` (child, explicitly declared `prune: false`). <!-- provider-drift-ok: historical source platform comparison -->
 - **Symptom:** `infra` Application stuck `OutOfSync`/`Degraded` on `Application/velero-resources` continuously since 2026-06-24.
 - **Fix applied:** added `ignoreDifferences` on the parent excluding `.spec.syncPolicy.automated` (via `jqPathExpressions`) for `group: argoproj.io, kind: Application` — keeps the child's explicit `prune: false` legible in Git while stopping the parent from fighting a field the API server won't persist.
 - **Root cause confirmed:** `prune` defaults to `false`; declaring it explicitly is the zero value under `omitempty`.
@@ -33,7 +33,7 @@ These are other `Application` spec fields that default to a zero value and are w
 - `syncPolicy.automated.selfHeal: false` (default is `false` — only a problem if something explicitly writes `false` rather than omitting it)
 - `syncPolicy.automated.allowEmpty: false`
 - `retry.limit: 0`
-- `syncPolicy.syncOptions` entries that assert a `=false` flag rather than simply not listing the option (e.g. an explicit `CreateNamespace=false`, which K3s-HA's `bootstrap/secrets-app.yaml` currently declares — not yet confirmed as a live problem, but the same shape as both confirmed instances above and worth checking if that Application ever shows unexplained drift)
+- `syncPolicy.syncOptions` entries that assert a `=false` flag rather than simply not listing the option (e.g. an explicit `CreateNamespace=false`, which K3s-HA's `bootstrap/secrets-app.yaml` currently declares — not yet confirmed as a live problem, but the same shape as both confirmed instances above and worth checking if that Application ever shows unexplained drift) <!-- provider-drift-ok: historical source platform comparison -->
 
 ## Review checklist addition
 

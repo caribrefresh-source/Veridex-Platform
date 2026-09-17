@@ -2,7 +2,7 @@
 
 **Status:** Proposal only. Does not amend the Initial Stages Plan, the gate ledger, or any closed gate. Where this document and the plan disagree, the plan governs.
 
-**Purpose:** A target structure for this repo's `gitops/` tree, grounded in what's actually built today (3 real Applications plus the `policies/` scaffold from the prior pass), what the plan explicitly names as coming, and two hard-won lessons from the K3s-HA comparison (`GitOps Structure Merge Assessment.md`, `argocd-omitempty-gotchas.md`). Every entry below is labeled by how solid its basis is — this repo is 12 gates into a 35-gate plan, so most of this tree is still a placeholder, not a fact.
+**Purpose:** A target structure for this repo's `gitops/` tree, grounded in what's actually built today (3 real Applications plus the `policies/` scaffold from the prior pass), what the plan explicitly names as coming, and two hard-won lessons from the K3s-HA comparison (`GitOps Structure Merge Assessment.md`, `argocd-omitempty-gotchas.md`). Every entry below is labeled by how solid its basis is — this repo is 12 gates into a 35-gate plan, so most of this tree is still a placeholder, not a fact. <!-- provider-drift-ok: historical source platform comparison -->
 
 ## Two decisions this structure must not violate
 
@@ -40,7 +40,7 @@ gitops/
 │   ├── redis/                           # ephemeral cache/locks/heartbeats only — no durable workflow or session state, per the plan's own constraint
 │   └── minio/                           # exactly 4 server pods across 4 labelled failure domains, never described as "4 replicas" — Gates 13, 23, 24, with object-level mirror to B2
 │
-├── applications/                        # "applications" (plan line 53). Empty today — grouped by the plan's own namespace rollout waves, not K3s-HA's flat numeric-prefix scheme, once anything lands.
+├── applications/                        # "applications" (plan line 53). Empty today — grouped by the plan's own namespace rollout waves, not K3s-HA's flat numeric-prefix scheme, once anything lands. <!-- provider-drift-ok: historical source platform comparison -->
 │   ├── wave-1-foundation/               # migration-runner, auth-service, governance-service — namespace resolved at Gate 32
 │   ├── wave-2-intake/                   # file-manager, ingestion-service, preview-service
 │   ├── wave-3-processing/               # ocr, nlp-preprocessing, embedding, cross-encoder
@@ -48,17 +48,17 @@ gitops/
 │   └── wave-5-governance/               # hitl-service, processing-authorization(-reconciler/-mode-*), notification-service, client-sync-service
 │
 ├── policies/                            # "policies" (plan line 53). REAL, created this pass.
-│   ├── README.md                        # documents what carried over from K3s-HA and what didn't (the two Rego stubs were non-functional and were not ported)
+│   ├── README.md                        # documents what carried over from K3s-HA and what didn't (the two Rego stubs were non-functional and were not ported) <!-- provider-drift-ok: historical source platform comparison -->
 │   └── consumer-capability-gates.yaml   # scaffold, gates: [] until the first interdependent service pair exists
 │
 ├── secrets/                             # PLACEHOLDER — mechanism is an open plan decision, not assumed
 │   └── README.md                        # NEW — states plainly that §6's "SOPS + age vs. SealedSecrets and Longhorn" conflict is unresolved (must close before Gates 13/24), and that docs/security/secret-register.yml is the interim source of truth for what secrets exist and where they're held today (operator-workstation env vars, not yet in-cluster for most entries)
 │
 ├── vendor/                              # PLACEHOLDER — empty until any chart/CRD needs pinning
-│   └── (each subdirectory gets a VERSION file recording the exact upstream release it was extracted from — K3s-HA's 157 KB unpinned Velero CRD dump is the example of what not to do)
+│   └── (each subdirectory gets a VERSION file recording the exact upstream release it was extracted from — K3s-HA's 157 KB unpinned Velero CRD dump is the example of what not to do) <!-- provider-drift-ok: historical source platform comparison -->
 │
 └── templates/                           # PLACEHOLDER — empty until an example/reference manifest is needed
-    └── (never mixed with live manifests — K3s-HA's grpc-ingressroute.yaml.example living next to real IngressRoutes is the example of what not to do)
+    └── (never mixed with live manifests — K3s-HA's grpc-ingressroute.yaml.example living next to real IngressRoutes is the example of what not to do) <!-- provider-drift-ok: historical source platform comparison -->
 ```
 
 ## What's confirmed vs. what's a placeholder

@@ -5,8 +5,9 @@ cluster reachable only on obscure high ports behind a self-signed certificate"
 to "the netcup cluster serves the site on 443 under a Let's Encrypt certificate,
 and Squarespace is retired."
 
-**Status:** IN PROGRESS. Stage A (DNS) and the cert-manager platform are built;
-the website, low-port ingress, certificates and the Cilium host policy are not.
+**Status:** IN PROGRESS. Stage A now includes the apex Route 53 migration and
+the cert-manager platform is built; the website, low-port ingress, certificates
+and the Cilium host policy are not.
 
 ---
 
@@ -64,8 +65,9 @@ Exit gates: EG68–EG89 allocated, EG73–EG77 passed. **New work starts at EG90
 
 | Fact | Evidence | Label |
 |---|---|---|
-| Route 53 public hosted zone `k8s.veridexeai.com` exists; NS delegation set at Squarespace | Resolves from both 1.1.1.1 and 8.8.8.8; AWS nameservers answer authoritatively | `VERIFIED` |
-| Apex `veridexeai.com` untouched — 4 Squarespace A records, `www` CNAME, SPF, DMARC all intact | Queried live 2026-09-17 | `VERIFIED` |
+| Route 53 public hosted zone `veridexeai.com` exists; the registrar nameservers were changed from Squarespace to Route 53 | 1.1.1.1 and 8.8.8.8 returned the four Route 53 nameservers on 2026-09-17; the operator workstation's system resolver still returned the prior Squarespace set during propagation | `VERIFIED` |
+| Apex website records remain on Squarespace — 4 Squarespace A records and the `www` CNAME were copied into Route 53 | Queried live 2026-09-17; the DNS authority changed but website origin did not | `VERIFIED` |
+| Child zone `k8s.veridexeai.com` remains delegated to its original Route 53 hosted zone | Queried live 2026-09-17 | `VERIFIED` |
 | No MX records; SPF is `v=spf1 -all` — **email is not used on this domain** | Queried live; confirmed by the owner | `VERIFIED` |
 | cert-manager v1.21.2, digest-pinned, GitOps-reconciled, webhook serving | EG73–EG77 all PASS | `VERIFIED` |
 | cert-manager issues end-to-end | A self-signed `Certificate` reached `Ready=True` with a real `notAfter`, then was deleted | `VERIFIED` |
@@ -157,9 +159,14 @@ between a wrong rule and a five-node lockout.
 
 Recorded here so the closure record (D83) has a single source.
 
-**Stage A — delegated DNS (D63–D64).** Route 53 public hosted zone
-`k8s.veridexeai.com`; four `NS` records at Squarespace. Verified from two
-independent public resolvers; apex diffed before and after and unchanged.
+**Stage A — Route 53 DNS (D63–D64, scope expanded by owner 2026-09-17).** The
+original `k8s.veridexeai.com` delegation remains intact. The apex
+`veridexeai.com` hosted zone is now also present in Route 53 and the registrar
+nameservers have been changed to its four Route 53 nameservers. Existing
+Squarespace A/CNAME and email-security records were copied so the authority
+change does not yet cut the website over. Public resolvers 1.1.1.1 and 8.8.8.8
+returned the Route 53 delegation; the workstation resolver still held the old
+Squarespace answer during propagation.
 *Outstanding:* D65 (scoped API token), D66 (secret-register entry), D67
 (evidence file).
 
@@ -465,10 +472,9 @@ one node at a time.
 Deferred in detail until Stages B–C land, because its shape depends on them.
 Recorded now so the sequence is not lost:
 
-1. Migrate the **whole** `veridexeai.com` zone to Route 53, records copied
-   exactly, still pointing at Squarespace. Nothing user-visible changes; fully
-   reversible by switching nameservers back. This is what makes DNS-01 possible
-   for the apex — Squarespace has no record API.
+1. **Completed 2026-09-17:** migrate the whole `veridexeai.com` zone to Route
+   53 with website records still pointing at Squarespace. Public resolvers show
+   Route 53 authority; allow propagation and re-verify before certificate work.
 2. Issue a Let's Encrypt certificate for `veridexeai.com` and `www`, **staging
    first**, using the existing DNS-01 solver.
 3. Flip the apex A records to the five netcup IPs. This is the cutover; rollback
@@ -503,9 +509,11 @@ New in Revision 3: **D88–D104** (17), **EG90–EG108** (19).
 - **R2 (partial).** Provider and zone settled — Route 53, `k8s.veridexeai.com`,
   delegated and verified. **Outstanding:** the scoped IAM credential (D65), which
   blocks every certificate.
-- **R3 — CI baseline.** `lint-provider-drift.py` fails on `main` with 36
-  pre-existing errors, unrelated to this plan. Exit gates compare against that
-  baseline rather than zero. Accept, or fix the baseline first?
+- **R3 — resolved 2026-09-17.** The 36 pre-existing findings were genuine
+  historical comparisons to the source platform. Each affected documentation
+  line now carries the linter's explicit, reasoned `provider-drift-ok` marker;
+  the normal non-strict provider-drift check returns zero errors without
+  suppressing future unannotated findings.
 - **R5 — Gate 11 drift.** PRs #51/#52 changed Traefik and the firewall after
   Gate 11 closed. Reopen-log entry, or is the D82 drift record sufficient?
 - **R6 — new.** Grafana currently allows anonymous Viewer access. Once the

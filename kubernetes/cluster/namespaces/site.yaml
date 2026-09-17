@@ -1,0 +1,12 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: site
+  annotations:
+    veridex.io/owner: platform-applications
+    veridex.io/purpose: Public two-page Veridex static site
+    argocd.argoproj.io/sync-wave: "0"
+  labels:
+    veridex.io/wave: "8"
+    veridex.io/role: public-site

@@ -20,14 +20,13 @@ Network flow → Cilium Hubble
 
 ## 1. Corrections applied to the source proposal
 
-This catalogue derives from a proposed 22-dashboard inventory. Four corrections were applied before recording it, because each would otherwise have propagated into manifests:
+This catalogue derives from a proposed 22-dashboard inventory. Three corrections were applied before recording it, because each would otherwise have propagated into manifests:
 
 | Source said | Correct for this platform | Why it matters |
 |---|---|---|
 | Backups to **GCS**; "MinIO-to-GCS replication lag", "GCS authentication failure" | **Backblaze B2** | There is no GCS in this stack. The plan was amended Wasabi → B2; the live bucket is `veridex-etcd-backup`. B2 has behaviours GCS does not: Object Lock two-phase activation, the 3× free egress allowance, and the `Content-MD5`/`x-amz-checksum-` requirement that already made k3s's native uploader unusable at Gate 9. |
 | `metrics-server` for workload metrics | **kubelet + cAdvisor via vmagent** | metrics-server is not installed; `kubectl top` fails. Container CPU/memory come from the cAdvisor and kubelet scrape jobs through the authenticated API-server node proxy. |
 | **Promtail** for log shipping | **Fluent Bit** | Fluent Bit is what runs, as a DaemonSet on all five nodes. |
-| **Velero** for backup | Not in the approved stack | `.claude/CLAUDE.md` §6 does not list Velero, and it is entangled in the still-unresolved "§6 conflict" (SOPS + age vs. SealedSecrets and Longhorn) that the gate ledger carries as open. Do not build Velero panels until that decision is made. |
 
 One further note carried forward: do not hard-code the source platform's Argo CD Application count (78) as the expected value. The netcup expected count must come from its own inventory.
 

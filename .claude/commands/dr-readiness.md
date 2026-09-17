@@ -47,10 +47,9 @@ Estimated RTO: ~30-45 min for full cluster rebuild.
 
 ## 7. Secret Recovery Path
 ```
-kubectl get sealedsecret -A --no-headers | wc -l
 kubectl get externalsecret -A --no-headers | wc -l
 ```
-Verify: SealedSecret private key backed up (in Vaultwarden or offline). ESO can re-sync from secret store.
+Verify: SOPS age private key escrowed off-cluster (veridex-recovery-keys). ESO can re-sync from secret store.
 
 ## 8. Node Rebuild Playbook
 ```

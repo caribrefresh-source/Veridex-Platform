@@ -25,7 +25,6 @@ Superseded statement	Confirmed decision
 Hetzner object storage is the backup destination.	No Hetzner dependency. Backblaze B2 (via its S3‑compatible API) is the backup destination (Gates 17–19, 31).
 MinIO is described only as "spreads data across nodes."	One distributed MinIO deployment runs exactly four server pods, one per failure domain (Gate 13, Gate 23).
 Longhorn is the default two‑replica StorageClass.	Longhorn is tiered by workload (critical / standard / disposable); MinIO volumes never use Longhorn (Gate 26).
-Sealed Secrets remains unresolved.	Tracked explicitly under the KMS incident and secret‑mechanism gate (Gate 22) and the §6 conflict below — resolve before Gate 13 and Gate 24 close.
 Network policy is applied generically to every namespace.	Network policy is promoted namespace by namespace through the P0–P6 sequence (Defined network policy rollout), with explicit Backblaze B2 egress handling (Gate 30).
 Recovery is summarized as one ≤30‑minute RTO and ≤1‑hour RPO.	Recovery objectives are measured separately per subsystem (Recovery objectives and proof); no combined figure is accepted (Gate 29).
 Changed this revision — backup destination (superseded 14 September 2026)
@@ -308,7 +307,6 @@ B2 implements an S3‑compatible API directly — it is not a cross‑cloud inte
 
 Producer	Preferred Backblaze B2 path	Required proof
 CloudNativePG	Barman Cloud plugin, generic S3‑compatible object store (endpointURL + application key id/secret as access/secret key)	Base backup, WAL archive and point‑in‑time restore
-Velero	AWS provider plugin, configured with the B2 S3‑compatible endpoint and region	Namespace and volume restore
 MinIO backup	MinIO's native server‑side bucket replication to an S3‑compatible remote, or a tested mirror tool	Versions, metadata, retention and checksums restored
 Longhorn	Native S3‑compatible backupstore — Longhorn's standard, documented backup‑target type	Incremental backup, list, delete under lifecycle rules and complete restore
 k3s etcd	Pinned b2-CLI sidecar uploader (the native k3s S3 snapshot target is incompatible with B2 Object Lock at the pinned version)	Scheduled upload, listing, pruning and isolated restore
@@ -581,7 +579,7 @@ There is no single combined RTO/RPO figure for this platform. The former single 
 Subsystem	Provisional RPO	RTO measured from	Mandatory proof
 k3s and etcd	≤ 1 hour	Recovery authorization to healthy API and etcd quorum.	Download the sidecar-uploaded external snapshot from veridex-etcd-backup, restore it with k3s, and validate representative Kubernetes resources (Gate 17).
 GitOps services	Near zero for Git state	Healthy Argo reconciliation from clean cluster.	Recreate pinned services from main without hand patches.
-SOPS or sealing keys	Zero	Recovery authorization to successful secret reconciliation.	Restore independently escrowed key from veridex-recovery-keys and decrypt approved test secret.
+SOPS age keys	Zero	Recovery authorization to successful secret reconciliation.	Restore independently escrowed key from veridex-recovery-keys and decrypt approved test secret.
 CloudNativePG	Defined by WAL archive objective	Recovery authorization to consistent promoted database.	Base backup plus WAL recovery from veridex-cnpg-backup and application consistency queries.
 MinIO	Defined by immutable backup schedule	Recovery authorization to validated object namespace.	Restore sampled and bulk objects, versions, metadata and checksums from veridex-minio-backup per Gate 25 semantics.
 Longhorn PVCs	Defined by backup class	Recovery authorization to mounted, validated filesystem.	Restore representative volume from veridex-longhorn-backup and application‑level data.
@@ -675,7 +673,7 @@ Not yet specified as full gates. Each needs an explicit owner and deadline befor
 Immediate implementation backlog
 Prove each producer's actual path to Backblaze B2 against its exact pinned version (Gate 17). The etcd producer is the pinned b2-CLI sidecar; do not substitute the failed native k3s path in its evidence row. Test multipart behavior, throttling, restore egress and omitted S3 features separately for every producer.
 Close the MINIO_KMS_SECRET_KEY incident end to end (Gate 22) before MinIO is approved for production.
-Resolve the §6 conflict below (SOPS + age vs. SealedSecrets and Longhorn) before Gate 13 or Gate 24 close.
+The §6 stack conflict was resolved 17 September 2026, gate ledger O5: Longhorn is approved and SOPS + age is the only secret mechanism.
 Commit outstanding documentation and group‑variable corrections in a focused commit.
 Add a dated Gate 0 correction and preserve the historical record.
 Implement Longhorn host prerequisites and prove idempotence; resolve node‑count feasibility for longhorn-critical (Gate 26).
@@ -704,4 +702,4 @@ Backblaze B2 — Cloud Storage pricing (per byte‑hour storage, egress allowanc
 Longhorn — setting an S3‑compatible backup target.
 k3s etcd‑snapshot CLI reference — S3‑compatible snapshot target options.
 CloudNativePG Barman Cloud plugin — object store providers — generic S3‑compatible endpoint support.
-Veridex AI — cluster production end‑state plan · Revision 3 (consolidated) · Gates 0–35 · backup destination: Backblaze B2 · supersedes the 37‑item stage list · amended 13 September 2026 with Gates 32–35 (network policy and namespace articulation) · amended 14 September 2026, backup destination moved from Wasabi to Backblaze B2
+Veridex AI — cluster production end‑state plan · Revision 3 (consolidated) · Gates 0–35 · backup destination: Backblaze B2 · supersedes the 37‑item stage list · amended 13 September 2026 with Gates 32–35 (network policy and namespace articulation) · amended 14 September 2026, backup destination moved from Wasabi to Backblaze B2 · amended 17 September 2026, §6 stack conflict resolved (gate ledger O5): Longhorn approved, SOPS + age only, Gate 17 matrix limited to native producers

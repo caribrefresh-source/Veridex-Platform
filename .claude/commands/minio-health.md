@@ -57,7 +57,6 @@ Pass: Recent WAL files present (confirms CNPG is archiving successfully).
 ## 8. Credentials Secret
 ```
 kubectl get secret -n data-plane | grep minio-credentials
-kubectl get sealedsecret -n data-plane | grep minio
 ```
 Pass: `dip-minio-credentials` secret exists and decrypted.
 

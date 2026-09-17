@@ -166,7 +166,7 @@ The source platform runs a comparable workload on **six** nodes and `[project_cn
 
 ### 5.3 Backup proves one producer of six
 
-`DOCUMENTED`: Gate 8/9 proved the **etcd** path to B2 end-to-end, including an isolated restore. Gate 17's matrix requires the same for **CloudNativePG, Velero, MinIO, Longhorn, and the audit exporter** — none of which exist yet. The plan's own "highest-priority unresolved issue" says the remaining risk is B2-specific behavior (multipart limits, throttling during a full restore, egress against the 3× free allowance), not protocol compatibility. Treat one proven producer as one, not as evidence the pattern generalizes.
+`DOCUMENTED`: Gate 8/9 proved the **etcd** path to B2 end-to-end, including an isolated restore. Gate 17's matrix requires the same for **CloudNativePG, MinIO, Longhorn, and the audit exporter** — none of which exist yet. The plan's own "highest-priority unresolved issue" says the remaining risk is B2-specific behavior (multipart limits, throttling during a full restore, egress against the 3× free allowance), not protocol compatibility. Treat one proven producer as one, not as evidence the pattern generalizes.
 
 ### 5.4 Recovery is unproven, by the repo's own admission
 
@@ -213,7 +213,7 @@ This document changes no cluster state and no configuration. Rollback is deletio
 
 1. **No live netcup verification in this assessment.** Everything about the running cluster is `DOCUMENTED` from gate closure records. A live re-verification pass should precede Gate 12.
 2. **Gate 6's 28 failing connectivity tests** are carried forward unresolved into any Gate 30 policy work.
-3. **The §6 conflict remains open** — the plan requires resolving "SOPS + age vs. SealedSecrets and Longhorn" before Gates 13 or 24 close; `.claude/CLAUDE.md` §6 lists SOPS + age and lists neither SealedSecrets, Longhorn, nor Velero. This is a stack decision, not only an ordering one, and it is unresolved.
+3. **The §6 stack conflict** — resolved 2026-09-17 (gate ledger O5): Longhorn is approved and SOPS + age is the secret mechanism; `.claude/CLAUDE.md` §6 now lists both.
 4. **`MINIO_KMS_SECRET_KEY` incident (Gate 22)** is carried as open in the plan and must close before MinIO reaches production.
 5. **Gate 31's IaC mechanism is undecided.** The plan notes Backblaze publishes a Terraform provider but that this platform has not adopted Terraform — naming a provider does not settle what holds that state or where it is backed up.
 6. **The GPBRMS spec's §17/§18 reconciliation notes are partly inaccurate** (§4.1). They should be corrected in the source reference cluster repo before being used as a migration input.

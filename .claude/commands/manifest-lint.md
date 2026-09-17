@@ -35,12 +35,12 @@ grep -rn '^  name:' gitops/ --include='*.yaml' | awk -F: '{print $NF}' | sort | 
 ```
 Review: Duplicate names are only a problem within the same namespace/kind.
 
-## 5. SealedSecret Encryption Check
+## 5. SOPS Encryption Check
 ```
-grep -rn 'encryptedData:' gitops/ --include='*.yaml' -l
+grep -rLn 'ENC\[AES256_GCM' gitops/secrets/ --include='*.yaml'
 grep -rn 'stringData:\|data:' gitops/secrets/ --include='*.yaml'
 ```
-Pass: All secrets in gitops/secrets/ are SealedSecrets (no plaintext stringData).
+Pass: Every file in gitops/secrets/ is SOPS-encrypted (first command prints nothing; no plaintext stringData).
 
 ## 6. Missing Finalizers on ArgoCD Apps
 ```

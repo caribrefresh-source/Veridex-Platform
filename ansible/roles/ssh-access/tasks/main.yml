@@ -9,15 +9,48 @@
 # version-controlled source of truth for root's authorized_keys, and refuses
 # to run unless a break-glass key is present alongside the primary one.
 
-- name: Assert at least two admin keys are registered (primary + break-glass)
+- name: Assert the declared admin key roles and formats are valid
   ansible.builtin.assert:
     that:
       - admin_ssh_public_keys is defined
       - admin_ssh_public_keys | length >= 2
+      - >-
+        admin_ssh_public_keys
+        | select('match', '^ssh-ed25519 [A-Za-z0-9+/]+={0,2} .+$')
+        | list | length == admin_ssh_public_keys | length
+      - >-
+        admin_ssh_public_keys
+        | select('search', ' veridex-netcup-prod(?: |$)')
+        | list | length == 1
+      - >-
+        admin_ssh_public_keys
+        | select('search', ' veridex-breakglass-[0-9]{8}(?: |$)')
+        | list | length >= 1
     fail_msg: >-
-      admin_ssh_public_keys must list the primary operator key and at least
-      one break-glass key -- a single key here is exactly the unrecoverable
-      state this role exists to close (Gate 1 G01-C5).
+      admin_ssh_public_keys must contain exactly one Ed25519 primary key named
+      veridex-netcup-prod and at least one Ed25519 emergency key named
+      veridex-breakglass-YYYYMMDD. A single, malformed, or undesignated key is
+      the unrecoverable state this role exists to prevent (Gate 1 G01-C5).
+    quiet: true
+
+- name: Extract managed SSH key material for uniqueness validation
+  ansible.builtin.set_fact:
+    _admin_ssh_key_material: >-
+      {{ (_admin_ssh_key_material | default([])) + [item.split()[1]] }}
+  loop: "{{ admin_ssh_public_keys }}"
+  loop_control:
+    label: "{{ item.split()[2] | default('(unnamed key)') }}"
+
+- name: Reject duplicate admin keys even when their comments differ
+  ansible.builtin.assert:
+    that:
+      - >-
+        _admin_ssh_key_material | unique | length
+        == _admin_ssh_key_material | length
+    fail_msg: >-
+      admin_ssh_public_keys contains duplicate public-key material. Primary
+      and emergency access must be backed by cryptographically distinct keys;
+      changing a duplicate key's comment does not create a recovery path.
     quiet: true
 
 - name: Validate each managed key is a well-formed public key

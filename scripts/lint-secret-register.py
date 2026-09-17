@@ -117,6 +117,7 @@ BYTE_ORDER_MARKS = (
 KINDS = {"env", "github-actions", "kubernetes-secret", "file"}
 STATUSES = {"active", "deferred"}
 REQUIRED_FIELDS = ("name", "kind", "sensitive", "purpose", "held_in", "provider", "status")
+MANUAL_ONLY_MAX_AGE_DAYS = 92
 
 # BEGIN secret-scan patterns
 NAME = r"([A-Za-z_][A-Za-z0-9_]*)"
@@ -524,6 +525,11 @@ def load_register(path: Path, errors: list[str]) -> dict[tuple[str, str], dict]:
                 else:
                     if reviewed_date > datetime.date.today():
                         errors.append(f"{label}: manual_only_reviewed is in the future")
+                    elif (datetime.date.today() - reviewed_date).days > MANUAL_ONLY_MAX_AGE_DAYS:
+                        errors.append(
+                            f"{label}: manual_only_reviewed is older than "
+                            f"{MANUAL_ONLY_MAX_AGE_DAYS} days -- perform and record a manual review"
+                        )
         elif reviewed is not None:
             errors.append(f"{label}: manual_only_reviewed is only valid when manual_only is true")
         if (kind, name) in register:

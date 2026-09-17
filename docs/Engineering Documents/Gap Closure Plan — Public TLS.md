@@ -17,6 +17,7 @@ live. Low-port ingress, certificates and the Cilium host policy are not built.
 |---|---|---|
 | 1 | 2026-09-16 | HTTP-01 design. Superseded — HTTP-01 is fixed to port 80, which is below this cluster's NodePort range, so it required low-port ingress surgery *before* any certificate could be issued. |
 | 2 | 2026-09-16 | Rewritten around **DNS-01** on a delegated subdomain. Decoupled certificate issuance from low-port ingress. Scope was one hostname, `grafana.k8s.veridexeai.com`, keeping Squarespace as the apex. |
+| 3a | 2026-09-17 | **Stage C amendment, decided by the repository owner.** The Traefik DaemonSet targets the **two worker nodes only**, not all five. EG95, EG96 and EG99 now require the two worker public IPs. Reason: public TLS termination stays off the control-plane/etcd nodes, whose blast radius is the whole cluster and whose latency is the most sensitive in it; the workers measured 2.5% CPU and ~11% memory of 8 vCPU / 16 GiB on 2026-09-17, so capacity is not the constraint. This also matches the agreed long-term target — a later move to two dedicated, tainted ingress nodes changes only a `nodeSelector` and the DNS records, not the mechanism. Trade-off accepted: two public ingress IPs instead of five, so availability now rests on health-checked DNS across two nodes. |
 | **3** | **2026-09-17** | **This revision.** Scope changed by the repository owner: the website itself moves onto this cluster, the apex points at netcup, and Squarespace is retired. That makes ports 80/443 mandatory rather than deferred, so Revision 2's deliberate deferral of low-port ingress no longer holds. Also folds in the security work (D84–D87) that Revision 2 predates, and the low-port spike that removed its largest `UNKNOWN`. |
 
 Revision 2's central decision — **DNS-01, not HTTP-01** — still stands and still
@@ -260,8 +261,19 @@ no user-visible effect — the Squarespace site is still serving the domain.
 
 ## 5. Stage C — Ingress on ports 80 and 443
 
-**Objective** Traefik answers on **80 and 443** on all five node public IPs, so
-the cluster can serve a website at a normal URL.
+**Objective** Traefik answers on **80 and 443** on the **two worker** node
+public IPs, so the cluster can serve a website at a normal URL.
+
+> **Amended 2026-09-17 (Rev 3a).** This stage originally targeted all five node
+> public IPs. The repository owner decided the DaemonSet is worker-only:
+> `nodeSelector: veridex.io/role: worker` (`veridex-agent-1`,
+> `veridex-agent-2`). Public TLS termination does not belong on the
+> control-plane/etcd nodes. The five-IP wording below is superseded wherever it
+> still appears; EG95, EG96 and EG99 are restated against the two worker IPs.
+> Availability across those two IPs comes from health-checked DNS
+> (multivalue-answer records with a health check per record), not from a VIP —
+> so failover is DNS-paced (health-check detection plus TTL), and in-flight
+> uploads and WebSocket sessions on a failed node break rather than migrate.
 
 **Scope**
 
@@ -287,7 +299,8 @@ the cluster can serve a website at a normal URL.
 - **D96.** `docs/architecture/low-port-ingress-decision.md` — the spike result
   and the chosen mechanism, written from the real output already captured.
 - **D97.** `docs/evidence/gap-closure/tls-public/stage-c/` — per-node
-  reachability for all five IPs, before and after.
+  reachability for both worker IPs, before and after, plus the negative result
+  for the three control-plane IPs (80/443 must not answer there).
 
 **Technical Detail**
 
@@ -305,8 +318,11 @@ the cluster can serve a website at a normal URL.
   not an in-place update: Argo CD prunes one and creates the other in an order
   it does not guarantee, so there is a window with **no Traefik at all**, taking
   Argo CD and Grafana down together. Create the DaemonSet under a different name
-  alongside the running Deployment, confirm it serves on all five nodes, then
-  remove the Deployment.
+  alongside the running Deployment, confirm it serves on both worker nodes,
+  then remove the Deployment. The DaemonSet carries the `websecure` and
+  `grafana-https` entrypoints and the same `app.kubernetes.io/name: traefik`
+  label as the Deployment, so the existing NodePort Service keeps answering on
+  32537/32538 from whichever pods exist at any point in the cutover.
 - **Traefik must stay in `kube-system`.** It is the namespace the admission
   policy exempts, and that exemption is deliberate: the ingress controller is
   the one thing that should publish.
@@ -316,10 +332,11 @@ the cluster can serve a website at a normal URL.
 
 **Exit Gate**
 
-- **EG95.** Port 80 answers on **each of the five** node public IPs — Method:
-  `curl` to all five from outside the cluster; all five must answer — Result:
-  PASS/FAIL.
-- **EG96.** Same for port 443 — Method: TLS connect to all five — Result:
+- **EG95.** Port 80 answers on **each of the two worker** public IPs — Method:
+  `curl` to both from outside the cluster; both must answer, and the
+  control-plane IPs must **not** answer on 80 (they are deliberately not
+  ingress nodes) — Result: PASS/FAIL.
+- **EG96.** Same for port 443 — Method: TLS connect to both workers — Result:
   PASS/FAIL. *(Reachability only. The certificate is still self-signed until
   Stage F; a passing EG96 must not be read as "TLS is working".)*
 - **EG97.** Argo CD on 32537 stays reachable **before, during and after** the
@@ -327,8 +344,9 @@ the cluster can serve a website at a normal URL.
   compared against the pre-stage response — Result: PASS/FAIL.
 - **EG98.** Grafana on 32538 likewise — Method: same three-point probe —
   Result: PASS/FAIL.
-- **EG99.** The site is served through Traefik on 443 on all five IPs — Method:
-  request with SNI set to the intended hostname; compare responses — Result:
+- **EG99.** The site is served through Traefik on 443 on **both worker** IPs —
+  Method: request with SNI set to the intended hostname (`--resolve`, since the
+  apex still points at Squarespace until Stage F); compare responses — Result:
   PASS/FAIL.
 - **EG100.** **IIR:** re-sync of `traefik` produces no diff and no pod churn —
   Method: hard-refresh, compare pod UIDs before and after — Result: PASS/FAIL.
@@ -453,9 +471,9 @@ dropped while it is on.
   host policy is **refused** from the public internet — Method: repeat the exact
   probe from the original finding (a NodePort on 31500) and require a timeout
   where it previously returned 200 — Result: PASS/FAIL.
-- **EG107.** Intended public ports still answer on all five nodes — Method:
-  probe 80, 443, 32537 and 32538 on each of the five public IPs — Result:
-  PASS/FAIL.
+- **EG107.** Intended public ports still answer — Method: probe 80 and 443 on
+  both worker IPs, and 32537/32538 on all five (the NodePorts remain reachable
+  cluster-wide until they are retired) — Result: PASS/FAIL.
 - **EG108.** **IIR:** an Ansible run and an Argo CD re-sync both complete
   normally with enforcement on — Method: run `prepare-hosts.yml` (expect
   `changed=0`) and hard-refresh every Application (expect Synced, no diff) —
@@ -479,8 +497,9 @@ Recorded now so the sequence is not lost:
    Route 53 authority; allow propagation and re-verify before certificate work.
 2. Issue a Let's Encrypt certificate for `veridexeai.com` and `www`, **staging
    first**, using the existing DNS-01 solver.
-3. Flip the apex A records to the five netcup IPs. This is the cutover; rollback
-   is flipping them back.
+3. Flip the apex A records to the **two worker** netcup IPs, as multivalue-answer
+   records with one Route 53 health check each (simple records cannot carry a
+   health check). This is the cutover; rollback is flipping them back.
 4. Retire Squarespace **only after** the cluster has served the site
    successfully.
 

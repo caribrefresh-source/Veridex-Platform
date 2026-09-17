@@ -76,6 +76,7 @@ Platform focus: document intelligence, workflow automation, AI services.
 
 - **Compute**: K3s HA, ArgoCD
 - **Network**: Cilium
+- **Ingress**: Traefik — the only component permitted to publish a host port or NodePort, which is why the host-exposure admission policy exempts `kube-system` and nothing else.
 - **Relational**: CloudNativePG / PostgreSQL
 - **Object**: MinIO
 - **Cache**: Redis

@@ -123,6 +123,17 @@ data:
       - job_name: traefik
         static_configs:
           - targets: ["traefik-metrics.kube-system.svc:8082"]
+      # cert-manager's controller metrics (kubernetes/infrastructure/cert-manager/).
+      # ClusterIP only. Only the controller is scraped: cainjector and webhook
+      # expose 9402 too, but neither reports certificate state -- the
+      # certificate, order and challenge metrics all come from the controller.
+      #
+      # Certificate metrics are emitted per Certificate object and only exist
+      # once at least one Certificate does; an empty scrape here is correct
+      # while no Certificate has been created yet, not a broken target.
+      - job_name: cert-manager
+        static_configs:
+          - targets: ["cert-manager.cert-manager.svc:9402"]
       # Cilium agent metrics (9962), one per node. Replaces inferring datapath
       # health from pod readiness -- a Cilium pod can be Running and passing
       # probes while its datapath is broken, which is exactly what happened on

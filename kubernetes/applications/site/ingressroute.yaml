@@ -1,0 +1,58 @@
+---
+# Public route for the site, served by the worker-only Traefik DaemonSet
+# (kubernetes/infrastructure/ingress/daemonset.yaml) on host port 443.
+#
+# TLS is Traefik's built-in self-signed certificate: tls: {} with no
+# secretName. There is no trusted certificate until Stage F issues one through
+# cert-manager and DNS-01, so browsers will warn until then. This is
+# reachability, not working TLS -- do not read a 200 here as "TLS is done".
+#
+# Hostnames are matched explicitly rather than with a catch-all: the apex
+# still resolves to Squarespace, so until the Stage F cutover this route is
+# exercised with an SNI override (curl --resolve), and a catch-all would also
+# swallow raw-IP requests that should not be served as the website.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: site
+  namespace: site
+spec:
+  entryPoints:
+    - publicsecure
+  routes:
+    - match: Host(`veridexeai.com`) || Host(`www.veridexeai.com`)
+      kind: Rule
+      services:
+        - name: site
+          port: 80
+  tls: {}
+---
+# Plain HTTP exists only to send callers to HTTPS. Nothing is served over
+# port 80 -- an HTTP entrypoint that served the site would be a downgrade
+# path, and ACME here is DNS-01, so port 80 is never needed for issuance.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: https-redirect
+  namespace: site
+spec:
+  redirectScheme:
+    scheme: https
+    permanent: true
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: site-http-redirect
+  namespace: site
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`veridexeai.com`) || Host(`www.veridexeai.com`)
+      kind: Rule
+      middlewares:
+        - name: https-redirect
+      services:
+        - name: site
+          port: 80

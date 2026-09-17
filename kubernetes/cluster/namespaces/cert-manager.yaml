@@ -1,0 +1,19 @@
+---
+# Declared here, not in kubernetes/infrastructure/cert-manager/, so exactly one
+# Argo CD path owns this namespace (CLAUDE.md §13). The upstream cert-manager
+# release manifest ships its own Namespace object; it is removed from the
+# vendored copy for this reason.
+#
+# wave/role follow the monitoring namespace's precedent for cluster
+# infrastructure. Both are provisional: Gate 32 holds the authority to resolve
+# namespace names and wave membership, and may confirm or change these.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cert-manager
+  annotations:
+    veridex.io/owner: platform-engineering
+    veridex.io/purpose: ACME certificate issuance and renewal for cluster ingress
+  labels:
+    veridex.io/wave: "7"
+    veridex.io/role: cluster-services

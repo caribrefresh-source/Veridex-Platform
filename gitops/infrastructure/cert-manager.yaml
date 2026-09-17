@@ -1,0 +1,52 @@
+---
+# cert-manager v1.21.2, pinned and vendored under
+# kubernetes/infrastructure/cert-manager/. Issues and renews the public TLS
+# certificates that replace Traefik's self-signed default -- see
+# docs/Engineering Documents/Gap Closure Plan — Public TLS.md (Phase 2).
+#
+# Flat file, not a subdirectory: this matches every other Application under
+# gitops/infrastructure/ on main.
+#
+# No `directory:` stanza. recurse defaults to false, and because false is the
+# zero value the API server drops the whole key from the stored object --
+# Git would hold a key the live object does not, leaving root permanently
+# OutOfSync. The same trap already cost this repo the Gate 11 monitoring
+# rollout; see the note in gitops/infrastructure/traefik.yaml.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cert-manager
+  namespace: argocd
+  annotations:
+    # After traefik and the namespaces app, before anything that requests a
+    # Certificate.
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: veridex
+  source:
+    repoURL: https://github.com/caribrefresh-source/Veridex-Platform.git
+    targetRevision: main
+    path: kubernetes/infrastructure/cert-manager
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cert-manager
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      # Mandatory, not a preference. cert-manager's CRDs are ~1 MB and exceed
+      # the 262144-byte ceiling on the kubectl.kubernetes.io/last-applied-
+      # configuration annotation, so a client-side apply fails outright with
+      # "metadata.annotations: Too long". Server-side apply has no such limit.
+      - ServerSideApply=true
+    retry:
+      # The webhook rejects Issuer and Certificate objects until it is serving,
+      # so the first sync after a cold start can legitimately fail once. Retry
+      # converges instead of leaving the Application Degraded and needing a
+      # human to press sync.
+      limit: 5
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 3m

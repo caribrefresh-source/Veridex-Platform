@@ -14,7 +14,7 @@ in `docs/Engineering Documents/Gap Closure Plan — Public TLS.md`.
 | D68-D72 cert-manager platform | Built and live | `cert-manager` Argo CD Application was `Synced/Healthy`; all three controller pods were Ready on 2026-09-17. |
 | D73-D78 first certificate | Blocked | No Route 53 credential Secret, ClusterIssuer, Certificate, Order, or Challenge exists. |
 | D88-D89 site source and rebrand | Candidate implemented; local checks pass | `apps/site/` contains only `/`, `/plans`, and not-found behavior. ESLint, TypeScript, 5/5 tests, production build, production dependency audit, Docker build, and container checks (`/`, `/plans`, `/healthz` 200; unknown path 404) passed on 2026-09-17. |
-| D90 immutable image | Published, pull access pending | `ghcr.io/caribrefresh-source/veridex-site@sha256:63c80dd7b81837a7600c2c82ee0ea6f9123f5727a2d843a04a91e86fea15022a`; package is private until the owner explicitly approves public visibility or provides an approved pull-secret design. The image passed a read-only-root-filesystem health check. |
+| D90 immutable image | Published and anonymously pullable | `ghcr.io/caribrefresh-source/veridex-site@sha256:63c80dd7b81837a7600c2c82ee0ea6f9123f5727a2d843a04a91e86fea15022a`; GitHub reported public visibility and a credential-free pull of this exact digest succeeded on 2026-09-17. The image also passed a read-only-root-filesystem health check. |
 | D91 site namespace | Candidate implemented | `kubernetes/cluster/namespaces/site.yaml`; not merged or reconciled yet. |
 | D92 workload and Argo CD Application | Candidate implemented | Digest-pinned Deployment, ClusterIP Service, and `site` Argo CD Application are present; not merged or reconciled. |
 | EG90-EG94 | Not passed | Local and repository checks pass, including a zero-error provider-drift run. These gates still require merged GitOps state and live/adversarial cluster evidence. |
@@ -22,12 +22,11 @@ in `docs/Engineering Documents/Gap Closure Plan — Public TLS.md`.
 
 ## Blocking operator checkpoints
 
-1. Approve a container registry/repository and its visibility/pull model.
-2. Create the Route 53 IAM credential scoped by
+1. Create the Route 53 IAM credential scoped by
    `docs/security/route53-iam-policy.json`.
-3. Approve and configure the SOPS+age decryption mechanism for Argo CD, then run
+2. Approve and configure the SOPS+age decryption mechanism for Argo CD, then run
    `scripts/New-Route53SopsSecret.ps1` locally with the approved age recipient.
-4. Review the staged rollout evidence and authorize the merge immediately before
+3. Review the staged rollout evidence and authorize the merge immediately before
    merging to `main`.
 
 Until those checkpoints are complete, Argo CD cannot deploy the site or issue a

@@ -1,0 +1,49 @@
+evidence_version: 1
+captured_at_utc: 2026-09-17T17:45:00Z
+captured_by: Codex agent
+target_identity: veridex-netcup; root, cluster-namespaces and site Argo CD Applications
+tested_repo_commit: 3ac19358068d594326cc540206262cad62c9d340
+scope: Public TLS gap-closure Stage B, D88-D92 and EG90-EG94
+
+EG90 PASS
+- Deployment site: 2/2 Ready, two pods distributed across veridex-agent-1 and veridex-agent-2.
+- Service site: ClusterIP, port 80 to named targetPort http.
+- Temporary in-cluster curl pod results: / 200, /plans 200, /healthz 200, /unknown 404.
+- The temporary probe pod was deleted by kubectl --rm after the test.
+
+EG91 PASS
+- Running Deployment image:
+  ghcr.io/caribrefresh-source/veridex-site@sha256:63c80dd7b81837a7600c2c82ee0ea6f9123f5727a2d843a04a91e86fea15022a
+- GitHub package visibility: public.
+- Credential-free pull of that exact digest: succeeded.
+
+EG92 PASS
+- PR #61 merged as 3ac19358068d594326cc540206262cad62c9d340.
+- GitHub Actions run 35253934703: all six jobs passed (Ansible syntax,
+  inventory schema, namespace declarations, provider drift, secret register,
+  YAML lint).
+- Frontend local checks passed: ESLint, TypeScript, 5/5 Vitest tests, Vite
+  production build, production dependency audit with zero vulnerabilities,
+  Docker build, and read-only-root-filesystem health check.
+
+EG93 PASS
+- Targeted scan of apps/site found no old brand, source-cluster name, old
+  provider name, or old provider CIDR.
+- Repository provider-drift check reported zero errors. Two warnings remain in
+  pre-existing Gate 9 historical evidence and are outside Stage B scope.
+
+EG94 PASS
+- A server-side dry run attempted to create a NodePort Service in namespace
+  site.
+- ValidatingAdmissionPolicy veridex-deny-nodeport, through binding
+  veridex-deny-nodeport, denied the request with the expected policy message.
+- The dry run created no Service.
+
+Argo CD reconciliation
+- root: Synced/Healthy at tested_repo_commit.
+- cluster-namespaces: Synced/Healthy at tested_repo_commit.
+- site: Synced/Healthy at tested_repo_commit.
+
+Limitations
+- Stage B is in-cluster only. No public IngressRoute, port 80/443 exposure,
+  certificate, DNS-01 credential, or apex A-record cutover is claimed here.

@@ -5,9 +5,9 @@ cluster reachable only on obscure high ports behind a self-signed certificate"
 to "the netcup cluster serves the site on 443 under a Let's Encrypt certificate,
 and Squarespace is retired."
 
-**Status:** IN PROGRESS. Stage A now includes the apex Route 53 migration and
-the cert-manager platform is built; the website, low-port ingress, certificates
-and the Cilium host policy are not.
+**Status:** IN PROGRESS. Stage A includes the apex Route 53 migration, the
+cert-manager platform is built, and Stage B's internal website deployment is
+live. Low-port ingress, certificates and the Cilium host policy are not built.
 
 ---
 
@@ -46,9 +46,11 @@ renumber** — the ledger's own rule.
 | D79–D80 | **Built** (cert-manager metrics + alerts) |
 | D81–D83 | Allocated, not built (drift check, prior-drift record, closure) |
 | D84–D87 | **Built** (security work — see §3) |
-| **D88+** | **New in this revision** |
+| D88–D92 | **Built** (Stage B website) |
+| **D93+** | **New work remaining in this revision** |
 
-Exit gates: EG68–EG89 allocated, EG73–EG77 passed. **New work starts at EG90.**
+Exit gates: EG68–EG89 allocated, EG73–EG77 passed; **EG90–EG94 passed** for
+Stage B. New work starts at EG95.
 
 > Revision 2 §8 said "Gate 12 then begins at D84/EG90". That is now wrong —
 > D84–D87 were consumed by the security work. Gate 12 begins after this plan's
@@ -141,8 +143,8 @@ dark.
 | Stage | What | State |
 |---|---|---|
 | **A** | Delegated DNS zone under API control | **Done** (zone + delegation). Credential outstanding. |
-| **B** | Website ported, rebranded, containerised, deployed | **Next** |
-| **C** | Traefik ingress on hostPort **80/443** | After B |
+| **B** | Website ported, rebranded, containerised, deployed | **Done** |
+| **C** | Traefik ingress on hostPort **80/443** | **Next** |
 | **D** | Cilium host policy in **audit mode** | After C — needs the final port shape |
 | **E** | Host policy switched to **enforce** | After D observes clean |
 | **F** | Apex certificate, DNS cutover, Squarespace retired | After C and E |
@@ -495,7 +497,7 @@ Email is not a constraint — no MX records, SPF is `-all` (§1.1).
 | First certificate | D73–D78 | EG78–EG84 |
 | Observability / drift | D79–D83 (D79–D80 built) | EG85–EG89 |
 | Security | D84–D87 **built** | — |
-| **B — Website** | **D88–D92** | **EG90–EG94** |
+| **B — Website** | **D88–D92 built** | **EG90–EG94 passed** |
 | **C — Ingress 80/443** | **D93–D97** | **EG95–EG100** |
 | **D — Host policy, audit** | **D98–D101** | **EG101–EG104** |
 | **E — Host policy, enforce** | **D102–D104** | **EG105–EG108** |

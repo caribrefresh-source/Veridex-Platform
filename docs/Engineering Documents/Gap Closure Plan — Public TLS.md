@@ -509,9 +509,11 @@ New in Revision 3: **D88–D104** (17), **EG90–EG108** (19).
 - **R2 (partial).** Provider and zone settled — Route 53, `k8s.veridexeai.com`,
   delegated and verified. **Outstanding:** the scoped IAM credential (D65), which
   blocks every certificate.
-- **R3 — CI baseline.** `lint-provider-drift.py` fails on `main` with 36
-  pre-existing errors, unrelated to this plan. Exit gates compare against that
-  baseline rather than zero. Accept, or fix the baseline first?
+- **R3 — resolved 2026-09-17.** The 36 pre-existing findings were genuine
+  historical comparisons to the source platform. Each affected documentation
+  line now carries the linter's explicit, reasoned `provider-drift-ok` marker;
+  the normal non-strict provider-drift check returns zero errors without
+  suppressing future unannotated findings.
 - **R5 — Gate 11 drift.** PRs #51/#52 changed Traefik and the firewall after
   Gate 11 closed. Reopen-log entry, or is the D82 drift record sufficient?
 - **R6 — new.** Grafana currently allows anonymous Viewer access. Once the

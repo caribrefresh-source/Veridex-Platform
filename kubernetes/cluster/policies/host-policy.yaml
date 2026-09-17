@@ -1,13 +1,19 @@
 ---
-# CANDIDATE host policy — D98. NOT APPLIED, and deliberately NOT in
-# kubernetes/cluster/policies/.
+# Host firewall policy — D98. LIVE from the moment this is merged.
 #
 # ┌──────────────────────────────────────────────────────────────────────────┐
-# │ Putting this file under kubernetes/cluster/policies/ IS the act of        │
-# │ applying it: that path is an auto-synced, self-healing Argo CD            │
-# │ Application. Merging it there enforces it within a sync interval, on all  │
-# │ five nodes at once, with no audit window. Do not move this file until     │
-# │ audit mode is confirmed active on every node (EG101).                     │
+# │ This path is an auto-synced, self-healing Argo CD Application. Anything   │
+# │ here is applied within a sync interval, on every node this selects.       │
+# │                                                                          │
+# │ It is safe ONLY while policy audit mode is enabled on every host          │
+# │ endpoint. Confirmed enabled on all five at 2026-09-17T20:23Z (EG101).     │
+# │ Audit mode does not survive a cilium-agent restart: if an agent restarts, │
+# │ that node starts ENFORCING this immediately. Re-check before trusting an  │
+# │ earlier EG101 result:                                                     │
+# │   cilium-dbg endpoint config <host-ep-id> | grep PolicyAuditMode          │
+# │                                                                          │
+# │ Rollback is NOT `kubectl delete` alone -- self-heal restores it within a  │
+# │ sync interval. Revert the commit as well. Rehearsed at EG104.             │
 # └──────────────────────────────────────────────────────────────────────────┘
 #
 # Why that matters here more than usual: both the operational and break-glass

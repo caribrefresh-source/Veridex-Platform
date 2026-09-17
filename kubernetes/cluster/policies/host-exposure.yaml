@@ -1,0 +1,115 @@
+---
+# Stops a pod or Service publishing itself to the public internet.
+#
+# WHY THIS EXISTS -- the host firewall does not do it.
+#
+# Proven live on 2026-09-17 (docs/security/nodeport-bypasses-host-firewall.md):
+# with Cilium kubeProxyReplacement=true, NodePort and hostPort traffic is
+# handled in eBPF at tc ingress, BEFORE netfilter's INPUT chain sees the
+# packet. roles/firewall's `firewall_public_tcp_ports` allowlist therefore has
+# no effect on them. A NodePort on 31500 -- a port that allowlist has never
+# contained -- answered 200 from the public internet on every node tested.
+#
+# So the control point cannot be nftables. Until Cilium's own host firewall is
+# enabled (enable-host-firewall is currently false; turning it on needs a
+# Cilium restart, which CLAUDE.md §9 forbids without RCA and explicit
+# authorization), admission control is what stands between "someone creates a
+# Service" and "it is on the internet".
+#
+# This is a PREVENTIVE control, not a network control. It stops new exposure
+# being created. It does not filter traffic to something already exposed, and
+# it cannot stop anyone who can write directly to etcd or bypass admission.
+# Defence in depth, not a substitute for the host firewall being fixed.
+#
+# SCOPE: kube-system is exempt because the ingress controller legitimately
+# publishes there (Traefik, NodePorts 32537/32538). Everything else is denied.
+# Application workloads reach the internet through Traefik, never by
+# publishing their own port -- if a namespace ever genuinely needs an
+# exception, add it to the namespaceSelector deliberately, the same way
+# roles/firewall requires a justification per opened port.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: veridex-deny-hostport
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods"]
+  validations:
+    - expression: >-
+        !has(object.spec.containers) ||
+        object.spec.containers.all(c,
+          !has(c.ports) || c.ports.all(p, !has(p.hostPort) || p.hostPort == 0))
+      message: >-
+        hostPort is not permitted in this namespace. With Cilium
+        kubeProxyReplacement a hostPort is reachable from the public internet
+        immediately and the host firewall does not gate it. Route traffic
+        through the ingress controller instead.
+    - expression: >-
+        !has(object.spec.initContainers) ||
+        object.spec.initContainers.all(c,
+          !has(c.ports) || c.ports.all(p, !has(p.hostPort) || p.hostPort == 0))
+      message: hostPort is not permitted on initContainers in this namespace.
+    - expression: >-
+        !has(object.spec.ephemeralContainers) ||
+        object.spec.ephemeralContainers.all(c,
+          !has(c.ports) || c.ports.all(p, !has(p.hostPort) || p.hostPort == 0))
+      message: hostPort is not permitted on ephemeralContainers in this namespace.
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: veridex-deny-hostport
+spec:
+  policyName: veridex-deny-hostport
+  validationActions: [Deny]
+  matchResources:
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: NotIn
+          values: [kube-system]
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: veridex-deny-nodeport
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["services"]
+  validations:
+    # LoadBalancer is denied alongside NodePort deliberately: a LoadBalancer
+    # Service still allocates a nodePort, and this cluster has no LoadBalancer
+    # controller (servicelb is disabled -- "no LoadBalancer implementation on
+    # netcup"), so one would sit Pending forever while its nodePort was already
+    # live on the internet. The worst combination: exposed, and looking broken.
+    - expression: "object.spec.type != 'NodePort' && object.spec.type != 'LoadBalancer'"
+      message: >-
+        Service type NodePort/LoadBalancer is not permitted in this namespace.
+        With Cilium kubeProxyReplacement the allocated node port is reachable
+        from the public internet on every node immediately, and the host
+        firewall does not gate it. Use ClusterIP and route through the ingress
+        controller.
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: veridex-deny-nodeport
+spec:
+  policyName: veridex-deny-nodeport
+  validationActions: [Deny]
+  matchResources:
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: NotIn
+          values: [kube-system]

@@ -4,6 +4,30 @@
 # Model: the private vLAN is trusted in full; the public interface allows only
 # SSH plus whatever is explicitly published. k3s binds its API to 0.0.0.0:6443
 # and kubelet to 10250, so without this they are reachable from the internet.
+#
+# !! THAT MODEL DOES NOT COVER KUBERNETES SERVICE TRAFFIC. !!
+#
+# Proven live 2026-09-17 (docs/security/nodeport-bypasses-host-firewall.md):
+# with Cilium kubeProxyReplacement=true, NodePort and hostPort traffic is
+# handled in eBPF at tc ingress, BEFORE netfilter's INPUT chain sees the
+# packet. firewall_public_tcp_ports below therefore has NO EFFECT on it. A
+# NodePort on 31500 -- never listed here -- answered 200 from the public
+# internet on every node tested.
+#
+# So: every NodePort in the cluster is public on every node, listed here or
+# not. Do not read the list below as the cluster's public attack surface; it
+# is the public attack surface of everything EXCEPT Kubernetes services.
+# Host-level listeners (SSH, and anything bound by the host itself rather than
+# served by Cilium) are still genuinely gated by these rules.
+#
+# The preventive control that actually limits this today is admission policy:
+# kubernetes/cluster/policies/host-exposure.yaml denies hostPort and
+# NodePort/LoadBalancer outside kube-system. Closing the bypass properly needs
+# Cilium's own host firewall (enable-host-firewall, currently false), which
+# requires a Cilium restart and therefore explicit authorization under
+# CLAUDE.md §9. Until that happens, entries added below express intent and
+# provide defence in depth if the bypass is ever closed -- they do not, on
+# their own, make a service reachable or unreachable.
 
 firewall_ssh_port: 22
 

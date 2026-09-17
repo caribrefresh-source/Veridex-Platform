@@ -44,6 +44,39 @@ cilium_hubble_relay_enabled: true
 cilium_prometheus_enabled: true
 cilium_allow_disruptive_upgrade: false
 
+# Cilium's host firewall -- the only thing that can actually filter NodePort
+# and hostPort traffic on this cluster.
+#
+# Why: proven live 2026-09-17 that with kubeProxyReplacement=true, NodePort and
+# hostPort are served in eBPF at tc ingress, BEFORE netfilter's INPUT chain
+# sees the packet. roles/firewall's allowlist therefore does not gate them at
+# all, and a NodePort on a port that allowlist has never contained answered 200
+# from the public internet on every node tested. Full finding:
+# docs/security/nodeport-bypasses-host-firewall.md.
+#
+# Enforcement has to happen in the same datapath that is bypassing nftables,
+# and this flag is what makes the host endpoint policy-enforceable at all.
+#
+# SETTING THIS TRUE IS, BY ITSELF, BEHAVIOURALLY INERT. Cilium's host endpoint
+# stays default-allow until a CiliumClusterwideNetworkPolicy with a
+# nodeSelector actually selects it. Nothing is filtered by this flag alone.
+# That is deliberate, and it is why the restart is taken now rather than later:
+# the flag needs an agent roll, the policy does not (policies are dynamic), so
+# the disruptive half happens while it cannot break anything, and the dangerous
+# half happens later with no restart and in policy audit mode.
+#
+# DO NOT add a host CiliumClusterwideNetworkPolicy casually. Both the
+# operational and the break-glass credential are SSH keys
+# (docs/security/emergency-access.md), so a host policy that drops tcp/22
+# locks every node out simultaneously with no documented way back short of
+# reinstalling. Build any host policy in audit mode
+# (`cilium endpoint config <host-id> PolicyAuditMode=Enabled`), observe real
+# traffic, and only then enforce.
+#
+# Like the metrics flag above: applied automatically on a FRESH install, and
+# gated behind cilium_allow_disruptive_upgrade on an existing cluster.
+cilium_host_firewall_enabled: true
+
 # Cilium's chart ships maxUnavailable: 2, which on this five-node cluster
 # takes 40% of the CNI down at once during any roll. Existing pods keep
 # working (the eBPF datapath survives without the agent) but policy updates

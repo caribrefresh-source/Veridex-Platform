@@ -57,6 +57,19 @@ spec:
   #     anything outside cert-manager's own CRDs. Re-verify this scoping on
   #     every cert-manager version bump; a future release widening those rules
   #     would silently widen this grant.
+  #   - ValidatingAdmissionPolicy, ValidatingAdmissionPolicyBinding: added
+  #     2026-09-17 for kubernetes/cluster/policies/host-exposure.yaml, which
+  #     denies hostPort and NodePort/LoadBalancer outside kube-system after
+  #     those were found to bypass the host firewall entirely
+  #     (docs/security/nodeport-bypasses-host-firewall.md).
+  #
+  #     Far weaker than the two webhook entries above, and worth saying why:
+  #     a ValidatingAdmissionPolicy can only REJECT a request. It cannot
+  #     modify an object, it runs CEL with no network access, and it cannot
+  #     reach outside the API server. The realistic failure mode is denying
+  #     too much -- a self-inflicted outage -- not a privilege escalation.
+  #     The binding's failurePolicy is Fail, so a broken policy blocks writes
+  #     to the resources it matches rather than silently allowing them.
   clusterResourceWhitelist:
     - group: ""
       kind: Namespace
@@ -70,6 +83,10 @@ spec:
       kind: ValidatingWebhookConfiguration
     - group: admissionregistration.k8s.io
       kind: MutatingWebhookConfiguration
+    - group: admissionregistration.k8s.io
+      kind: ValidatingAdmissionPolicy
+    - group: admissionregistration.k8s.io
+      kind: ValidatingAdmissionPolicyBinding
   namespaceResourceWhitelist:
     - group: "*"
       kind: "*"

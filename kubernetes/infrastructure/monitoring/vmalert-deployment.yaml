@@ -248,6 +248,69 @@ data:
               class: argo-reconciliation
             annotations:
               summary: "Argo CD application {{ $labels.name }} has been OutOfSync for over 30m"
+      # Certificate lifecycle. A certificate that silently stops renewing is
+      # invisible until it expires and every browser rejects the site at once,
+      # so these alert on the renewal failing, not on the expiry arriving.
+      #
+      # Metric names and label sets here were read from a live cert-manager
+      # v1.21.2 /metrics endpoint on 2026-09-16, not from documentation.
+      - name: certificates
+        interval: 30s
+        rules:
+          # certmanager_certificate_ready_status is NOT a plain 0/1 gauge: it
+          # emits one series per condition value, so a healthy certificate
+          # publishes condition="True" 1 alongside condition="False" 0 and
+          # condition="Unknown" 0. The obvious-looking expression
+          # `certmanager_certificate_ready_status == 0` therefore matches two
+          # series for every healthy certificate and fires permanently. The
+          # condition="True" selector is load-bearing -- do not remove it.
+          - alert: CertificateNotReady
+            expr: certmanager_certificate_ready_status{condition="True"} == 0
+            for: 15m
+            labels:
+              severity: P1
+              class: certificates
+            annotations:
+              summary: "Certificate {{ $labels.namespace }}/{{ $labels.name }} is not Ready"
+          # cert-manager schedules renewal at roughly two-thirds of lifetime,
+          # so for a 90-day Let's Encrypt certificate this fires only after
+          # renewal has been failing for about a week. Expiry itself is the
+          # last line, not the first.
+          - alert: CertificateExpiringSoon
+            expr: >-
+              certmanager_certificate_expiration_timestamp_seconds - time()
+              < 21 * 24 * 3600
+            for: 1h
+            labels:
+              severity: P1
+              class: certificates
+            annotations:
+              summary: "Certificate {{ $labels.namespace }}/{{ $labels.name }} expires in under 21 days"
+          # Fires earlier than the expiry alert: cert-manager publishes the
+          # time it intends to renew, so a renewal timestamp more than a day in
+          # the past means renewal is stuck, while the certificate is still
+          # comfortably valid and there is time to fix it.
+          - alert: CertificateRenewalOverdue
+            expr: >-
+              time() - certmanager_certificate_renewal_timestamp_seconds
+              > 24 * 3600
+            for: 1h
+            labels:
+              severity: P2
+              class: certificates
+            annotations:
+              summary: "Certificate {{ $labels.namespace }}/{{ $labels.name }} is overdue for renewal by more than 24h"
+          # Without this, cert-manager going away entirely would silence the
+          # three alerts above rather than trigger them -- they are all
+          # evaluated over metrics that simply stop existing.
+          - alert: CertManagerMetricsMissing
+            expr: absent(certmanager_controller_sync_call_count)
+            for: 10m
+            labels:
+              severity: P2
+              class: certificates
+            annotations:
+              summary: "cert-manager is not reporting metrics -- certificate alerting is blind"
 ---
 apiVersion: apps/v1
 kind: Deployment

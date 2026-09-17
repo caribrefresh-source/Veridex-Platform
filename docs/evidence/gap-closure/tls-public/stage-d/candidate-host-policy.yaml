@@ -1,0 +1,140 @@
+---
+# CANDIDATE host policy — D98. NOT APPLIED, and deliberately NOT in
+# kubernetes/cluster/policies/.
+#
+# ┌──────────────────────────────────────────────────────────────────────────┐
+# │ Putting this file under kubernetes/cluster/policies/ IS the act of        │
+# │ applying it: that path is an auto-synced, self-healing Argo CD            │
+# │ Application. Merging it there enforces it within a sync interval, on all  │
+# │ five nodes at once, with no audit window. Do not move this file until     │
+# │ audit mode is confirmed active on every node (EG101).                     │
+# └──────────────────────────────────────────────────────────────────────────┘
+#
+# Why that matters here more than usual: both the operational and break-glass
+# credentials are SSH keys on the same workstation, and no console path is
+# documented (docs/security/emergency-access.md). A host policy that drops
+# tcp/22 locks out all five nodes at once, and the remaining route is
+# reinstalling them.
+#
+# Audit mode is NOT a field on this object. It is per-endpoint, imperative and
+# temporary:
+#   cilium-dbg endpoint config <host-endpoint-id> PolicyAuditMode=Enabled
+# It does not survive a cilium-agent restart — VERIFIED against Cilium's own
+# host-firewall documentation for v1.20. If an agent restarts while this policy
+# exists, that node begins enforcing immediately. That is the single most
+# important property of this stage, and the reason the observation window is
+# measured in hours, not days.
+#
+# Scope decision — INGRESS ONLY, a deliberate deviation from D98's wording,
+# which also lists egress (DNS, NTP, ACME, Route 53, B2). Reasons:
+#   1. The finding this closes is inbound: NodePort/hostPort traffic bypassing
+#      nftables (docs/security/nodeport-bypasses-host-firewall.md). Egress
+#      enforcement closes nothing that finding described.
+#   2. In Cilium, a direction is only enforced once a rule exists for it. With
+#      no egress rule, host egress stays default-allow and cannot lock anything
+#      out.
+#   3. Host egress is where the unknowns are: containerd pulls images from the
+#      host netns, k3s agents dial the API, apt and NTP run there. An egress
+#      allow-list that misses one breaks the cluster in ways that look like
+#      unrelated failures.
+# Egress belongs in its own later policy with its own audit window. If that is
+# not acceptable, the plan needs amending rather than this file quietly
+# widening.
+#
+# Port inventory below is taken from ansible/roles/firewall/defaults/main.yml,
+# ansible/inventory/production/group_vars/all.yml (k3s_cluster_cidr
+# 10.44.0.0/16, k3s_service_cidr 10.45.0.0/16) and live Cilium status
+# (WireGuard port 51871), not from memory.
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: veridex-host-baseline
+spec:
+  description: >-
+    Host-endpoint ingress baseline for every node. Allows the cluster's own
+    traffic, the whole trusted vLAN, and the three ports the public internet is
+    meant to reach on any node (SSH plus the two Traefik NodePorts). Public
+    80/443 is granted separately, to workers only, by
+    veridex-host-public-ingress.
+  # Empty nodeSelector = every node's host endpoint. Enforcement begins for a
+  # node the moment this is applied and audit mode is off there.
+  nodeSelector: {}
+  ingress:
+    # 1. The cluster talking to its own hosts. remote-node is listed explicitly
+    #    rather than assumed to be part of `cluster`: node-to-node traffic
+    #    carries its own identity, and omitting it is a classic way to break
+    #    etcd and kubelet while the policy "looks complete".
+    - fromEntities:
+        - cluster
+        - remote-node
+        - health
+        - kube-apiserver
+
+    # 2. The private vLAN, trusted in full — the same model
+    #    roles/firewall/defaults/main.yml already applies (firewall_trusted_
+    #    networks: 10.2.0.0/16). This is what carries etcd (2379/2380), kubelet
+    #    (10250), the API (6443), VXLAN (8472/udp), WireGuard (51871/udp),
+    #    Cilium health (4240) and the metrics ports between nodes.
+    - fromCIDR:
+        - 10.2.0.0/16
+
+    # 3. Pod and Service CIDRs. Covered by `cluster` above in normal operation;
+    #    listed because a pod whose identity is still resolving is seen as an
+    #    unknown source, and that is exactly when a scrape or probe gets
+    #    dropped and the cause looks random.
+    - fromCIDR:
+        - 10.44.0.0/16
+        - 10.45.0.0/16
+
+    # 4. From the public internet, on every node: SSH and the two Traefik
+    #    NodePorts. 32537/32538 are listed because they are still the way Argo
+    #    CD and Grafana are reached; when they are retired (open remediation
+    #    register), delete this rule's two NodePort entries with them.
+    - fromEntities:
+        - world
+      toPorts:
+        - ports:
+            - port: "22"
+              protocol: TCP
+            - port: "32537"
+              protocol: TCP
+            - port: "32538"
+              protocol: TCP
+
+    # 5. ICMP echo, so the nodes stay diagnosable from outside. A host policy
+    #    that silently breaks ping turns every future network investigation
+    #    into a false lead.
+    - fromEntities:
+        - world
+      icmps:
+        - fields:
+            - type: 8
+              family: IPv4
+---
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: veridex-host-public-ingress
+spec:
+  description: >-
+    Public 80/443 on the two worker nodes only, matching the Stage C DaemonSet
+    placement (plan Rev 3a). The control-plane nodes are not ingress nodes and
+    must not answer on these ports.
+  nodeSelector:
+    matchLabels:
+      veridex.io/role: worker
+  ingress:
+    - fromEntities:
+        - world
+      toPorts:
+        - ports:
+            - port: "80"
+              protocol: TCP
+            - port: "443"
+              protocol: TCP
+    # Route 53 health checkers need no separate allowance while 80/443 are open
+    # to the world: they are part of `world`. A checker-range list is only
+    # needed if these ports are ever narrowed below world, and AWS changes
+    # those ranges, so an unused copy here would rot. If the ports are
+    # narrowed, pull the ranges from AWS's published ip-ranges.json
+    # (ROUTE53_HEALTHCHECKS service) and give the list a review cadence.

@@ -87,6 +87,16 @@ spec:
       kind: ValidatingAdmissionPolicy
     - group: admissionregistration.k8s.io
       kind: ValidatingAdmissionPolicyBinding
+    # Host firewall policy (Stage D/E of the Public TLS plan). Permitting the
+    # kind does not create one -- without this entry Argo CD refuses to sync a
+    # host policy at all, the same way it refused webhook configurations
+    # (PR #54) and admission policies (PR #57) before their entries were added.
+    # Worth stating plainly: a CiliumClusterwideNetworkPolicy selecting the
+    # host endpoint can make every node unreachable, so the resource is
+    # permitted here while the rollout stays deliberately manual and audited
+    # (docs/evidence/gap-closure/tls-public/stage-d/procedure.md).
+    - group: cilium.io
+      kind: CiliumClusterwideNetworkPolicy
   namespaceResourceWhitelist:
     - group: "*"
       kind: "*"

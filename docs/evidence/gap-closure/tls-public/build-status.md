@@ -14,9 +14,9 @@ in `docs/Engineering Documents/Gap Closure Plan — Public TLS.md`.
 | D68-D72 cert-manager platform | Built and live | `cert-manager` Argo CD Application was `Synced/Healthy`; all three controller pods were Ready on 2026-09-17. |
 | D73-D78 first certificate | Blocked | No Route 53 credential Secret, ClusterIssuer, Certificate, Order, or Challenge exists. |
 | D88-D89 site source and rebrand | Candidate implemented; local checks pass | `apps/site/` contains only `/`, `/plans`, and not-found behavior. ESLint, TypeScript, 5/5 tests, production build, production dependency audit, Docker build, and container checks (`/`, `/plans`, `/healthz` 200; unknown path 404) passed on 2026-09-17. |
-| D90 immutable image | Blocked | No repository-approved registry/repository destination has been confirmed, so no image digest is recorded. |
+| D90 immutable image | Published, pull access pending | `ghcr.io/caribrefresh-source/veridex-site@sha256:63c80dd7b81837a7600c2c82ee0ea6f9123f5727a2d843a04a91e86fea15022a`; package is private until the owner explicitly approves public visibility or provides an approved pull-secret design. The image passed a read-only-root-filesystem health check. |
 | D91 site namespace | Candidate implemented | `kubernetes/cluster/namespaces/site.yaml`; not merged or reconciled yet. |
-| D92 workload and Argo CD Application | Not built | Requires the immutable image digest from D90. |
+| D92 workload and Argo CD Application | Candidate implemented | Digest-pinned Deployment, ClusterIP Service, and `site` Argo CD Application are present; not merged or reconciled. |
 | EG90-EG94 | Not passed | These require merged GitOps state and live/adversarial cluster evidence. |
 | Stages C-F | Not started | No low-port ingress, host-policy enforcement, certificate promotion, or apex cutover has been merged from this candidate. |
 

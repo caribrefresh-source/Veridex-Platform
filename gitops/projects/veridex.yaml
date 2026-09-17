@@ -39,6 +39,24 @@ spec:
   #     entirely. Unlike Cilium, Traefik has no bootstrap circular dependency
   #     on Argo CD (Argo CD's own pods don't need external ingress to run),
   #     so it is GitOps-managed rather than Ansible-managed.
+  #   - ValidatingWebhookConfiguration, MutatingWebhookConfiguration: added
+  #     2026-09-16 for cert-manager (kubernetes/infrastructure/cert-manager/).
+  #     Its webhooks default and validate its own custom resources; without
+  #     them an invalid Certificate or Issuer spec is accepted and fails later,
+  #     opaquely, instead of being rejected at admission. Admission
+  #     configuration is a cluster-scoped API by nature -- there is no
+  #     namespace-scoped equivalent to grant instead.
+  #
+  #     This is the most powerful entry in this list and is not granted
+  #     lightly: a MutatingWebhookConfiguration can in principle intercept and
+  #     rewrite any object cluster-wide. cert-manager's do not. Verified
+  #     against the pinned v1.21.2 manifest before granting -- the mutating
+  #     webhook's rules cover only cert-manager.io/v1 certificaterequests on
+  #     CREATE, and the validating webhook only the cert-manager.io and
+  #     acme.cert-manager.io API groups. Neither can touch a Pod, a Secret, or
+  #     anything outside cert-manager's own CRDs. Re-verify this scoping on
+  #     every cert-manager version bump; a future release widening those rules
+  #     would silently widen this grant.
   clusterResourceWhitelist:
     - group: ""
       kind: Namespace
@@ -48,6 +66,10 @@ spec:
       kind: ClusterRole
     - group: rbac.authorization.k8s.io
       kind: ClusterRoleBinding
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+    - group: admissionregistration.k8s.io
+      kind: MutatingWebhookConfiguration
   namespaceResourceWhitelist:
     - group: "*"
       kind: "*"

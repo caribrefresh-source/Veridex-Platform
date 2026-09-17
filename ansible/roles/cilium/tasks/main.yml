@@ -84,6 +84,7 @@
       --set operator.replicas=2
       --set prometheus.enabled={{ cilium_prometheus_enabled | string | lower }}
       --set operator.prometheus.enabled={{ cilium_prometheus_enabled | string | lower }}
+      --set hostFirewall.enabled={{ cilium_host_firewall_enabled | string | lower }}
   environment:
     KUBECONFIG: "{{ cilium_kubeconfig }}"
   register: _cilium_install
@@ -356,6 +357,114 @@
       --timeout=300s
   changed_when: false
   when: _hubble_upgrade is defined and _hubble_upgrade is changed
+
+# Host firewall. Same shape as the metrics block above and for the same
+# reason: it rewrites the agent DaemonSet's pod template and rolls every
+# Cilium pod, so it is gated behind cilium_allow_disruptive_upgrade rather
+# than firing on a routine converge.
+#
+# Turning the flag on filters NOTHING by itself -- the host endpoint stays
+# default-allow until a CiliumClusterwideNetworkPolicy selects it. See the
+# variable's comment in defaults/main.yml for why the restart is deliberately
+# taken at this inert stage, and for the lockout warning that applies to
+# writing the host policy afterwards.
+# Deliberately reads the RUNNING AGENT, not cilium-config. Found live
+# 2026-09-17: `cilium upgrade --set hostFirewall.enabled=true` rewrites the
+# ConfigMap but does NOT change the agent DaemonSet's pod template, so nothing
+# rolls and the agents keep running with the host firewall disabled. Keying
+# this check off the ConfigMap made the role report success while the datapath
+# was unchanged -- and left the cluster one unrelated pod restart away from
+# silently activating the feature at an unpredictable moment. The agent's own
+# status is the only honest source for whether this is actually in force.
+- name: Check whether the Cilium host firewall is already enabled (runtime, not config)
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail;
+      pod=$(k3s kubectl -n {{ cilium_namespace }} get pods --no-headers | awk '/^cilium-[a-z0-9]{5}/ {print $1; exit}');
+      k3s kubectl -n {{ cilium_namespace }} exec "$pod" -c cilium-agent -- cilium-dbg status 2>/dev/null | awk -F: '/^Host firewall/ {gsub(/ /,"",$2); print tolower($2)}' | cut -d'[' -f1
+    executable: /bin/bash
+  register: _cilium_hostfw
+  changed_when: false
+  when:
+    - is_first_server | bool
+    - cilium_host_firewall_enabled | bool
+
+- name: Report that the Cilium host firewall needs an authorised, disruptive upgrade
+  ansible.builtin.debug:
+    msg: >-
+      The Cilium host firewall is NOT enabled and cilium_allow_disruptive_upgrade
+      is false, so this run is leaving it alone. Enabling it rewrites the agent
+      DaemonSet pod template and rolls every Cilium pod. Re-run with
+      -e cilium_allow_disruptive_upgrade=true only when that restart is
+      intended and authorised (CLAUDE.md Sections 9 and 15).
+  when:
+    - is_first_server | bool
+    - cilium_host_firewall_enabled | bool
+    - (_cilium_hostfw.stdout | default('') | trim) != 'enabled'
+    - not (cilium_allow_disruptive_upgrade | bool)
+
+- name: Enable the Cilium host firewall (DISRUPTIVE - rolls the DaemonSet)
+  ansible.builtin.command:
+    cmd: >-
+      {{ cilium_cli_bin }} upgrade
+      --namespace {{ cilium_namespace }}
+      --reuse-values
+      --set hostFirewall.enabled=true
+      --set k8sServiceHost={{ cilium_k8s_service_host }}
+      --set k8sServicePort={{ cilium_k8s_service_port }}
+      --set MTU={{ cilium_mtu }}
+      --set updateStrategy.rollingUpdate.maxUnavailable={{ cilium_max_unavailable }}
+  environment:
+    KUBECONFIG: "{{ cilium_kubeconfig }}"
+  register: _cilium_hostfw_upgrade
+  changed_when: _cilium_hostfw_upgrade.rc == 0
+  timeout: "{{ cilium_install_timeout }}"
+  when:
+    - is_first_server | bool
+    - cilium_host_firewall_enabled | bool
+    - (_cilium_hostfw.stdout | default('') | trim) != 'enabled'
+    - cilium_allow_disruptive_upgrade | bool
+
+# The helm upgrade above only rewrites cilium-config; it leaves the DaemonSet
+# pod template untouched, so Kubernetes has nothing to roll and the agents keep
+# their old in-process configuration. The restart therefore has to be explicit.
+- name: Restart the Cilium DaemonSet so the agents actually read the new config
+  ansible.builtin.command:
+    cmd: k3s kubectl -n {{ cilium_namespace }} rollout restart daemonset/cilium
+  changed_when: true
+  when: _cilium_hostfw_upgrade is defined and _cilium_hostfw_upgrade is changed
+
+- name: Wait for the Cilium rollout to finish after enabling the host firewall
+  ansible.builtin.command:
+    cmd: >-
+      k3s kubectl -n {{ cilium_namespace }} rollout status daemonset/cilium
+      --timeout=600s
+  changed_when: false
+  when: _cilium_hostfw_upgrade is defined and _cilium_hostfw_upgrade is changed
+
+- name: Assert the running agent now actually reports the host firewall enabled
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail;
+      pod=$(k3s kubectl -n {{ cilium_namespace }} get pods --no-headers | awk '/^cilium-[a-z0-9]{5}/ {print $1; exit}');
+      k3s kubectl -n {{ cilium_namespace }} exec "$pod" -c cilium-agent -- cilium-dbg status 2>/dev/null | awk -F: '/^Host firewall/ {gsub(/ /,"",$2); print tolower($2)}' | cut -d'[' -f1
+    executable: /bin/bash
+  register: _cilium_hostfw_after
+  changed_when: false
+  failed_when: (_cilium_hostfw_after.stdout | default('') | trim) != 'enabled'
+  when: _cilium_hostfw_upgrade is defined and _cilium_hostfw_upgrade is changed
+
+- name: Assert no host policy is silently in force after enabling the host firewall
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail;
+      k3s kubectl get ciliumclusterwidenetworkpolicies -o json 2>/dev/null
+      | grep -c '"nodeSelector"' || true
+    executable: /bin/bash
+  register: _cilium_host_policies
+  changed_when: false
+  failed_when: (_cilium_host_policies.stdout | default('0') | trim | int) > 0
+  when: _cilium_hostfw_upgrade is defined and _cilium_hostfw_upgrade is changed
 
 # Plain grep over YAML rather than jsonpath. jsonpath needs quoting for both
 # filter expressions and literal text, and neither survives Ansible's command

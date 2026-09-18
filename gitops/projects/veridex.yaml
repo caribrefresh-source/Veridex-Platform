@@ -97,6 +97,28 @@ spec:
     # (docs/evidence/gap-closure/tls-public/stage-d/procedure.md).
     - group: cilium.io
       kind: CiliumClusterwideNetworkPolicy
+    # ClusterIssuer (ACME/DNS-01, Public TLS plan Stage F). Without this entry
+    # Argo CD refuses to sync the issuers at all -- the same refusal that
+    # webhook configurations (PR #54) and admission policies (PR #57) hit
+    # before their entries were added.
+    #
+    # Cluster-scoped rather than a namespaced Issuer, and the justification
+    # §13 asks for: a namespaced Issuer resolves its credential secretRef in
+    # its OWN namespace, which would mean a copy of the Route 53 credential in
+    # every namespace that ever needs a certificate. A ClusterIssuer resolves
+    # every secretRef in --cluster-resource-namespace (cert-manager), so the
+    # credential exists exactly once. One copy of a secret is the smaller
+    # blast radius, and it is also what docs/security/route53-dns01.md
+    # already specifies.
+    #
+    # Scope of the grant: a ClusterIssuer holds ACME account configuration and
+    # a DNS solver. It cannot mint arbitrary Kubernetes objects and it cannot
+    # issue for a zone the Route 53 IAM policy does not permit TXT writes on
+    # (docs/security/route53-iam-policy.json). Certificate and
+    # CertificateRequest
+    # stay namespace-scoped and are already covered below.
+    - group: cert-manager.io
+      kind: ClusterIssuer
   namespaceResourceWhitelist:
     - group: "*"
       kind: "*"

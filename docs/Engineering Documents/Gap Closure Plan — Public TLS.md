@@ -146,7 +146,7 @@ dark.
 |---|---|---|
 | **A** | Delegated DNS zone under API control | **Done** (zone + delegation). Credential outstanding. |
 | **B** | Website ported, rebranded, containerised, deployed | **Done** |
-| **C** | Traefik ingress on hostPort **80/443** | **Next** |
+| **C** | Traefik ingress on hostPort **80/443** | **Done** 2026-09-18 -- worker-only DaemonSet live, 80 and 443 answering on both worker IPs, control planes silent (`docs/evidence/gap-closure/tls-public/build-status.md`) |
 | **D** | Cilium host policy in **audit mode** | After C — needs the final port shape |
 | **E** | Host policy switched to **enforce** | After D observes clean |
 | **F** | Apex certificate, DNS cutover, Squarespace retired | After C and E |

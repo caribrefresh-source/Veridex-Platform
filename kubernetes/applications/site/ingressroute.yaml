@@ -2,10 +2,14 @@
 # Public route for the site, served by the worker-only Traefik DaemonSet
 # (kubernetes/infrastructure/ingress/daemonset.yaml) on host port 443.
 #
-# TLS is Traefik's built-in self-signed certificate: tls: {} with no
-# secretName. There is no trusted certificate until Stage F issues one through
-# cert-manager and DNS-01, so browsers will warn until then. This is
-# reachability, not working TLS -- do not read a 200 here as "TLS is done".
+# TLS is the cert-manager-issued wildcard in certificate.yaml, referenced by
+# secretName. Traefik reads the Secret from this namespace and hot-reloads it
+# on renewal, so nothing here changes again at rotation time.
+#
+# If that Secret is absent or not yet populated, Traefik does NOT fail the
+# route -- it falls back to its built-in self-signed certificate and logs the
+# miss. So a 200 on 443 still does not prove TLS is trusted; check the
+# issuer on the served certificate, not the status code.
 #
 # Hostnames are matched explicitly rather than with a catch-all: the apex
 # still resolves to Squarespace, so until the Stage F cutover this route is
@@ -25,7 +29,8 @@ spec:
       services:
         - name: site
           port: 80
-  tls: {}
+  tls:
+    secretName: veridexeai-tls
 ---
 # Plain HTTP exists only to send callers to HTTPS. Nothing is served over
 # port 80 -- an HTTP entrypoint that served the site would be a downgrade

@@ -69,17 +69,17 @@ Each number is a promotion boundary. Components on the same number may be one at
 4. **Root app-of-apps alignment** — Reconcile current names (`root`, `cluster-namespaces`, `cluster-policies`, `monitoring`, `traefik`) with repository names (`k3s-ha-root`, `infra`, `observability`, `secrets`). Migration must avoid creating two owners for one resource. <!-- provider-drift-ok: historical source platform comparison -->
 5. **Namespaces and security labels** — Create the canonical application, `cnpg-system`, and required infrastructure namespaces with deterministic labels, quotas, LimitRanges, and Pod Security settings.
 6. **RBAC and service accounts** — Apply least-privilege roles/bindings; prove allowed operations work and denied operations fail.
-7. **Cilium core** — Reconcile CNI, VXLAN, WireGuard, MTU 1400, default-deny posture, and deterministic egress rules.
+7. **Cilium core** — Reconcile CNI, VXLAN, WireGuard, MTU auto-detection, default-deny posture, and deterministic egress rules. MTU is deliberately `cilium_mtu: 0` (auto-detect), not a fixed value: 1350 was tested and only lowered usable payload, and the accepted result is ~1354 bytes across nodes over VXLAN + WireGuard (`ansible/inventory/production/group_vars/all.yml`). Verify large single-datagram UDP separately — TCP is protected by MSS clamping, UDP is not.
 8. **Cilium Envoy and Hubble Peer** — Verify node coverage and flow visibility.
 9. **Hubble Relay repair** — Restore ready endpoints before declaring network observability complete.
 10. **CoreDNS** — Prove Kubernetes service discovery and allowlisted external DNS resolution.
-11. **Hetzner CCM** — Verify node/route reconciliation without static node-IP assumptions.
-12. **Hetzner CSI and storage classes** — Test dynamic provision, mount, detach, reschedule, reclaim, and retained-volume recovery.
+11. **Node identity and addressing (no cloud controller)** — netcup provides no cloud controller manager, so k3s runs with `disable-cloud-controller: true` and deliberately without the external cloud-provider setting, which would leave every node tainted `uninitialized` with nothing to clear it (`ansible/roles/k3s-server/templates/config.yaml.j2`). Verify no node carries that taint, node addresses come only from the Ansible address register, and the kube-vip API VIP fails over (Gate 5). *Replaces the source platform's Hetzner CCM unit.*
+12. **Longhorn and storage classes** — Longhorn is the approved block storage (gate ledger O5; Gate 12), and k3s's `local-storage` provisioner is disabled. Test dynamic provision, mount, detach, reschedule, reclaim, replica placement across distinct nodes, and retained-volume recovery. MinIO data never uses Longhorn — it runs on direct local paths so erasure coding stays its only replication layer (Gate 13). *Replaces the source platform's Hetzner CSI unit.*
 
 ### Stage B — identity, secrets, ingress, and policy
 
 13. **cert-manager CRDs/controller** — Install CRDs before Certificate resources and verify controller recovery.
-14. **Hetzner DNS webhook and `letsencrypt-dns` issuer** — Prove DNS-01 issuance and renewal; HTTP-01 remains prohibited.
+14. **Route 53 DNS-01 and the `letsencrypt-dns` issuer** — DNS authority for `veridexeai.com` is Route 53, and cert-manager's built-in Route 53 solver needs no webhook. The credential is scoped to TXT changes by `docs/security/route53-iam-policy.json` and delivered through SOPS + age (`docs/security/route53-dns01.md`). Prove DNS-01 issuance and renewal against Let's Encrypt staging before production; HTTP-01 remains prohibited. Sequenced by Stage F of the Public TLS plan. *Replaces the source platform's Hetzner DNS webhook unit.*
 15. **Canonical secret controller** — Reconcile Sealed Secrets if retained. Do not operate SOPS/age and Sealed Secrets as ambiguous co-owners. Test decrypt/reseal and disaster recovery.
 16. **Reflector** — Restrict reflection to explicitly approved secrets/certificates and namespaces.
 17. **Vault** — If retained, define its non-overlapping role, then verify initialization, unseal, persistence, policy, backup, and restore.

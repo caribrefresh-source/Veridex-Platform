@@ -4,7 +4,11 @@ kind: Role
 metadata:
   name: policy-test
   namespace: veridex-policy-test
-rules: []
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["policy-test-public"]
+    verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

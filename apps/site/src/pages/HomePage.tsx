@@ -1,44 +1,6 @@
-import { Link } from 'react-router-dom';
-import { SiteFooter } from '../components/SiteFooter';
-import { SiteHeader } from '../components/SiteHeader';
-import { PageMeta } from '../components/PageMeta';
+import {Link} from'react-router-dom';import{PageMeta}from'../components/PageMeta';import{SiteHeader}from'../components/SiteHeader';import{SiteFooter}from'../components/SiteFooter';
+const cards=[['Traceable by design','Preserve provenance, versions and review history.'],['Intelligence with oversight','Route risk and uncertainty to the right reviewer.'],['Answers with evidence','Ground answers in authorized, cited sources.'],['Control where data lives','Deploy on infrastructure you control.']];
+export function HomePage(){return <div className="page-shell"><PageMeta title="Veridex AI | Governed Document Intelligence" path="/" /><SiteHeader/><main><section className="hero"><div><p className="eyebrow">Governed Document Intelligence</p><h1>AI decisions your organization can defend.</h1><p className="lead">Turn sensitive documents into trusted, searchable knowledge through governed AI, human verification and complete decision lineage.</p><p className="actions"><Link className="button" to="/plans">Explore deployment options</Link><a className="button outline" href="#gates">See the Seven Gates</a></p><ul className="promises"><li>Verify every extraction</li><li>Trace every decision</li><li>Control your deployment</li></ul></div><aside className="evidence"><header>Decision evidence <b>● Verified</b></header><div className="paper">Contract-042.pdf<br/><br/>Source evidence<br/>Reviewer decision<br/>Version history</div><p><b>Verification path</b><br/>Gates 1 → 4 → 6 → 7</p></aside></section><section className="audience">Built for regulated teams · Legal · Healthcare · Finance · Insurance · Government</section><section className="section"><div className="split"><div><p className="eyebrow">Trust is a system property</p><h2>Move faster without surrendering accountability.</h2></div><p>Generic automation stops at an answer. Veridex preserves the evidence and controls behind it.</p></div><div className="cards">{cards.map(([t,d],i)=><article key={t}><em>0{i+1}</em><h3>{t}</h3><p>{d}</p></article>)}</div></section><section className="gates" id="gates"><p className="eyebrow">The Seven Gates™</p><h2>Automation earns its way forward.</h2><p>Routine work moves quickly. Material decisions receive human oversight.</p><figure className="gates-visual"><img src="/seven-gates.png" alt="Seven Gates workflow: ingest, review, extract, validate, enrich, approve, and deliver or archive" /><figcaption>1 Ingest · 2 Review · 3 Extract · 4 Validate · 5 Enrich · 6 Approve · 7 Deliver / Archive</figcaption></figure><p className="status"><b>Product transparency:</b> This is the target governance framework. Availability varies by build phase and deployment scope.</p></section><section className="section architecture"><div><p className="eyebrow">Customer-controlled by default</p><h2>Your documents stay on infrastructure you control.</h2><p>Self-hosted deployment is the core model for regulated organizations.</p><ul><li>Tenant-aware boundaries</li><li>Human review for material decisions</li><li>Versioned evidence and history</li><li>Reproducible GitOps deployment</li></ul></div><div className="stack"><small>Your environment</small><p>Experience <b>Search · Review</b></p><p>Intelligence <b>Extract · Retrieve</b></p><p>Governance <b>Evidence · Audit</b></p><strong>◆ Your infrastructure &amp; data</strong></div></section><section className="cta"><p className="eyebrow">Every decision deserves evidence</p><h2>Make document intelligence accountable.</h2><a className="button light" href="mailto:gesseldaniel@yahoo.com">Start a conversation</a></section></main><SiteFooter/></div>}
 
-const features = [
-  ['Document Intelligence', 'A focused path from document intake to structured, reviewable information.'],
-  ['Security by Design', 'An architecture built around least privilege, encrypted transport, and auditable operations.'],
-  ['Workflow Automation', 'A planned foundation for dependable, observable document workflows.'],
-  ['Data Platform', 'Purpose-specific data services designed for documents, events, search, and workflow state.'],
-  ['AI Services', 'A roadmap for retrieval, embeddings, and knowledge-assisted document analysis.'],
-];
 
-export function HomePage() {
-  return (
-    <div className="page-shell">
-      <PageMeta title="Veridex | Document Intelligence" path="/" />
-      <SiteHeader />
-      <main>
-        <section className="hero" aria-labelledby="home-heading">
-          <p className="eyebrow">Document Intelligence Platform</p>
-          <h1 id="home-heading">Turn complex documents into reliable workflows.</h1>
-          <p className="hero-copy">
-            Veridex is building a secure platform for turning document-heavy operations into observable,
-            AI-assisted processes.
-          </p>
-          <Link className="button" to="/plans">Explore plans</Link>
-        </section>
-        <section className="features" aria-labelledby="capabilities-heading">
-          <h2 id="capabilities-heading">Platform capabilities</h2>
-          <div className="feature-grid">
-            {features.map(([title, description]) => (
-              <article className="card" key={title}>
-                <h3>{title}</h3>
-                <p>{description}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-      </main>
-      <SiteFooter />
-    </div>
-  );
-}
+

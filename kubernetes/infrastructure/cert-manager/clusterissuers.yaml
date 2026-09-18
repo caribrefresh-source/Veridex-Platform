@@ -15,11 +15,12 @@
 # hostedZoneID is set deliberately. With it cert-manager addresses the zone
 # directly instead of discovering it, so the committed least-privilege policy
 # (docs/security/route53-iam-policy.json) does not need
-# route53:ListHostedZonesByName. DOCUMENTED, from cert-manager's Route53 page
-# ("can be further restricted by specifying a particular hosted zone ID
-# instead of all hosted zones") -- NOT yet VERIFIED against a live challenge.
-# If a challenge fails with AccessDenied on ListHostedZonesByName, that claim
-# was wrong: add that one action to the policy. Do not widen anything else.
+# route53:ListHostedZonesByName. VERIFIED 2026-09-18 by a live challenge: the
+# TXT record appeared at _acme-challenge.veridexeai.com and both identifiers
+# authorized, while the same credential is provably refused both
+# ListHostedZones and ListHostedZonesByName. The committed policy is therefore
+# sufficient as written and must not be widened. (This was DOCUMENTED-only
+# when first written; the staging run settled it.)
 #
 # region: us-east-1 is the Route 53 control-plane endpoint's region. Route 53
 # is a global service; this does not place any record or zone in us-east-1.

@@ -14,7 +14,22 @@
 >   only one server and one worker were drilled; the console needs the
 >   Clipboard button rather than typed paste; a worker has no kubeconfig, so
 >   its path is `crictl`, not `kubectl`.
-> - **NEW, and it must be resolved before step 3.** That drill recorded
+> - **RESOLVED 2026-09-18, and replaced by a larger finding.** EG101 was run
+>   fresh across all five host endpoints: every one reports
+>   `PolicyAuditMode: Enabled`, enforcement `Disabled`, and zero
+>   `CiliumClusterwideNetworkPolicy` objects exist. Enumeration retained at
+>   `eg101-enumeration.txt`. The step-3 stop condition is therefore currently
+>   MET -- but see the next bullet before relying on that.
+> - **Audit mode here is imperative and undocumented.** `VERIFIED`
+>   2026-09-18: it is absent from the `cilium-config` ConfigMap, is not a
+>   `cilium-agent` argument, and no Ansible role sets it. Something set it on
+>   all five endpoints out of band and nothing records what or when. Two
+>   consequences. First, EG101 passing today says nothing about tomorrow --
+>   re-run it immediately before applying any policy, every time. Second,
+>   this is live state that no source of truth describes, which CLAUDE.md §15
+>   forbids treating as intended design. It should either become declarative
+>   or be recorded as an expiring emergency mutation under §4.
+> - **Superseded note, kept for provenance.** The drill recorded
 >   `agent-2` host endpoint 107 already showing `PolicyAuditMode: Enabled`.
 >   Whether that is still true, and what the other four nodes show, is
 >   `UNKNOWN` — it was not re-checked, and audit mode does not survive a

@@ -4,6 +4,7 @@ kind: Namespace
 metadata:
   name: site
   annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
     veridex.io/owner: platform-applications
     veridex.io/purpose: Public two-page Veridex static site
     argocd.argoproj.io/sync-wave: "0"

@@ -4,6 +4,7 @@ kind: Namespace
 metadata:
   name: monitoring
   annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
     veridex.io/owner: platform-observability
     veridex.io/purpose: Cluster metrics, logs, alerts, and capacity dashboards
   labels:

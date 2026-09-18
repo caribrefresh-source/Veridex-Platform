@@ -12,6 +12,7 @@ kind: Namespace
 metadata:
   name: cert-manager
   annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
     veridex.io/owner: platform-engineering
     veridex.io/purpose: ACME certificate issuance and renewal for cluster ingress
   labels:

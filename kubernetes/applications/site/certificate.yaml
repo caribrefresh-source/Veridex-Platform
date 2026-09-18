@@ -19,12 +19,16 @@
 # The Secret is created by cert-manager in this namespace because a Traefik
 # IngressRoute can only reference a Secret from its own namespace.
 #
-# issuerRef is letsencrypt-staging for the first issuance, per the order fixed
-# in docs/security/route53-dns01.md. PROMOTION IS THIS ONE FIELD: change it to
-# letsencrypt-prod and cert-manager reissues into the same Secret name, which
-# Traefik picks up without a restart. Do not promote before a staging
-# certificate has actually gone Ready -- that is what the staging endpoint is
-# for, and the production endpoint's duplicate limit is unforgiving.
+# issuerRef is letsencrypt-prod, promoted 2026-09-18 after the staging run
+# proved the whole chain: both challenges reached valid, the Certificate went
+# Ready, and both worker IPs served a cert-manager certificate whose SAN list
+# held *.veridexeai.com and veridexeai.com, matched with SNI
+# www.veridexeai.com. Staging evidence:
+# docs/evidence/gap-closure/tls-public/build-status.md.
+#
+# To roll back, put letsencrypt-staging here again: cert-manager reissues into
+# the same Secret name and Traefik reloads it without a restart. The rollback
+# is untrusted-but-serving, never no-certificate.
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
@@ -37,6 +41,6 @@ spec:
     - veridexeai.com
     - "*.veridexeai.com"
   issuerRef:
-    name: letsencrypt-staging
+    name: letsencrypt-prod
     kind: ClusterIssuer
     group: cert-manager.io

@@ -31,7 +31,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: site
-          image: ghcr.io/caribrefresh-source/veridex-site@sha256:63c80dd7b81837a7600c2c82ee0ea6f9123f5727a2d843a04a91e86fea15022a
+          image: ghcr.io/caribrefresh-source/veridex-site@sha256:24bb1b14624402652e8e9a22b76265b8d6ea32694b2e9bede5aed650ef53e18a
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

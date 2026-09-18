@@ -5,7 +5,7 @@ metadata:
   name: policy-test-allowed
   namespace: veridex-policy-test
 spec:
-  schedule: "3,33 * * * *"
+  schedule: "*/2 * * * *"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
@@ -54,7 +54,7 @@ metadata:
   name: policy-test-denied
   namespace: veridex-policy-test
 spec:
-  schedule: "8,38 * * * *"
+  schedule: "*/2 * * * *"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3

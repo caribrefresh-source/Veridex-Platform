@@ -1,0 +1,155 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: policy-admission-verifier
+  namespace: veridex-policy-test
+data:
+  verify.py: |
+    import json
+    import os
+    import ssl
+    import time
+    import urllib.error
+    import urllib.request
+
+    namespace = "veridex-policy-test"
+    base = "https://kubernetes.default.svc"
+    token = open("/var/run/secrets/kubernetes.io/serviceaccount/token", encoding="utf-8").read()
+    context = ssl.create_default_context(cafile="/var/run/secrets/kubernetes.io/serviceaccount/ca.crt")
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+    def request(method, path, body=None):
+        data = json.dumps(body).encode() if body is not None else None
+        req = urllib.request.Request(base + path, data=data, headers=headers, method=method)
+        try:
+            with urllib.request.urlopen(req, context=context, timeout=15) as response:
+                return response.status, json.loads(response.read() or b"{}")
+        except urllib.error.HTTPError as error:
+            return error.code, json.loads(error.read() or b"{}")
+
+    def rejected(name, path, body, expected):
+        status, result = request("POST", path, body)
+        message = result.get("message", "")
+        if status not in (403, 422) or expected.lower() not in message.lower():
+            raise RuntimeError(f"{name}: expected rejection containing {expected!r}; status={status} message={message!r}")
+        print(f"PASS {name}: status={status} reason={message}")
+
+    suffix = str(int(time.time()))
+    pod_path = f"/api/v1/namespaces/{namespace}/pods"
+    role_path = f"/apis/rbac.authorization.k8s.io/v1/namespaces/{namespace}/roles"
+    binding_path = f"/apis/rbac.authorization.k8s.io/v1/namespaces/{namespace}/rolebindings"
+    image = "busybox:1.37.0@sha256:7a3ebe5bfd1a4a19797d20b0c0bb39d44393e9a03fd852c0865b0f540d868df0"
+    restricted = {
+        "allowPrivilegeEscalation": False,
+        "capabilities": {"drop": ["ALL"]},
+        "runAsNonRoot": True,
+        "runAsUser": 65532,
+        "seccompProfile": {"type": "RuntimeDefault"},
+    }
+
+    rejected("wildcard-role", role_path, {
+        "apiVersion": "rbac.authorization.k8s.io/v1", "kind": "Role",
+        "metadata": {"name": f"rejected-wildcard-{suffix}", "labels": {"veridex.io/policy-test-run": suffix}},
+        "rules": [{"apiGroups": ["*"], "resources": ["*"], "verbs": ["*"]}],
+    }, "wildcards are forbidden")
+
+    rejected("cluster-admin-binding", binding_path, {
+        "apiVersion": "rbac.authorization.k8s.io/v1", "kind": "RoleBinding",
+        "metadata": {"name": f"rejected-admin-{suffix}", "labels": {"veridex.io/policy-test-run": suffix}},
+        "roleRef": {"apiGroup": "rbac.authorization.k8s.io", "kind": "ClusterRole", "name": "cluster-admin"},
+        "subjects": [{"kind": "ServiceAccount", "name": "policy-test", "namespace": namespace}],
+    }, "unapproved clusterroles")
+
+    rejected("restricted-pod-security", pod_path, {
+        "apiVersion": "v1", "kind": "Pod",
+        "metadata": {"name": f"rejected-privileged-{suffix}", "labels": {"veridex.io/policy-test-run": suffix}},
+        "spec": {"restartPolicy": "Never", "containers": [{"name": "test", "image": image,
+          "command": ["true"], "resources": {"requests": {"cpu": "10m", "memory": "8Mi"}, "limits": {"cpu": "20m", "memory": "16Mi"}},
+          "securityContext": {"privileged": True}}]},
+    }, "restricted")
+
+    rejected("resource-quota", pod_path, {
+        "apiVersion": "v1", "kind": "Pod",
+        "metadata": {"name": f"rejected-quota-{suffix}", "labels": {"veridex.io/policy-test-run": suffix}},
+        "spec": {"restartPolicy": "Never", "securityContext": {"runAsNonRoot": True, "runAsUser": 65532, "seccompProfile": {"type": "RuntimeDefault"}},
+          "containers": [{"name": "test", "image": image, "command": ["true"],
+          "resources": {"requests": {"cpu": "2", "memory": "16Mi"}, "limits": {"cpu": "2", "memory": "16Mi"}}, "securityContext": restricted}]},
+    }, "exceeded quota")
+
+    cleanup_name = f"cleanup-{suffix}"
+    compliant = {
+        "apiVersion": "v1", "kind": "Pod",
+        "metadata": {"name": cleanup_name, "labels": {"veridex.io/policy-test-run": suffix}},
+        "spec": {"restartPolicy": "Never", "automountServiceAccountToken": False,
+          "securityContext": {"runAsNonRoot": True, "runAsUser": 65532, "seccompProfile": {"type": "RuntimeDefault"}},
+          "containers": [{"name": "test", "image": image, "command": ["sh", "-c", "sleep 60"],
+          "resources": {"requests": {"cpu": "10m", "memory": "8Mi"}, "limits": {"cpu": "20m", "memory": "16Mi"}}, "securityContext": restricted}]},
+    }
+    status, result = request("POST", pod_path, compliant)
+    if status != 201:
+        raise RuntimeError(f"cleanup-create: status={status} result={result}")
+    status, result = request("DELETE", f"{pod_path}/{cleanup_name}", {"apiVersion": "v1", "kind": "DeleteOptions", "gracePeriodSeconds": 0})
+    if status not in (200, 202):
+        raise RuntimeError(f"cleanup-delete: status={status} result={result}")
+    for _ in range(20):
+        status, _ = request("GET", f"{pod_path}/{cleanup_name}")
+        if status == 404:
+            break
+        time.sleep(1)
+    else:
+        raise RuntimeError("cleanup residue remained")
+    print(f"PASS label-scoped-cleanup: run={suffix} residue=0")
+    print("POLICY_ADMISSION_VERIFICATION_PASS")
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: policy-test-admission
+  namespace: veridex-policy-test
+spec:
+  schedule: "*/2 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    metadata:
+      labels:
+        veridex.io/policy-test-suite: admission
+    spec:
+      backoffLimit: 0
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels:
+            veridex.io/policy-role: admission-verifier
+            veridex.io/policy-test-suite: admission
+        spec:
+          serviceAccountName: policy-verifier
+          automountServiceAccountToken: true
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: verify
+              image: python:3.12-slim@sha256:2fe5997d249a808b8eeea52c58a1dbffbba28754dc11699ef5c029f2d818ce79
+              command: ["python", "/verify/verify.py"]
+              resources:
+                requests: {cpu: 20m, memory: 32Mi}
+                limits: {cpu: 100m, memory: 96Mi}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: ["ALL"]}
+              volumeMounts:
+                - name: script
+                  mountPath: /verify
+                  readOnly: true
+          volumes:
+            - name: script
+              configMap:
+                name: policy-admission-verifier
+

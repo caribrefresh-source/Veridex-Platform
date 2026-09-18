@@ -24,11 +24,24 @@ in `docs/Engineering Documents/Gap Closure Plan — Public TLS.md`.
 
 ## Blocking operator checkpoints
 
-1. Create the Route 53 IAM credential scoped by
-   `docs/security/route53-iam-policy.json`.
-2. Approve and configure the SOPS+age decryption mechanism for Argo CD, then run
-   `scripts/New-Route53SopsSecret.ps1` locally with the approved age recipient.
-3. Complete Stages C–E before the Stage F certificate and apex cutover.
+1. ~~Create the Route 53 IAM credential~~ — **done 2026-09-18.** IAM user
+   `veridex-cert-manager-dns01` in account 372083591392, carrying
+   `docs/security/route53-iam-policy.json` as an inline policy, no console
+   access. Secret `route53-credentials` applied to namespace `cert-manager`.
+   `VERIFIED` adversarially with the issued key: it can read record sets in
+   zone Z01555242T3QOO9FDT59Z, and is refused `route53:ListHostedZones` and
+   `route53:ListHostedZonesByName` — confirming the scope is real and not
+   merely declared.
+2. ~~Approve and configure the SOPS+age decryption mechanism for Argo CD~~ —
+   superseded 2026-09-18. SOPS exists nowhere in this repository or cluster,
+   so `route53-credentials` follows the `grafana-admin-credentials`
+   precedent instead: applied by `kubectl`, never committed, registered
+   `manual_only`. Reasoning and the accepted IIR cost are in
+   `docs/security/route53-dns01.md`. `scripts/New-Route53SopsSecret.ps1` is
+   retained for when Gates 21/22 land SOPS decryption.
+3. Stage C is done. Stages D–E (host policy) remain prerequisites for the
+   Stage F **apex cutover**, but not for certificate issuance — DNS-01 does
+   not touch the ingress path.
 
 Stage B's "internal-only" note no longer holds: the public IngressRoute and
 host ports 80/443 are live and serving (Stage C). What is still absent is a

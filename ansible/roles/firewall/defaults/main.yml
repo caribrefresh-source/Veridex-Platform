@@ -123,7 +123,7 @@ firewall_trusted_pod_ports:
 #     sent in cleartext over the public internet. Deliberately its own
 #     NodePort, not a reuse of 32537: keeps this fully independent of Argo
 #     CD's TLS-passthrough catch-all route (see
-#     kubernetes/infrastructure/ingress/deployment.yaml's scope note).
+#     kubernetes/infrastructure/ingress/daemonset.yaml's scope note).
 # 31742 (web/HTTP) and 30051 (Traefik's own dashboard) stay closed until
 # something actually needs them; opening a port nothing listens on yet is
 # needless attack surface.

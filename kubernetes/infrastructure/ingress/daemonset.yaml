@@ -1,12 +1,13 @@
 ---
 # Traefik as a worker-only DaemonSet publishing host ports 80 and 443.
 #
-# This exists ALONGSIDE the Deployment in deployment.yaml on purpose. A
-# Deployment -> DaemonSet change is not an in-place update: Argo CD prunes one
-# and creates the other in an order it does not guarantee, so a straight swap
-# has a window with no Traefik at all, taking Argo CD and Grafana down
-# together. Stage C therefore lands this DaemonSet first, proves it serves,
-# and only then removes the Deployment in a separate change.
+# This is now the only Traefik. It deliberately ran ALONGSIDE the Deployment
+# for a day first: a Deployment -> DaemonSet change is not an in-place update,
+# Argo CD prunes one and creates the other in an order it does not guarantee,
+# so a straight swap has a window with no Traefik at all -- taking Argo CD and
+# Grafana down together. Stage C therefore landed this DaemonSet first, proved
+# it served, and removed the Deployment in a separate change (2026-09-18,
+# evidence in docs/evidence/gap-closure/tls-public/stage-c/).
 #
 # Two nodes, not five. The plan's Stage C originally said "all five node
 # public IPs"; amended 2026-09-17 (see the plan's Stage C) to the two worker

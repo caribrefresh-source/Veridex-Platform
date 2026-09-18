@@ -15,6 +15,10 @@ metadata:
     argocd.argoproj.io/sync-options: Prune=false,Delete=false
     veridex.io/owner: platform-engineering
     veridex.io/purpose: ACME certificate issuance and renewal for cluster ingress
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
   labels:
     veridex.io/wave: "7"
     veridex.io/role: cluster-services
+    veridex.io/lifecycle: active
+    veridex.io/recovery-class: reconcile
+    veridex.io/data-classification: internal

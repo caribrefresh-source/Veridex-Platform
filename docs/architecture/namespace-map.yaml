@@ -49,8 +49,20 @@ spec:
       role: cluster-access
       owner: platform-security
       recoveryClass: reconcile
+    - name: cnpg-system
+      lifecycle: planned
+      wave: 6
+      role: database-operator
+      owner: platform-data
+      recoveryClass: reconcile
+    - name: longhorn-system
+      lifecycle: planned
+      wave: 6
+      role: storage-system
+      owner: platform-data
+      recoveryClass: reconcile
     - name: veridex-policy-test
-      lifecycle: active
+      lifecycle: planned
       wave: 1
       role: policy-test
       owner: platform-security

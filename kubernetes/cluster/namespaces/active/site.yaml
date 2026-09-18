@@ -8,6 +8,10 @@ metadata:
     veridex.io/owner: platform-applications
     veridex.io/purpose: Public two-page Veridex static site
     argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
   labels:
     veridex.io/wave: "8"
     veridex.io/role: public-site
+    veridex.io/lifecycle: active
+    veridex.io/recovery-class: redeploy
+    veridex.io/data-classification: public

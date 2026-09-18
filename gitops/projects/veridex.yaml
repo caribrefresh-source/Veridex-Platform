@@ -5,13 +5,10 @@
 # whose repoURL is not listed here, so a compromised or mistaken Application
 # spec cannot pull from an arbitrary Git host.
 #
-# destinations is restricted to this cluster's own in-cluster API server
-# (never an external/attacker-registered cluster Secret -- the plan's
-# "unrestricted destinations" stop condition). Namespace stays '*' within
-# that one server: Gate 10 closes before every namespace name used by later
-# rollout waves has been enumerated (that enumeration is Gate 32, which the
-# plan explicitly places after GitOps exists to manage it). Narrow this list
-# once Gate 32 closes.
+# Destinations are the exact current and approved future namespace set on the
+# in-cluster API. CI verifies this against namespace-map.yaml. This does not
+# constrain cluster-scoped Namespace objects, so source/path lint remains a
+# separate mandatory control.
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
@@ -22,8 +19,24 @@ spec:
   sourceRepos:
     - https://github.com/caribrefresh-source/Veridex-Platform.git
   destinations:
-    - server: https://kubernetes.default.svc
-      namespace: "*"
+    - {server: https://kubernetes.default.svc, namespace: argocd}
+    - {server: https://kubernetes.default.svc, namespace: cert-manager}
+    - {server: https://kubernetes.default.svc, namespace: cnpg-system}
+    - {server: https://kubernetes.default.svc, namespace: longhorn-system}
+    - {server: https://kubernetes.default.svc, namespace: kube-system}
+    - {server: https://kubernetes.default.svc, namespace: monitoring}
+    - {server: https://kubernetes.default.svc, namespace: site}
+    - {server: https://kubernetes.default.svc, namespace: veridex-access}
+    - {server: https://kubernetes.default.svc, namespace: veridex-policy-test}
+    - {server: https://kubernetes.default.svc, namespace: veridex-edge}
+    - {server: https://kubernetes.default.svc, namespace: veridex-auth}
+    - {server: https://kubernetes.default.svc, namespace: veridex-apps}
+    - {server: https://kubernetes.default.svc, namespace: veridex-workers}
+    - {server: https://kubernetes.default.svc, namespace: veridex-ai}
+    - {server: https://kubernetes.default.svc, namespace: veridex-database}
+    - {server: https://kubernetes.default.svc, namespace: veridex-object}
+    - {server: https://kubernetes.default.svc, namespace: veridex-messaging}
+    - {server: https://kubernetes.default.svc, namespace: veridex-derived}
   # Only what a specific, justified need has required is pre-approved here --
   # Gate 10's own rule: "a later gate that genuinely needs one extends this
   # list explicitly, not by default."

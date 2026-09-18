@@ -1,0 +1,16 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: veridex-derived
+  annotations:
+    veridex.io/owner: platform-data
+    veridex.io/purpose: Rebuildable search, vector, graph and cache state
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+  labels:
+    veridex.io/wave: "6"
+    veridex.io/role: derived-state
+    veridex.io/lifecycle: planned
+    veridex.io/recovery-class: rebuild-replay
+    veridex.io/data-classification: restricted
+

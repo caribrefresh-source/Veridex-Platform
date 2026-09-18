@@ -11,10 +11,13 @@ spec:
   source:
     repoURL: https://github.com/caribrefresh-source/Veridex-Platform.git
     targetRevision: main
-    path: kubernetes/cluster/namespaces
+    # Planned Namespace manifests remain inert until their P0-P5 promotion
+    # changes lifecycle and moves them into active/.
+    path: kubernetes/cluster/namespaces/active
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
   syncPolicy:
     automated:
+      # prune is deliberately omitted: Namespace deletion is never automated.
       selfHeal: true

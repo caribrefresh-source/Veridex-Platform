@@ -27,7 +27,7 @@ spec:
       # under its path as a manifest, so leaving it in scope would fail
       # manifest generation for the whole root app and stall every child
       # Application behind a ComparisonError. Excluded deliberately.
-      exclude: "{bootstrap/**,policies/**}"
+      exclude: "{bootstrap/**,policies/**,templates/**,vendor/**,secrets/**}"
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd

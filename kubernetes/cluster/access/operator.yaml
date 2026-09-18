@@ -1,0 +1,115 @@
+---
+# Day-to-day kubectl identity: READ-ONLY, and revocable.
+#
+# Replaces the k3s built-in admin certificate (system:admin / system:masters)
+# as the operator workstation's default credential. That certificate is full
+# cluster-admin and cannot be revoked short of rotating k3s's certificates --
+# the "standing cluster-admin" that .claude/CLAUDE.md §8 says has no legitimate
+# use. It is kept, but only as a separate break-glass kubeconfig
+# (docs/security/kubectl-access.md).
+#
+# Why a token Secret and not short-lived TokenRequest tokens: minting a
+# short-lived token needs create on serviceaccounts/token, which this identity
+# deliberately lacks -- so every session would start by using the break-glass
+# credential to mint one, which defeats the purpose. A token Secret is
+# long-lived but REVOCABLE: delete the Secret and the token stops working at
+# once. Because this Secret is Git-managed, Argo CD's selfHeal recreates it
+# with a NEW token -- so deleting it is also how the token is rotated.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: veridex-operator
+  namespace: veridex-access
+automountServiceAccountToken: false
+---
+# The token controller fills in token, ca.crt and namespace. No secret value is
+# in Git -- this manifest only asks for one to exist.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: veridex-operator-token
+  namespace: veridex-access
+  annotations:
+    kubernetes.io/service-account.name: veridex-operator
+type: kubernetes.io/service-account-token
+---
+# Read-only across the cluster, with Secrets deliberately excluded.
+#
+# Kubernetes RBAC has no deny rule, so "read everything except Secrets" cannot
+# be written as a wildcard with an exception. Secrets exist only in the core
+# ("") API group, so core is listed resource by resource (no secrets), and
+# every other group in use gets a read-only wildcard. Reading Secrets would
+# make this identity admin-equivalent in practice (service-account tokens,
+# repository credentials), which is the whole thing being removed.
+#
+# Read verbs only -- get/list/watch -- so exec, port-forward, attach, proxy,
+# create, patch and delete are all impossible by construction.
+#
+# Groups listed from `kubectl api-resources` on 2026-09-18. A new CRD group
+# added later is NOT covered until listed here; that is intentional -- new
+# access is granted by a reviewed change, not inherited silently.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: veridex-operator-read
+rules:
+  - apiGroups: [""]
+    resources:
+      - componentstatuses
+      - configmaps
+      - endpoints
+      - events
+      - limitranges
+      - namespaces
+      - nodes
+      - persistentvolumeclaims
+      - persistentvolumes
+      - pods
+      - pods/log
+      - podtemplates
+      - replicationcontrollers
+      - resourcequotas
+      - serviceaccounts
+      - services
+    verbs: [get, list, watch]
+  - apiGroups:
+      - acme.cert-manager.io
+      - admissionregistration.k8s.io
+      - apiextensions.k8s.io
+      - apiregistration.k8s.io
+      - apps
+      - argoproj.io
+      - autoscaling
+      - batch
+      - cert-manager.io
+      - certificates.k8s.io
+      - cilium.io
+      - coordination.k8s.io
+      - discovery.k8s.io
+      - events.k8s.io
+      - flowcontrol.apiserver.k8s.io
+      - helm.cattle.io
+      - k3s.cattle.io
+      - networking.k8s.io
+      - node.k8s.io
+      - policy
+      - rbac.authorization.k8s.io
+      - resource.k8s.io
+      - scheduling.k8s.io
+      - storage.k8s.io
+      - traefik.io
+    resources: ["*"]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: veridex-operator-read
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: veridex-operator-read
+subjects:
+  - kind: ServiceAccount
+    name: veridex-operator
+    namespace: veridex-access

@@ -3,7 +3,7 @@
 **Status:** Corrected after 11 adversarial review iterations  
 **Purpose:** Canonical, dependency-ordered GitOps build ledger for the Document Intelligence Platform  
 **Evidence date:** 2026-09-15  
-**Sources:** `K3s-HA/docs/operations/argocd-application-inventory.md`, `K3s-HA/eng-design/Document Intelligence Platform v4.4.docx`, repository manifests/source, and the current Kubernetes context
+**Sources:** `K3s-HA/docs/operations/argocd-application-inventory.md`, `K3s-HA/eng-design/Document Intelligence Platform v4.4.docx`, repository manifests/source, and the current Kubernetes context <!-- provider-drift-ok: historical source platform comparison -->
 
 ## 1. Truth model
 
@@ -66,7 +66,7 @@ Each number is a promotion boundary. Components on the same number may be one at
 1. **Baseline capture and target-context lock** — Record cluster identity, Kubernetes/K3s version, nodes, namespaces, CRDs, storage classes, Argo applications, Git revision, and existing workloads. Abort on context mismatch.
 2. **Architecture reconciliation decision** — Correct the `v4.4.docx` filename/internal `v4.3` mismatch; mark the 78-application inventory as historical for the current context; select `docintel` or `data-plane` as the one canonical namespace; reconcile SOPS/age versus Sealed Secrets; document VictoriaMetrics rather than legacy Prometheus Operator ownership.
 3. **Argo CD control plane** — Reconcile the existing installation; verify repository authentication, projects, health customizations, retry policy, sync windows, and controller recovery. Do not replace a working control plane.
-4. **Root app-of-apps alignment** — Reconcile current names (`root`, `cluster-namespaces`, `cluster-policies`, `monitoring`, `traefik`) with repository names (`k3s-ha-root`, `infra`, `observability`, `secrets`). Migration must avoid creating two owners for one resource.
+4. **Root app-of-apps alignment** — Reconcile current names (`root`, `cluster-namespaces`, `cluster-policies`, `monitoring`, `traefik`) with repository names (`k3s-ha-root`, `infra`, `observability`, `secrets`). Migration must avoid creating two owners for one resource. <!-- provider-drift-ok: historical source platform comparison -->
 5. **Namespaces and security labels** — Create the canonical application, `cnpg-system`, and required infrastructure namespaces with deterministic labels, quotas, LimitRanges, and Pod Security settings.
 6. **RBAC and service accounts** — Apply least-privilege roles/bindings; prove allowed operations work and denied operations fail.
 7. **Cilium core** — Reconcile CNI, VXLAN, WireGuard, MTU 1400, default-deny posture, and deterministic egress rules.

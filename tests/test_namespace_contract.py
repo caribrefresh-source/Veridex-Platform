@@ -21,8 +21,14 @@ class NamespaceContractTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
-        for name in ("docs", "gitops", "kubernetes"):
-            shutil.copytree(ROOT / name, self.root / name)
+        shutil.copytree(ROOT / "gitops", self.root / "gitops")
+        (self.root / "docs").mkdir()
+        shutil.copytree(ROOT / "docs" / "architecture", self.root / "docs" / "architecture")
+        (self.root / "kubernetes" / "cluster").mkdir(parents=True)
+        shutil.copytree(
+            ROOT / "kubernetes" / "cluster" / "namespaces",
+            self.root / "kubernetes" / "cluster" / "namespaces",
+        )
 
     def tearDown(self):
         self.temp.cleanup()

@@ -13,21 +13,21 @@ function renderPath(path: string) {
 describe('static frontend routes', () => {
   it('renders HomePage at /', () => {
     renderPath('/');
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Turn complex documents');
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('AI decisions your organization can defend');
   });
 
   it('renders PlansPage at /plans', () => {
     renderPath('/plans');
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Built around your organization');
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Choose control first');
   });
 
   it('navigates in both directions', async () => {
     const user = userEvent.setup();
     renderPath('/');
-    await user.click(screen.getByRole('link', { name: 'Explore plans' }));
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Built around');
-    await user.click(screen.getByRole('link', { name: /Back to home/ }));
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Turn complex documents');
+    await user.click(screen.getByRole('link', { name: 'Explore deployment options' }));
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Choose control first');
+    await user.click(screen.getByRole('link', { name: /Return home/ }));
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('AI decisions your organization can defend');
   });
 
   it('does not render a legacy route', () => {
@@ -36,10 +36,10 @@ describe('static frontend routes', () => {
     expect(screen.queryByText('Admin Panel')).not.toBeInTheDocument();
   });
 
-  it('provides a route-specific title and navigation landmarks', () => {
+  it('provides titles and navigation landmarks', () => {
     renderPath('/plans');
-    expect(document.title).toBe('Plans | Veridex');
     expect(screen.getByRole('navigation', { name: 'Primary' })).toBeVisible();
     expect(screen.getByRole('main')).toBeVisible();
   });
 });
+

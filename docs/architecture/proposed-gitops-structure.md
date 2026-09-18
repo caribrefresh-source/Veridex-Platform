@@ -8,7 +8,7 @@
 
 **Cilium and CoreDNS never appear under `gitops/`.** `docs/security/cilium-coredns-ownership.md` documents this as closing part of Gate 10's End State: both are bootstrap-path components owned by Ansible (Cilium) and k3s itself (CoreDNS), verified live against the actual cluster. `root-application.yaml`'s `directory.recurse: true` picks up *anything* placed under `gitops/` with no allow-list, so a future `gitops/infrastructure/cilium/` is explicitly called out in that document as a stop-condition violation, not a routine addition. This structure has no Cilium or CoreDNS directory anywhere, on purpose.
 
-**No Velero, no cluster-wide backup Application.** The plan's backup design is per-producer, not a single backup layer: the etcd path is a pinned b2-CLI sidecar owned by Ansible (same bootstrap-path logic as Cilium — it's not GitOps-managed), CNPG uses its own Barman Cloud plugin, MinIO gets an object-level mirror, and the Backblaze B2 buckets themselves are "provisioned as a separate infrastructure-as-code stack outside the netcup cluster" (plan text) — explicitly stated to be un-triggerable by "the cluster's own GitOps root app" (Gate 31). Nothing in `gitops/` should ever declare a bucket, a bucket policy, or a whole-cluster backup Application. Each producer's backup config lives inline with that producer's own manifests under `platform/`.
+**No cluster-wide backup Application.** The plan's backup design is per-producer, not a single backup layer: the etcd path is a pinned b2-CLI sidecar owned by Ansible (same bootstrap-path logic as Cilium — it's not GitOps-managed), CNPG uses its own Barman Cloud plugin, MinIO gets an object-level mirror, and the Backblaze B2 buckets themselves are "provisioned as a separate infrastructure-as-code stack outside the netcup cluster" (plan text) — explicitly stated to be un-triggerable by "the cluster's own GitOps root app" (Gate 31). Nothing in `gitops/` should ever declare a bucket, a bucket policy, or a whole-cluster backup Application. Each producer's backup config lives inline with that producer's own manifests under `platform/`.
 
 ## Full tree
 
@@ -52,10 +52,10 @@ gitops/
 │   └── consumer-capability-gates.yaml   # scaffold, gates: [] until the first interdependent service pair exists
 │
 ├── secrets/                             # PLACEHOLDER — mechanism is an open plan decision, not assumed
-│   └── README.md                        # NEW — states plainly that §6's "SOPS + age vs. SealedSecrets and Longhorn" conflict is unresolved (must close before Gates 13/24), and that docs/security/secret-register.yml is the interim source of truth for what secrets exist and where they're held today (operator-workstation env vars, not yet in-cluster for most entries)
+│   └── README.md                        # NEW — states that secrets use SOPS + age only (the §6 conflict was resolved 2026-09-17, gate ledger O5), and that docs/security/secret-register.yml is the interim source of truth for what secrets exist and where they're held today (operator-workstation env vars, not yet in-cluster for most entries)
 │
 ├── vendor/                              # PLACEHOLDER — empty until any chart/CRD needs pinning
-│   └── (each subdirectory gets a VERSION file recording the exact upstream release it was extracted from — K3s-HA's 157 KB unpinned Velero CRD dump is the example of what not to do) <!-- provider-drift-ok: historical source platform comparison -->
+│   └── (each subdirectory gets a VERSION file recording the exact upstream release it was extracted from — K3s-HA's 157 KB unpinned CRD dump is the example of what not to do) <!-- provider-drift-ok: historical source platform comparison -->
 │
 └── templates/                           # PLACEHOLDER — empty until an example/reference manifest is needed
     └── (never mixed with live manifests — K3s-HA's grpc-ingressroute.yaml.example living next to real IngressRoutes is the example of what not to do) <!-- provider-drift-ok: historical source platform comparison -->

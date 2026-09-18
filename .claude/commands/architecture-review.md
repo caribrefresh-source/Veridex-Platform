@@ -42,9 +42,8 @@ Verify: Single ingress (Traefik v3.7 hostNetwork). ForwardAuth on all app routes
 ```
 kubectl get clustersecretstore
 kubectl get externalsecret -A --no-headers | wc -l
-kubectl get sealedsecret -A --no-headers | wc -l
 ```
-Verify: ESO + SealedSecrets dual approach. SOPS for Ansible vars.
+Verify: SOPS + age for Ansible vars and GitOps secrets.
 
 ## 7. Observability Architecture
 ```

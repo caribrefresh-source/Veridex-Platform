@@ -1,7 +1,7 @@
 # Stage D — host policy in audit mode: procedure
 
-**Status:** In progress. Steps 1 and 3 are done; the policy is not yet applied.
-**Deliverables:** D98 (`kubernetes/cluster/policies/host-policy.yaml`), D99 (this file), D100
+**Status:** Draft for review. Nothing here has been executed.
+**Deliverables:** D98 (`candidate-host-policy.yaml`), D99 (this file), D100
 (evidence, produced by running it), D101 (rollback drill result).
 
 Evidence labels per `.claude/CLAUDE.md` §1.
@@ -35,29 +35,23 @@ Two consequences the plan's own text should be read against:
 
 ## 1. Prerequisite: the Argo project must permit the resource
 
-`gitops/projects/veridex.yaml` did **not** list `CiliumClusterwideNetworkPolicy`
-in `clusterResourceWhitelist`, so Argo CD would have refused to sync it — the
-same failure PR #54 and PR #57 fixed for webhook and admission-policy kinds.
-
-**Done:** added in PR #64, merged 2026-09-17 as `94e603a`. Permitting the kind
-created nothing.
+`gitops/projects/veridex.yaml` does **not** list `CiliumClusterwideNetworkPolicy`
+in `clusterResourceWhitelist`, so Argo CD would refuse to sync it — the same
+failure PR #54 and PR #57 fixed for webhook and admission-policy kinds. This
+branch adds it. Merging that addition alone changes nothing at runtime: it
+permits the kind, it does not create one.
 
 ## 2. Order of operations
 
 Each step has a stop condition. If one is not met, stop — do not continue to
 the next.
 
-1. ✅ **Merge the project allow-list change.** PR #64, `94e603a`.
-   `cluster-policies` stayed Synced/Healthy.
-2. ⬜ **Open a second SSH session to each node and leave it open.** An
-   established connection survives a policy that blocks new ones. This is the
-   difference between a fixable mistake and a rebuild. **Operator-held — this
-   is the one step no automation can do, because it is the escape hatch from
-   automation.**
-3. ✅ **Enable audit mode on all five host endpoints**, before any policy
-   exists. Done 2026-09-17T20:15Z, re-verified 20:23Z; no agent has restarted
-   since (all started ~09:59Z). Host firewall is active on `eth0` and `eth1` on
-   every node.
+1. **Merge the project allow-list change** (this branch). Confirm
+   `cluster-policies` stays Synced/Healthy.
+2. **Open a second SSH session to each node and leave it open.** An established
+   connection survives a policy that blocks new ones. This is the difference
+   between a fixable mistake and a rebuild.
+3. **Enable audit mode on all five host endpoints**, before any policy exists:
 
    ```bash
    for pod in $(kubectl -n kube-system get pods -l k8s-app=cilium -o name); do
@@ -71,16 +65,8 @@ the next.
    **Stop condition (EG101):** all five report `PolicyAuditMode: Enabled`. If
    even one does not, do not apply the policy — a node still enforcing is a
    lockout on that node.
-4. ⬜ **Merge the policy into the synced path** — this PR moves it to
-   `kubernetes/cluster/policies/host-policy.yaml`, where `cluster-policies`
-   applies it. Nothing is dropped while audit mode holds. Re-verify step 3
-   immediately before merging, not hours earlier: the only thing standing
-   between this policy and enforcement is a setting that a single agent restart
-   silently clears.
-
-   Note the destination. `kubernetes/infrastructure/cilium/` is **not** synced
-   by any Application — Cilium is Ansible-owned bootstrap — so a policy left
-   there would never be applied, and the silence would look like success.
+4. **Move `candidate-host-policy.yaml` into `kubernetes/cluster/policies/`** and
+   merge. Argo CD applies it. Nothing is dropped while audit mode holds.
 5. **Observe.** See §3.
 6. **Rollback drill (EG104), while still in audit mode:** delete the policy,
    confirm the host endpoints return to `ENFORCEMENT: Disabled`, re-apply it.
@@ -123,10 +109,10 @@ Argo CD path once it is moved there, a `kubectl delete` alone will be
 closes behind you within a sync interval. That interaction is the most likely
 way this goes wrong in an emergency, which is why step 6 rehearses it.
 
-## 5. Known gaps
+## 5. Known gaps in this draft
 
 - **Ingress only.** Egress is deliberately excluded; see the header of
-  `kubernetes/cluster/policies/host-policy.yaml`. D98's wording lists egress, so either the plan
+  `candidate-host-policy.yaml`. D98's wording lists egress, so either the plan
   is amended or a second policy and a second audit window are scheduled.
 - **SSH is allowed from the whole internet**, matching today's nftables model
   (rate-limited, key-only). Narrowing it to known addresses would be a real

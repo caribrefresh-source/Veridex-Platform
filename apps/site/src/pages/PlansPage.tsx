@@ -1,37 +1,3 @@
-import { Link } from 'react-router-dom';
-import { SiteFooter } from '../components/SiteFooter';
-import { SiteHeader } from '../components/SiteHeader';
-import { PageMeta } from '../components/PageMeta';
+import{Link}from'react-router-dom';import{SiteHeader}from'../components/SiteHeader';import{SiteFooter}from'../components/SiteFooter';const tiers=[['Starter','Core deployment · Initial workflow · Audit trail · Onboarding'],['Professional','SSO · Analytics · Model registry · Integration support'],['Enterprise','Custom integrations · SLA · Training · Compliance consulting']];
+export function PlansPage(){return <div className="page-shell"><SiteHeader/><main className="plans"><section className="plans-hero"><p className="eyebrow">Deployment &amp; plans</p><h1>Choose control first. Then choose scale.</h1><p className="lead">Self-hosted by default. Every engagement is sized around document volume, risk, integration and availability—not an arbitrary seat count.</p><p className="disclosure"><b>Transparent by design.</b> Commercial pricing is being validated. Request a scoped proposal with explicit assumptions.</p></section><section className="section"><div className="split"><div><p className="eyebrow">Primary offering</p><h2>Self-hosted platform</h2></div><p>You retain infrastructure control and document custody. Veridex supplies the platform, deployment pattern and support.</p></div><div className="plan-grid">{tiers.map(([n,f],i)=><article key={n} className={i===1?'plan featured':'plan'}>{i===1&&<em>Recommended</em>}<h3>{n}</h3><p>Scoped to your environment.</p><strong>Custom proposal</strong><a className="button" href="mailto:gesseldaniel@yahoo.com">Discuss this plan</a><p>{f}</p></article>)}</div></section><section className="hosted"><div><p className="eyebrow">Narrow hosted exception</p><h2>Micro Business SaaS</h2><p>Early access for businesses without infrastructure to self-host. Not intended for regulated mid-market or enterprise deployments.</p></div><div className="hosted-grid"><article><h3>Micro</h3><p>Up to 3 users · 500 documents/month target · Core verification · Email support</p></article><article><h3>Growth</h3><p>Up to 10 users · 2,500 documents/month target · Analytics · Migration path</p></article></div></section><section className="faq section"><div><p className="eyebrow">Evidence before claims</p><h2>Clear answers, before commitment.</h2></div><details open><summary>Is every Seven Gates capability live?</summary><p>No. Proposals separate proven, in-progress and planned capabilities.</p></details><details><summary>Who holds our documents?</summary><p>You do in the self-hosted model. Managed custody applies only to the micro-business offering.</p></details></section><section className="cta"><h2>Scope a defensible first workflow.</h2><a className="button light" href="mailto:gesseldaniel@yahoo.com">Request a proposal</a> <Link className="button outline" to="/">Return home</Link></section></main><SiteFooter/></div>}
 
-const included = [
-  'Deployment planning around document volume and infrastructure capacity',
-  'Security and isolation requirements assessed during solution design',
-  'Workflow and human-review requirements mapped before implementation',
-  'Auditability and compliance needs included in the delivery scope',
-  'Direct engineering collaboration for onboarding and integration',
-];
-
-export function PlansPage() {
-  return (
-    <div className="page-shell">
-      <PageMeta title="Plans | Veridex" path="/plans" />
-      <SiteHeader />
-      <main className="plans" aria-labelledby="plans-heading">
-        <p className="eyebrow">Plans</p>
-        <h1 id="plans-heading">Built around your organization.</h1>
-        <p className="plans-copy">
-          Veridex is deployed and licensed per organization. Each deployment is sized against document volume,
-          compliance requirements, availability targets, and infrastructure footprint.
-        </p>
-        <section className="plan-card" aria-labelledby="included-heading">
-          <h2 id="included-heading">What’s included</h2>
-          <ul>
-            {included.map((item) => <li key={item}>{item}</li>)}
-          </ul>
-        </section>
-        <Link className="text-link" to="/">← Back to home</Link>
-      </main>
-      <SiteFooter />
-    </div>
-  );
-}

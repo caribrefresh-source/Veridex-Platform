@@ -1,11 +1,9 @@
 import { Link } from 'react-router-dom';
 import { SiteHeader } from '../components/SiteHeader';
-import { PageMeta } from '../components/PageMeta';
 
 export function NotFoundPage() {
   return (
     <div className="page-shell">
-      <PageMeta title="Page not found | Veridex" path="/404" />
       <SiteHeader />
       <main className="not-found">
         <p className="eyebrow">404</p>

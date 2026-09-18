@@ -5,8 +5,7 @@ export function SiteHeader() {
     <header className="site-header">
       <nav className="nav" aria-label="Primary">
         <NavLink className="brand" to="/" aria-label="Veridex home">
-          <span className="brand-mark" aria-hidden="true">V</span>
-          <span>Veridex</span>
+          <img className="brand-logo" src="/veridex-logo.png" alt="Veridex AI" />
         </NavLink>
         <div className="nav-links">
           <NavLink to="/">Home</NavLink>
@@ -16,3 +15,5 @@ export function SiteHeader() {
     </header>
   );
 }
+
+

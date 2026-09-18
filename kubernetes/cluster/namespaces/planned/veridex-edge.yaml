@@ -13,4 +13,3 @@ metadata:
     veridex.io/lifecycle: planned
     veridex.io/recovery-class: redeploy
     veridex.io/data-classification: public
-

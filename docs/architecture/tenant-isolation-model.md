@@ -15,4 +15,3 @@ A release that activates tenant data must include negative tests attempting a
 cross-tenant read and write at every applicable store. Namespace-per-tenant is
 out of scope unless a later ADR supersedes this model and adds provisioning,
 quota, policy, credential and teardown controls.
-

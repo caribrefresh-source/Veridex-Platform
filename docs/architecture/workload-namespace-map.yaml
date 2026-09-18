@@ -57,4 +57,3 @@ spec:
     - {name: meilisearch, namespace: veridex-derived}
     - {name: memgraph, namespace: veridex-derived}
     - {name: shared-redis, namespace: veridex-derived}
-

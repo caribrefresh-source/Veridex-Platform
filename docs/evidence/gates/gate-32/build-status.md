@@ -87,4 +87,3 @@ Before merge: delete the branch/worktree. After merge but before workloads:
 revert the commit through Git. Do not delete an active Namespace as rollback.
 After any workload or data exists, only the guarded decommission runbook may
 remove a namespace, with explicit authorization and an empty-resource proof.
-

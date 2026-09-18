@@ -36,4 +36,3 @@ probe, monitoring, quota, ServiceAccount and RBAC controls have landed as one
 bundle. Removing an active manifest is not a deletion mechanism: Namespace
 objects are protected from Argo pruning and require a separately authorized,
 guarded decommission procedure.
-

@@ -13,4 +13,3 @@ Rollback policy or workload changes through Git. Do not roll back activation by
 deleting a Namespace. Namespace objects carry Argo `Prune=false,Delete=false`;
 decommissioning requires an inventory proving that no PVC, Secret, workload,
 finalizer or production data remains, plus explicit operator authorization.
-

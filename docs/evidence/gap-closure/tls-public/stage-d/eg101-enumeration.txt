@@ -1,0 +1,11 @@
+### EG101 -- fresh enumeration of all five host endpoints
+captured 2026-09-18T21:19:04Z
+
+  veridex-agent-1    pod=cilium-5gtr7   hostEP=2075   PolicyAuditMode                   : Enabled  Disabled ingress=Disabled
+  veridex-server-3   pod=cilium-7tnsw   hostEP=4053   PolicyAuditMode                   : Enabled  Disabled ingress=Disabled
+  veridex-server-1   pod=cilium-b5t8s   hostEP=3183   PolicyAuditMode                   : Enabled  Disabled ingress=Disabled
+  veridex-server-2   pod=cilium-hwbnl   hostEP=8      PolicyAuditMode                   : Enabled  Disabled ingress=Disabled
+  veridex-agent-2    pod=cilium-t5rm6   hostEP=107    PolicyAuditMode                   : Enabled  Disabled ingress=Disabled
+
+### existing CiliumClusterwideNetworkPolicy objects
+No resources found

@@ -70,8 +70,9 @@ exist. It is accepted here rather than hidden.
 
 Prerequisite: an AWS principal that may create IAM users in the account owning
 hosted zone `Z01555242T3QOO9FDT59Z`. The operator workstation does **not** have
-one — its only AWS profile points at `https://fsn1.your-objectstorage.com`
-(Hetzner object storage), so every step in §1 is a human action.
+one — its only `~/.aws` profile is an S3-compatible object-storage credential
+with a non-AWS endpoint, not an AWS principal, so every step in §1 is a human
+action performed in the AWS console.
 
 ### 1. Create the scoped credential (operator, in AWS)
 

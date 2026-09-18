@@ -1,0 +1,167 @@
+Stage C exit gates -- Traefik ingress on hostPort 80/443
+========================================================
+Recorded 2026-09-18. Evidence labels per .claude/CLAUDE.md S1.
+
+WHAT THIS RECORDS, AND WHAT IT CANNOT
+-------------------------------------
+Stage C landed in two steps, deliberately (see the header of
+kubernetes/infrastructure/ingress/daemonset.yaml):
+
+  step 1  2026-09-17  worker-only DaemonSet added ALONGSIDE the Deployment
+  step 2  2026-09-18  Deployment removed (merge 1712f69)
+
+No evidence was retained for step 1 at the time. This file was produced
+during step 2.
+
+  EG95, EG96, EG99, EG100  -- measured directly below. PASS.
+  EG97, EG98               -- PARTIAL, and the shortfall is stated rather
+                              than papered over.
+
+EG97/EG98 as written require probes of 32537/32538 before, during and after
+"the DaemonSet cutover" -- meaning step 1, on 2026-09-17. That window closed
+unobserved and cannot be reconstructed. What IS proven below is the same
+property across the step 2 cutover, which is the more dangerous of the two
+(step 1 only added a pod; step 2 removed a serving one). This is a
+substitution, not a satisfaction, of the original gate. Anyone reading a
+later status claim off this file should carry that distinction forward.
+
+RESULTS
+-------
+EG95  port 80 answers on each of the two worker public IPs, and the
+      control-plane IPs do not                                        PASS
+EG96  port 443 likewise                                               PASS
+EG97  Argo CD on 32537 reachable before / during / after              PARTIAL (step 2 only)
+EG98  Grafana on 32538 likewise                                       PARTIAL (step 2 only)
+EG99  the site is served through Traefik on 443 on both worker IPs    PASS
+EG100 re-sync produces no diff and no pod churn                       PASS
+
+EG100 detail: 14 consecutive samples at 35s spacing, spanning several Argo
+auto-sync cycles with selfHeal enabled --
+  sync status          : Synced        (14/14, no other value observed)
+  outOfSync resources  : 0             (no other value observed)
+  container restarts   : 0,0           (no other value observed)
+  distinct pod UID sets: 1             (identical before the merge and after)
+The DaemonSet pods were NOT recreated by removing the Deployment.
+
+Continuity detail: 19 consecutive samples at 10s spacing across the prune.
+Every probe -- Argo CD 32537 and Grafana 32538 on BOTH worker IPs, plus the
+site on 443 -- returned 200 at every sample. No degraded sample occurred.
+
+NOT CLAIMED
+-----------
+Recovery. No node loss, no pod eviction and no rollback has been exercised
+against this ingress path. S10 stage reached is "behaviour verified", not
+"recovery verified".
+
+
+========================================================
+### Stage C step 2 -- BEFORE (Deployment still present)
+captured 2026-09-18T19:49:26Z
+
+-- traefik pods + UIDs --
+NAME                       OWNER        NODE              UID                                    READY
+traefik-5ccfdd7bdf-7c5g9   ReplicaSet   veridex-agent-2   d6ef9be0-1bd4-48f4-a352-bea33ab57403   true
+traefik-ingress-ds-hf79n   DaemonSet    veridex-agent-1   f42bfa01-f88f-4db1-ae1e-6fc23d774676   true
+traefik-ingress-ds-vmjrg   DaemonSet    veridex-agent-2   117b364e-971b-4216-9dba-a33f00ab9132   true
+
+-- NodePort Service endpoints --
+traefik-5ccfdd7bdf-7c5g9 ready=true
+traefik-ingress-ds-vmjrg ready=true
+traefik-ingress-ds-hf79n ready=true
+
+-- EG97 Argo CD on 32537 / EG98 Grafana on 32538, from outside --
+  159.195.197.136  argocd:32537=200  grafana:32538=200
+  159.195.197.40  argocd:32537=200  grafana:32538=200
+  152.53.177.26  argocd:32537=200  grafana:32538=200
+
+-- EG95/EG96/EG99 public 80/443 --
+  159.195.197.136  :80=301  :443(trusted)=200
+  159.195.197.40  :80=301  :443(trusted)=200
+
+-- traefik Application --
+SYNC     HEALTH    REV
+Synced   Healthy   e20e7e63f87595b62e75278f18cbba61245e5364
+
+========================================================
+19:53:44Z deploy=1 pods=3 argocd136=200 graf136=200 argocd40=200 graf40=200 site443=200
+19:54:00Z deploy=1 pods=3 argocd136=200 graf136=200 argocd40=200 graf40=200 site443=200
+19:54:16Z deploy=1 pods=3 argocd136=200 graf136=200 argocd40=200 graf40=200 site443=200
+19:54:31Z deploy=1 pods=3 argocd136=200 graf136=200 argocd40=200 graf40=200 site443=200
+19:54:47Z deploy=1 pods=3 argocd136=200 graf136=200 argocd40=200 graf40=200 site443=200
+19:55:02Z deploy=1 pods=3 argocd136=200 graf136=200 argocd40=200 graf40=200 site443=200
+19:55:18Z deploy=1 pods=3 argocd136=200 graf136=200 argocd40=200 graf40=200 site443=200
+19:55:33Z deploy=1 pods=3 argocd136=200 graf136=200 argocd40=200 graf40=200 site443=200
+19:55:49Z deploy=1 pods=3 argocd136=200 graf136=200 argocd40=200 graf40=200 site443=200
+19:56:04Z deploy=1 pods=3 argocd136=200 graf136=200 argocd40=200 graf40=200 site443=200
+19:56:20Z deploy=1 pods=3 argocd136=200 graf136=200 argocd40=200 graf40=200 site443=200
+19:56:35Z deploy=1 pods=3 argocd136=200 graf136=200 argocd40=200 graf40=200 site443=200
+19:56:51Z deploy=0 pods=2 argocd136=200 graf136=200 argocd40=200 graf40=200 site443=200
+19:57:07Z deploy=0 pods=2 argocd136=200 graf136=200 argocd40=200 graf40=200 site443=200
+19:57:23Z deploy=0 pods=2 argocd136=200 graf136=200 argocd40=200 graf40=200 site443=200
+19:57:39Z deploy=0 pods=2 argocd136=200 graf136=200 argocd40=200 graf40=200 site443=200
+19:57:55Z deploy=0 pods=2 argocd136=200 graf136=200 argocd40=200 graf40=200 site443=200
+19:58:11Z deploy=0 pods=2 argocd136=200 graf136=200 argocd40=200 graf40=200 site443=200
+19:58:27Z deploy=0 pods=2 argocd136=200 graf136=200 argocd40=200 graf40=200 site443=200
+
+========================================================
+### Stage C step 2 -- AFTER (Deployment pruned)
+captured 2026-09-18T19:58:47Z
+
+-- traefik pods + UIDs (compare against BEFORE) --
+NAME                       OWNER       NODE              UID                                    READY
+traefik-ingress-ds-hf79n   DaemonSet   veridex-agent-1   f42bfa01-f88f-4db1-ae1e-6fc23d774676   true
+traefik-ingress-ds-vmjrg   DaemonSet   veridex-agent-2   117b364e-971b-4216-9dba-a33f00ab9132   true
+
+-- Deployment must be absent --
+Error from server (NotFound): deployments.apps "traefik" not found
+
+-- NodePort Service endpoints now --
+traefik-ingress-ds-vmjrg ready=true
+traefik-ingress-ds-hf79n ready=true
+
+-- EG97/EG98 after --
+  159.195.197.136  argocd:32537=200  grafana:32538=200
+  159.195.197.40  argocd:32537=200  grafana:32538=200
+  152.53.177.26  argocd:32537=200  grafana:32538=200
+
+-- EG95/EG96/EG99 after, trusted chain --
+  159.195.197.136  :80=301  :443(www,trusted)=200  issuer=C=US, O=Let's Encrypt, CN=YR2
+  159.195.197.40  :80=301  :443(www,trusted)=200  issuer=C=US, O=Let's Encrypt, CN=YR2
+  152.53.177.26 :443 -> no answer (correct)
+
+-- traefik Application --
+SYNC     HEALTH    REV
+Synced   Healthy   1712f69a7b65d257b8139ec2cc7ae3d38d059c49
+
+========================================================
+### EG100 -- IIR: repeated reconciliation produces no diff and no pod churn
+baseline UIDs: f42bfa01-f88f-4db1-ae1e-6fc23d774676 / 117b364e-971b-4216-9dba-a33f00ab9132
+19:59:41Z sync=Synced rev=1712f69 outOfSyncResources=0 restarts=0,0,
+   uids: f42bfa01-f88f-4db1-ae1e-6fc23d774676 117b364e-971b-4216-9dba-a33f00ab9132 
+20:00:21Z sync=Synced rev=1712f69 outOfSyncResources=0 restarts=0,0,
+   uids: f42bfa01-f88f-4db1-ae1e-6fc23d774676 117b364e-971b-4216-9dba-a33f00ab9132 
+20:01:01Z sync=Synced rev=1712f69 outOfSyncResources=0 restarts=0,0,
+   uids: f42bfa01-f88f-4db1-ae1e-6fc23d774676 117b364e-971b-4216-9dba-a33f00ab9132 
+20:01:41Z sync=Synced rev=1712f69 outOfSyncResources=0 restarts=0,0,
+   uids: f42bfa01-f88f-4db1-ae1e-6fc23d774676 117b364e-971b-4216-9dba-a33f00ab9132 
+20:02:21Z sync=Synced rev=1712f69 outOfSyncResources=0 restarts=0,0,
+   uids: f42bfa01-f88f-4db1-ae1e-6fc23d774676 117b364e-971b-4216-9dba-a33f00ab9132 
+20:03:01Z sync=Synced rev=1712f69 outOfSyncResources=0 restarts=0,0,
+   uids: f42bfa01-f88f-4db1-ae1e-6fc23d774676 117b364e-971b-4216-9dba-a33f00ab9132 
+20:03:41Z sync=Synced rev=1712f69 outOfSyncResources=0 restarts=0,0,
+   uids: f42bfa01-f88f-4db1-ae1e-6fc23d774676 117b364e-971b-4216-9dba-a33f00ab9132 
+20:04:21Z sync=Synced rev=1712f69 outOfSyncResources=0 restarts=0,0,
+   uids: f42bfa01-f88f-4db1-ae1e-6fc23d774676 117b364e-971b-4216-9dba-a33f00ab9132 
+20:05:00Z sync=Synced rev=1712f69 outOfSyncResources=0 restarts=0,0,
+   uids: f42bfa01-f88f-4db1-ae1e-6fc23d774676 117b364e-971b-4216-9dba-a33f00ab9132 
+20:05:40Z sync=Synced rev=1712f69 outOfSyncResources=0 restarts=0,0,
+   uids: f42bfa01-f88f-4db1-ae1e-6fc23d774676 117b364e-971b-4216-9dba-a33f00ab9132 
+20:06:20Z sync=Synced rev=1712f69 outOfSyncResources=0 restarts=0,0,
+   uids: f42bfa01-f88f-4db1-ae1e-6fc23d774676 117b364e-971b-4216-9dba-a33f00ab9132 
+20:07:00Z sync=Synced rev=1712f69 outOfSyncResources=0 restarts=0,0,
+   uids: f42bfa01-f88f-4db1-ae1e-6fc23d774676 117b364e-971b-4216-9dba-a33f00ab9132 
+20:07:40Z sync=Synced rev=1712f69 outOfSyncResources=0 restarts=0,0,
+   uids: f42bfa01-f88f-4db1-ae1e-6fc23d774676 117b364e-971b-4216-9dba-a33f00ab9132 
+20:08:20Z sync=Synced rev=1712f69 outOfSyncResources=0 restarts=0,0,
+   uids: f42bfa01-f88f-4db1-ae1e-6fc23d774676 117b364e-971b-4216-9dba-a33f00ab9132 
+(observation window spans multiple Argo auto-sync cycles; selfHeal is enabled)

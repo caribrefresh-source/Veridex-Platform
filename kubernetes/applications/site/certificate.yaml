@@ -1,0 +1,42 @@
+---
+# The wildcard certificate Traefik serves on host port 443.
+#
+# Two identifiers, and both are needed: a wildcard covers exactly one label,
+# so *.veridexeai.com matches www.veridexeai.com but NOT the apex. The apex is
+# listed separately. Together they cover every hostname the site IngressRoute
+# matches today (ingressroute.yaml) and every future subdomain without a
+# second issuance.
+#
+# Both identifiers validate against the SAME DNS-01 record name,
+# _acme-challenge.veridexeai.com, as two TXT values in one RRset -- the
+# wildcard's challenge is published at the base domain, not under the
+# wildcard. That name is already permitted by the committed IAM policy
+# (docs/security/route53-iam-policy.json), so no policy change is required.
+# Note the consequence: www is covered by the wildcard, so
+# _acme-challenge.www.veridexeai.com is never written. The policy permits it;
+# nothing uses it.
+#
+# The Secret is created by cert-manager in this namespace because a Traefik
+# IngressRoute can only reference a Secret from its own namespace.
+#
+# issuerRef is letsencrypt-staging for the first issuance, per the order fixed
+# in docs/security/route53-dns01.md. PROMOTION IS THIS ONE FIELD: change it to
+# letsencrypt-prod and cert-manager reissues into the same Secret name, which
+# Traefik picks up without a restart. Do not promote before a staging
+# certificate has actually gone Ready -- that is what the staging endpoint is
+# for, and the production endpoint's duplicate limit is unforgiving.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: veridexeai-tls
+  namespace: site
+spec:
+  secretName: veridexeai-tls
+  commonName: veridexeai.com
+  dnsNames:
+    - veridexeai.com
+    - "*.veridexeai.com"
+  issuerRef:
+    name: letsencrypt-staging
+    kind: ClusterIssuer
+    group: cert-manager.io

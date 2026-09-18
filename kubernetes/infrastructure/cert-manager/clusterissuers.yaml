@@ -1,0 +1,92 @@
+---
+# ACME issuers for the public zone veridexeai.com, solving DNS-01 through
+# Route 53 (hosted zone Z01555242T3QOO9FDT59Z, verified authoritative from
+# 8.8.8.8 on 2026-09-18).
+#
+# DNS-01, not HTTP-01, for two independent reasons:
+#   1. A wildcard identifier (*.veridexeai.com) can ONLY be validated over
+#      DNS-01 -- Let's Encrypt does not accept HTTP-01 for wildcards.
+#   2. HTTP-01 is fixed to port 80, which this cluster reaches only through
+#      the worker-only hostPort path. Issuance would then depend on public
+#      ingress already being healthy, which is backwards: the certificate
+#      that ingress serves must not require ingress to obtain.
+# This is also why the plan's Revision 1 HTTP-01 design was superseded.
+#
+# hostedZoneID is set deliberately. With it cert-manager addresses the zone
+# directly instead of discovering it, so the committed least-privilege policy
+# (docs/security/route53-iam-policy.json) does not need
+# route53:ListHostedZonesByName. DOCUMENTED, from cert-manager's Route53 page
+# ("can be further restricted by specifying a particular hosted zone ID
+# instead of all hosted zones") -- NOT yet VERIFIED against a live challenge.
+# If a challenge fails with AccessDenied on ListHostedZonesByName, that claim
+# was wrong: add that one action to the policy. Do not widen anything else.
+#
+# region: us-east-1 is the Route 53 control-plane endpoint's region. Route 53
+# is a global service; this does not place any record or zone in us-east-1.
+#
+# The referenced Secret route53-credentials lives in the cert-manager
+# namespace because --cluster-resource-namespace=$(POD_NAMESPACE) is set on
+# the controller (controller.yaml) and a ClusterIssuer resolves every
+# secretRef there. It is applied out-of-band and is never committed --
+# see docs/security/route53-dns01.md and docs/security/secret-register.yml.
+#
+# Two issuers, not one. Let's Encrypt's production endpoint enforces a
+# duplicate-certificate limit (5 per identical name set per week) that a
+# misconfiguration can burn through in an afternoon; the staging endpoint has
+# no such limit and issues from an untrusted chain, which is exactly what a
+# first run should exercise. The promotion path is one field --
+# see kubernetes/applications/site/certificate.yaml.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-staging
+  annotations:
+    # After the CRDs and the controller/webhook in this same Application. The
+    # webhook rejects ClusterIssuer writes until it is serving; the
+    # Application's retry/backoff (gitops/infrastructure/cert-manager.yaml)
+    # is the backstop for a cold start, this is the ordinary ordering.
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    # The address already published as this project's public contact on
+    # apps/site (HomePage.tsx, PlansPage.tsx). Let's Encrypt uses it only for
+    # expiry and revocation notices; no new address is disclosed by this.
+    email: gesseldaniel@yahoo.com
+    privateKeySecretRef:
+      name: letsencrypt-staging-account-key
+    solvers:
+      - dns01:
+          route53:
+            region: us-east-1
+            hostedZoneID: Z01555242T3QOO9FDT59Z
+            accessKeyIDSecretRef:
+              name: route53-credentials
+              key: access-key-id
+            secretAccessKeySecretRef:
+              name: route53-credentials
+              key: secret-access-key
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: gesseldaniel@yahoo.com
+    privateKeySecretRef:
+      name: letsencrypt-prod-account-key
+    solvers:
+      - dns01:
+          route53:
+            region: us-east-1
+            hostedZoneID: Z01555242T3QOO9FDT59Z
+            accessKeyIDSecretRef:
+              name: route53-credentials
+              key: access-key-id
+            secretAccessKeySecretRef:
+              name: route53-credentials
+              key: secret-access-key

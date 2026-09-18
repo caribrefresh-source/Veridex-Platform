@@ -1,0 +1,48 @@
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: policy-test-cross-namespace-denied
+  namespace: veridex-policy-test
+spec:
+  schedule: "13,43 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    metadata:
+      labels:
+        veridex.io/policy-test-suite: connectivity
+    spec:
+      backoffLimit: 0
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels:
+            veridex.io/policy-role: denied-client
+            veridex.io/policy-test-suite: connectivity
+        spec:
+          serviceAccountName: policy-test
+          automountServiceAccountToken: false
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: test
+              image: busybox:1.37.0@sha256:7a3ebe5bfd1a4a19797d20b0c0bb39d44393e9a03fd852c0865b0f540d868df0
+              command: ["sh", "-ec"]
+              args:
+                - |
+                  nslookup site.site.svc.cluster.local
+                  if wget -qO- -T 3 http://site.site.svc.cluster.local; then exit 44; fi
+                  echo POLICY_TEST_CROSS_NAMESPACE_DENIED_PASS
+              resources:
+                requests: {cpu: 10m, memory: 8Mi}
+                limits: {cpu: 50m, memory: 32Mi}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: ["ALL"]}

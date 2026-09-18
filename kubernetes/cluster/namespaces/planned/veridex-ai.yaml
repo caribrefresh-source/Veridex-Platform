@@ -1,0 +1,15 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: veridex-ai
+  annotations:
+    veridex.io/owner: platform-ai
+    veridex.io/purpose: OCR, NLP, embeddings, RAG, LLM routing and local models
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+  labels:
+    veridex.io/wave: "5"
+    veridex.io/role: ai
+    veridex.io/lifecycle: planned
+    veridex.io/recovery-class: redeploy-cache-repull
+    veridex.io/data-classification: restricted

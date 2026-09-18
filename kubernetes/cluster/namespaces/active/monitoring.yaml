@@ -10,3 +10,7 @@ metadata:
   labels:
     veridex.io/wave: "7"
     veridex.io/role: cluster-services
+    veridex.io/lifecycle: active
+    veridex.io/recovery-class: reconcile
+    veridex.io/data-classification: restricted
+

@@ -1,0 +1,59 @@
+apiVersion: veridex.io/v1alpha1
+kind: WorkloadNamespaceMap
+metadata:
+  name: production
+spec:
+  workloads:
+    - {name: argocd, namespace: argocd}
+    - {name: cert-manager, namespace: cert-manager}
+    - {name: traefik, namespace: kube-system}
+    - {name: monitoring-stack, namespace: monitoring}
+    - {name: public-site, namespace: site}
+    - {name: read-only-cluster-access, namespace: veridex-access}
+    - {name: policy-regression-harness, namespace: veridex-policy-test}
+    - {name: cnpg-operator, namespace: cnpg-system}
+    - {name: longhorn, namespace: longhorn-system}
+    - {name: frontend, namespace: veridex-edge}
+    - {name: auth-service, namespace: veridex-auth}
+    - {name: auth-postgres, namespace: veridex-auth}
+    - {name: auth-redis, namespace: veridex-auth}
+    - {name: audit-chain-verify, namespace: veridex-auth}
+    - {name: auth-migration, namespace: veridex-auth}
+    - {name: file-manager, namespace: veridex-apps}
+    - {name: ingestion-service, namespace: veridex-apps}
+    - {name: preview-service, namespace: veridex-apps}
+    - {name: hitl-service, namespace: veridex-apps}
+    - {name: governance-service, namespace: veridex-apps}
+    - {name: metadata-service, namespace: veridex-apps}
+    - {name: policy-service, namespace: veridex-apps}
+    - {name: rule-service, namespace: veridex-apps}
+    - {name: search-gateway, namespace: veridex-apps}
+    - {name: search-service, namespace: veridex-apps}
+    - {name: notification-service, namespace: veridex-apps}
+    - {name: processing-authorization-api, namespace: veridex-apps}
+    - {name: temporal-workers, namespace: veridex-workers}
+    - {name: data-consistency, namespace: veridex-workers}
+    - {name: client-sync-service, namespace: veridex-workers}
+    - {name: processing-authorization-reconciler, namespace: veridex-workers}
+    - {name: migration-runner, namespace: veridex-workers}
+    - {name: ollama, namespace: veridex-ai}
+    - {name: litellm-gateway, namespace: veridex-ai}
+    - {name: embedding-service, namespace: veridex-ai}
+    - {name: cross-encoder-service, namespace: veridex-ai}
+    - {name: ocr-service, namespace: veridex-ai}
+    - {name: nlp-preprocessing-service, namespace: veridex-ai}
+    - {name: rag-retriever, namespace: veridex-ai}
+    - {name: rag-reranker, namespace: veridex-ai}
+    - {name: rag-context-builder, namespace: veridex-ai}
+    - {name: rag-orchestrator, namespace: veridex-ai}
+    - {name: main-cnpg, namespace: veridex-database}
+    - {name: cnpg-pooler, namespace: veridex-database}
+    - {name: cnpg-pitr-backup, namespace: veridex-database}
+    - {name: minio, namespace: veridex-object}
+    - {name: b2-object-mirror, namespace: veridex-object}
+    - {name: nats-jetstream, namespace: veridex-messaging}
+    - {name: temporal-server, namespace: veridex-messaging}
+    - {name: qdrant, namespace: veridex-derived}
+    - {name: meilisearch, namespace: veridex-derived}
+    - {name: memgraph, namespace: veridex-derived}
+    - {name: shared-redis, namespace: veridex-derived}

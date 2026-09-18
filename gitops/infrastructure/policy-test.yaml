@@ -2,22 +2,22 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: cluster-namespaces
+  name: policy-test
   namespace: argocd
   annotations:
-    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/sync-wave: "2"
 spec:
   project: veridex
   source:
     repoURL: https://github.com/caribrefresh-source/Veridex-Platform.git
     targetRevision: main
-    # Planned Namespace manifests remain inert until their P0-P5 promotion
-    # changes lifecycle and moves them into active/.
-    path: kubernetes/cluster/namespaces/active
+    path: kubernetes/cluster/policy-test
   destination:
     server: https://kubernetes.default.svc
-    namespace: argocd
+    namespace: veridex-policy-test
   syncPolicy:
     automated:
-      # prune is deliberately omitted: Namespace deletion is never automated.
+      prune: true
       selfHeal: true
+    syncOptions:
+      - CreateNamespace=false

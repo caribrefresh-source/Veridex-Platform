@@ -1,0 +1,15 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: veridex-messaging
+  annotations:
+    veridex.io/owner: platform-data
+    veridex.io/purpose: Durable NATS JetStream and Temporal Server infrastructure
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+  labels:
+    veridex.io/wave: "6"
+    veridex.io/role: durable-messaging
+    veridex.io/lifecycle: planned
+    veridex.io/recovery-class: restore
+    veridex.io/data-classification: restricted

@@ -11,3 +11,7 @@ metadata:
   labels:
     veridex.io/wave: "8"
     veridex.io/role: public-site
+    veridex.io/lifecycle: active
+    veridex.io/recovery-class: redeploy
+    veridex.io/data-classification: public
+

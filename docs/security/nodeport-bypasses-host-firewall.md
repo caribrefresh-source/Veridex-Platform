@@ -111,3 +111,19 @@ the false claim was made, so the next person to read it is not misled.
 - Grafana's exposure is unchanged and was always intentional.
 - The vLAN trust model is unaffected: `10.2.0.0/16` remains trusted in full, and
   that is still enforced by nftables for non-service traffic.
+
+## A second control exists that was not considered here
+
+`VERIFIED` 2026-09-18: netcup's own per-interface firewall is active on every
+server's public NIC, carrying only netcup's outbound SMTP block. It filters at
+the hypervisor, so NodePort and hostPort traffic never reaches the node's eBPF
+datapath — the bypass described above does not apply to it.
+
+That makes it a candidate for closing this finding *without* the lockout risk
+of a node-level policy: a wrong rule there is undone through the provider API
+rather than needing console access. It cannot replace the Cilium host policy
+(it does not see the Cloud vLAN, and cannot express pod- or identity-aware
+rules), but it can own the blunt question of which public ports exist at all.
+
+See `provider-firewall.md` for the proposed split and its costs — chiefly that
+those rules live outside Git.

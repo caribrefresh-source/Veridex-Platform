@@ -11,10 +11,27 @@
 # └──────────────────────────────────────────────────────────────────────────┘
 #
 # Why that matters here more than usual: both the operational and break-glass
-# credentials are SSH keys on the same workstation, and no console path is
-# documented (docs/security/emergency-access.md). A host policy that drops
-# tcp/22 locks out all five nodes at once, and the remaining route is
-# reinstalling them.
+# credentials are SSH keys on the same workstation, so a host policy that drops
+# tcp/22 locks out all five nodes at once.
+#
+# UPDATED 2026-09-18 -- the sentence that used to follow, "no console path is
+# documented ... the remaining route is reinstalling them", is no longer true
+# and has been removed rather than left to frighten a future reader into the
+# wrong decision. The provider console was drilled on 2026-09-18
+# (docs/security/incidents/2026-09-18-provider-console-drill.md): root login
+# succeeded at the netcup SCP Screen tab on one server and one worker without
+# SSH, and both node types' recovery commands ran from it -- `k3s kubectl get
+# ccnp` on a server, `k3s crictl ps --name cilium-agent` on a worker. Recovery
+# from a self-inflicted lockout is therefore a PROVEN path, not a rebuild.
+#
+# Three caveats from that drill that still bear on this stage:
+#   - Only one server and one worker were drilled. The paths are identical by
+#     node type, but three nodes are untested.
+#   - The console does not accept paste by typing; use the Clipboard button.
+#     Keep recovery commands short and exact -- typos there produced
+#     misleading-but-harmless empty output during the drill.
+#   - A worker has no /etc/rancher/k3s/k3s.yaml, so the worker recovery path is
+#     `crictl`, never `kubectl`.
 #
 # Audit mode is NOT a field on this object. It is per-endpoint, imperative and
 # temporary:

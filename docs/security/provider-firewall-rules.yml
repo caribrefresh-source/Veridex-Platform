@@ -1,0 +1,107 @@
+---
+# Intended netcup provider-firewall state — the source of truth in Git.
+#
+# These rules live in netcup's control plane, not in the cluster, so nothing
+# reconciles them automatically. That is the accepted IIR gap
+# (.claude/CLAUDE.md §4) and the reason this file exists: the live state is
+# compared against this file by scripts/verify-provider-firewall.py, which is
+# read-only. Drift is reported, never silently corrected.
+#
+# Field names and enum values match the SCP API's FirewallRule schema exactly
+# (direction/protocol/action/sources/destinationPorts), read from the live
+# OpenAPI document on 2026-09-18 at spec version 2026.0916.061229. If the
+# schema moves again — it moved once already during this project — the
+# verifier's schema check fails loudly rather than comparing the wrong fields.
+#
+# Scope: the PUBLIC interface only. Cloud vLAN interfaces are not supported by
+# the provider firewall (`firewall.cloud.vlan.not.supported`), so vLAN rules
+# remain the Cilium host policy's job.
+
+spec_version_verified: "2026.0916.061229"
+verified_at: "2026-09-18"
+
+# Applied, or intended to be applied, per SCP server id. Roles come from
+# scripts/netcup-set-nicknames.py ROLE_MAP.
+servers:
+  938801: {node: veridex-server-1, role: control-plane}
+  938802: {node: veridex-server-2, role: control-plane}
+  938803: {node: veridex-server-3, role: control-plane}
+  939122: {node: veridex-agent-1, role: worker}
+  939123: {node: veridex-agent-2, role: worker}
+
+# netcup attaches its own policies. We do not manage these; the verifier only
+# checks they are still present, because losing the SMTP block silently would
+# matter.
+expected_copied_policies:
+  - "netcup Mail block"
+
+# Egress is deliberately unmanaged: implicit ACCEPT_ALL, minus netcup's own
+# SMTP block. Host egress allow-listing is a separate decision with its own
+# failure modes (image pulls, k3s agent, NTP, apt) -- see
+# docs/evidence/gap-closure/tls-public/stage-d/candidate-host-policy.yaml.
+egress:
+  implicit_rule: ACCEPT_ALL
+  managed: false
+
+ingress:
+  # Everything not listed below is refused. This is what closes the NodePort
+  # bypass (docs/security/nodeport-bypasses-host-firewall.md) at a layer the
+  # eBPF datapath never sees.
+  implicit_rule: DROP_ALL
+
+  # Every node, every role.
+  common:
+    - description: SSH
+      direction: INGRESS
+      protocol: TCP
+      action: ACCEPT
+      destinationPorts: "22"
+      sources: []          # empty = any source
+
+    - description: >-
+        Traefik websecure NodePort (Argo CD, TLS passthrough). Remove together
+        with 32538 when the NodePorts are retired -- tracked in
+        docs/security/open-remediation-register.md.
+      direction: INGRESS
+      protocol: TCP
+      action: ACCEPT
+      destinationPorts: "32537"
+      sources: []
+
+    - description: Traefik grafana-https NodePort. Retire with 32537.
+      direction: INGRESS
+      protocol: TCP
+      action: ACCEPT
+      destinationPorts: "32538"
+      sources: []
+
+    - description: >-
+        ICMP echo. Deliberate: a firewall that silently breaks ping turns every
+        later network investigation into a false lead.
+      direction: INGRESS
+      protocol: ICMP
+      action: ACCEPT
+      sources: []
+
+  # Worker nodes only. The control-plane nodes are not ingress nodes and must
+  # not answer on 80/443 -- the same split the Stage C DaemonSet enforces
+  # (plan Rev 3a).
+  worker:
+    - description: HTTP, redirects to HTTPS
+      direction: INGRESS
+      protocol: TCP
+      action: ACCEPT
+      destinationPorts: "80"
+      sources: []
+
+    - description: >-
+        HTTPS. Route 53 health checkers are covered by this rule while the
+        source is any; narrowing it means pulling AWS's published
+        ROUTE53_HEALTHCHECKS ranges and giving them a review cadence.
+      direction: INGRESS
+      protocol: TCP
+      action: ACCEPT
+      destinationPorts: "443"
+      sources: []
+
+  control-plane: []

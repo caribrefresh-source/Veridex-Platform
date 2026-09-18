@@ -70,14 +70,21 @@ reduced, because the provider firewall is the outer gate.
 
 ## 4. What this costs, stated honestly
 
-- **It is not in Git.** This is a real violation of the IIR principle
-  (CLAUDE.md §4): the rules live in netcup's control plane, and nothing detects
-  drift. Mitigation, if adopted: commit the intended ruleset as data in this
-  repo and add a **read-only** verify script that compares live state against
-  it, in the style of the existing `scripts/netcup-*.py` — which are
-  deliberately read-only. A write path is a separate decision; the SCP API is
-  unsupported by netcup and its schema has already moved once
-  (`2026.0909` → `2026.0916`) during this project.
+- **It is not in Git**, and nothing reconciles it. This is a real violation of
+  the IIR principle (CLAUDE.md §4). **Mitigated, not solved**, by two files
+  added with this proposal:
+  - `provider-firewall-rules.yml` — the intended state, in the API's own field
+    names, as the committed source of truth.
+  - `scripts/verify-provider-firewall.py` — read-only. It reports drift and
+    never corrects it. Exit 0 matches, 1 drift, **2 could not check** — that
+    third code exists so "I could not check" is never read as "no drift".
+
+  It is an operator/periodic check, **not a CI gate**: CI has no netcup
+  credential, and giving it one would mean storing a provider credential in
+  GitHub — a new secret and a new blast radius for an advisory check. Applying
+  a correction stays manual: the SCP API is unsupported by netcup and its
+  schema already moved once during this project (`2026.0909` → `2026.0916`),
+  which is why the verifier pins the version it was written against.
 - **Two places to look.** A port could be blocked at the provider while the
   host policy allows it. Any future "why is this unreachable" investigation has
   to check both. The table in §3 exists so the split is at least predictable:
@@ -87,7 +94,11 @@ reduced, because the provider firewall is the outer gate.
 - **Same-account risk.** Whoever holds the SCP session can change it. It is
   independent of SSH, not independent of the account.
 
-## 5. Recommended sequence
+## 5. Sequence — Stage D splits in two
+
+Decided 2026-09-18 by the repository owner. Stage D of the Public TLS plan
+becomes **D1 (provider firewall)** then **D2 (Cilium host policy)**, in that
+order and not the reverse.
 
 1. Apply the §3 ruleset at the provider **first**, while the node-level policy
    is still absent. If it is wrong, the symptom is a blocked port, and the fix

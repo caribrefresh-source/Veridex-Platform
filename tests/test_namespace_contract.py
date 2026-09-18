@@ -58,7 +58,7 @@ class NamespaceContractTests(unittest.TestCase):
             "kubernetes/cluster/namespaces/planned/veridex-edge.yaml",
             lambda doc: doc["metadata"]["labels"].pop("veridex.io/recovery-class"),
         )
-        self.assertTrue(any("missing label veridex.io/recovery-class" in error for error in self.errors()))
+        self.assertTrue(any("missing or empty label veridex.io/recovery-class" in error for error in self.errors()))
 
     def test_rejects_namespace_source_outside_active(self):
         self.mutate_one(
@@ -80,8 +80,7 @@ class NamespaceContractTests(unittest.TestCase):
             ),
         )
         errors = self.errors()
-        self.assertTrue(any("destinations differ" in error for error in errors))
-        self.assertTrue(any("wildcard namespace" in error for error in errors))
+        self.assertTrue(any("exact map/server pairs" in error for error in errors))
 
 
     def test_rejects_external_application_server(self):

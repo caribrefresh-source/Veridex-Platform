@@ -22,7 +22,7 @@ AppProjects, Applications, Namespaces and namespace-scoped resources.
   Pod Security, quota, LimitRange, tokenless ServiceAccount, default deny and
   CoreDNS-only egress.
 - **D110** — fail-closed namespace contract validator, CI integration and seven
-  adversarial fixture tests.
+  adversarial mutation tests.
 
 ## Exit checks
 
@@ -36,7 +36,7 @@ AppProjects, Applications, Namespaces and namespace-scoped resources.
 - **EG113 PASS** — the `veridex` AppProject has no destination wildcard and its
   destinations equal the namespace map.
 - **EG114 PASS** — static lint, provider-drift lint, secret-register lint,
-  namespace lint, contract lint, YAML lint and seven adversarial tests pass.
+  namespace lint, contract lint, YAML lint and 14 adversarial tests pass.
 - **EG115 PASS** — client-side Kubernetes construction accepts all changed
   AppProject, Application, Namespace, quota, LimitRange, ServiceAccount and
   NetworkPolicy resources.

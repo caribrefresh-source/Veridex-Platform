@@ -68,6 +68,12 @@ jobs:
       - name: Validate namespace declarations
         run: python3 scripts/lint-namespaces.py
 
+      - name: Validate namespace lifecycle and Argo project contract
+        run: |
+          # Mutation tests below are the adversarial self-test.
+          python3 scripts/lint-namespace-contract.py
+          python3 -m unittest tests/test_namespace_contract.py
+
   yaml-lint:
     name: YAML lint
     runs-on: ubuntu-latest

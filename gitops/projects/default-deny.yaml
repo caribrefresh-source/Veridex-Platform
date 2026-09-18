@@ -1,0 +1,18 @@
+---
+# Argo CD creates this project during installation. Owning a deny-by-default
+# spec in Git prevents a future Application from escaping repository and
+# destination allowlists by selecting `project: default`.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: default
+  namespace: argocd
+spec:
+  description: Disabled; every Veridex Application must use project veridex.
+  sourceRepos:
+    - https://invalid.invalid/disabled.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: __disabled_default_project__
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist: []

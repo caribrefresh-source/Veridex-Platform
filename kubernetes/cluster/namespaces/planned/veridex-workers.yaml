@@ -1,0 +1,15 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: veridex-workers
+  annotations:
+    veridex.io/owner: platform-applications
+    veridex.io/purpose: Temporal and NATS clients, reconcilers and workers
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+  labels:
+    veridex.io/wave: "5"
+    veridex.io/role: workers
+    veridex.io/lifecycle: planned
+    veridex.io/recovery-class: redeploy
+    veridex.io/data-classification: confidential

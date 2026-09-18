@@ -1,0 +1,15 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: veridex-edge
+  annotations:
+    veridex.io/owner: platform-applications
+    veridex.io/purpose: Internet-facing frontend and viewer surfaces
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+  labels:
+    veridex.io/wave: "2"
+    veridex.io/role: edge
+    veridex.io/lifecycle: planned
+    veridex.io/recovery-class: redeploy
+    veridex.io/data-classification: public

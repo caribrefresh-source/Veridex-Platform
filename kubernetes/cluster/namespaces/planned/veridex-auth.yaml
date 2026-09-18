@@ -1,0 +1,15 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: veridex-auth
+  annotations:
+    veridex.io/owner: platform-security
+    veridex.io/purpose: Authentication, identity state and audit verification
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+  labels:
+    veridex.io/wave: "3"
+    veridex.io/role: auth
+    veridex.io/lifecycle: planned
+    veridex.io/recovery-class: restore-isolated
+    veridex.io/data-classification: restricted

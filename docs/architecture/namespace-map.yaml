@@ -1,0 +1,123 @@
+apiVersion: veridex.io/v1alpha1
+kind: NamespaceMap
+metadata:
+  name: production
+  revision: 1
+spec:
+  forbiddenNames:
+    - data-plane
+    - docintel
+    - headlamp
+    - ingress-nginx
+    - observability
+  forbiddenPrefixes:
+    - dip-
+  namespaces:
+    - name: argocd
+      lifecycle: bootstrap
+      wave: 7
+      role: cluster-services
+      owner: platform-engineering
+      recoveryClass: reconcile
+    - name: kube-system
+      lifecycle: builtin
+      wave: 7
+      role: cluster-services
+      owner: platform-engineering
+      recoveryClass: cluster-recovery
+    - name: cert-manager
+      lifecycle: active
+      wave: 7
+      role: cluster-services
+      owner: platform-engineering
+      recoveryClass: reconcile
+    - name: monitoring
+      lifecycle: active
+      wave: 7
+      role: cluster-services
+      owner: platform-observability
+      recoveryClass: reconcile
+    - name: site
+      lifecycle: active
+      wave: 8
+      role: public-site
+      owner: platform-applications
+      recoveryClass: redeploy
+    - name: veridex-access
+      lifecycle: active
+      wave: 7
+      role: cluster-access
+      owner: platform-security
+      recoveryClass: reconcile
+    - name: cnpg-system
+      lifecycle: planned
+      wave: 6
+      role: database-operator
+      owner: platform-data
+      recoveryClass: reconcile
+    - name: longhorn-system
+      lifecycle: planned
+      wave: 6
+      role: storage-system
+      owner: platform-data
+      recoveryClass: reconcile
+    - name: veridex-policy-test
+      lifecycle: active
+      wave: 1
+      role: policy-test
+      owner: platform-security
+      recoveryClass: disposable
+    - name: veridex-edge
+      lifecycle: planned
+      wave: 2
+      role: edge
+      owner: platform-applications
+      recoveryClass: redeploy
+    - name: veridex-auth
+      lifecycle: planned
+      wave: 3
+      role: auth
+      owner: platform-security
+      recoveryClass: restore-isolated
+    - name: veridex-apps
+      lifecycle: planned
+      wave: 4
+      role: applications
+      owner: platform-applications
+      recoveryClass: redeploy
+    - name: veridex-workers
+      lifecycle: planned
+      wave: 5
+      role: workers
+      owner: platform-applications
+      recoveryClass: redeploy
+    - name: veridex-ai
+      lifecycle: planned
+      wave: 5
+      role: ai
+      owner: platform-ai
+      recoveryClass: redeploy-cache-repull
+    - name: veridex-database
+      lifecycle: planned
+      wave: 6
+      role: authoritative-database
+      owner: platform-data
+      recoveryClass: pitr
+    - name: veridex-object
+      lifecycle: planned
+      wave: 6
+      role: authoritative-object
+      owner: platform-data
+      recoveryClass: restore-remirror
+    - name: veridex-messaging
+      lifecycle: planned
+      wave: 6
+      role: durable-messaging
+      owner: platform-data
+      recoveryClass: restore
+    - name: veridex-derived
+      lifecycle: planned
+      wave: 6
+      role: derived-state
+      owner: platform-data
+      recoveryClass: rebuild-replay

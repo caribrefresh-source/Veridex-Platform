@@ -1,0 +1,15 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: veridex-database
+  annotations:
+    veridex.io/owner: platform-data
+    veridex.io/purpose: Main CloudNativePG cluster, pooler and PITR resources
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+  labels:
+    veridex.io/wave: "6"
+    veridex.io/role: authoritative-database
+    veridex.io/lifecycle: planned
+    veridex.io/recovery-class: pitr
+    veridex.io/data-classification: restricted

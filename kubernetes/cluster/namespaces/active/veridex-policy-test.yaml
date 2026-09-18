@@ -1,0 +1,18 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: veridex-policy-test
+  annotations:
+    veridex.io/owner: platform-security
+    veridex.io/purpose: Permanent target for disposable policy regression tests
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+  labels:
+    veridex.io/wave: "1"
+    veridex.io/role: policy-test
+    veridex.io/lifecycle: active
+    veridex.io/recovery-class: disposable
+    veridex.io/data-classification: synthetic-only
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted

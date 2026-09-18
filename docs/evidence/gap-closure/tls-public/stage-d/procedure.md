@@ -1,6 +1,27 @@
 # Stage D — host policy in audit mode: procedure
 
 **Status:** Draft for review. Nothing here has been executed.
+
+> **Updated 2026-09-18.** Two prerequisites this procedure treats as open are
+> now closed, and one new unknown has appeared.
+>
+> - **§1's prerequisite is already met.** `cilium.io/CiliumClusterwideNetworkPolicy`
+>   is in `clusterResourceWhitelist` and live on the cluster, added with the
+>   host-policy work. Step 1 is a no-op; confirm and move on.
+> - **The console recovery path is proven**, so the lockout risk is recoverable
+>   rather than terminal. See
+>   `docs/security/incidents/2026-09-18-provider-console-drill.md`. Caveats:
+>   only one server and one worker were drilled; the console needs the
+>   Clipboard button rather than typed paste; a worker has no kubeconfig, so
+>   its path is `crictl`, not `kubectl`.
+> - **NEW, and it must be resolved before step 3.** That drill recorded
+>   `agent-2` host endpoint 107 already showing `PolicyAuditMode: Enabled`.
+>   Whether that is still true, and what the other four nodes show, is
+>   `UNKNOWN` — it was not re-checked, and audit mode does not survive a
+>   `cilium-agent` restart. Step 3's stop condition (EG101) therefore cannot be
+>   assumed from the drill: enumerate all five endpoints fresh. A node
+>   silently *not* in audit mode is the lockout this whole procedure exists to
+>   avoid.
 **Deliverables:** D98 (`candidate-host-policy.yaml`), D99 (this file), D100
 (evidence, produced by running it), D101 (rollback drill result).
 

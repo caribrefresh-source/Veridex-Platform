@@ -11,10 +11,10 @@ metadata:
     veridex.io/owner: platform-security
     veridex.io/purpose: Read-only operator identity for day-to-day kubectl access
     argocd.argoproj.io/sync-wave: "0"
-    argocd.argoproj.io/sync-options: Prune=false,Delete=false
   labels:
     veridex.io/wave: "7"
     veridex.io/role: cluster-access
     veridex.io/lifecycle: active
     veridex.io/recovery-class: reconcile
     veridex.io/data-classification: restricted
+

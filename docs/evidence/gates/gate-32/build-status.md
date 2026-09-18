@@ -2,7 +2,7 @@
 
 Status: **CODE COMPLETE / LIVE VERIFICATION PENDING**
 
-Base: `origin/main` at `a8057299e0c3df8a7d4a1c82df022140d600d395`
+Base: `origin/main` at `99f3dd741d6aea62f42d7d75c182b51b94b9f7a1`
 Branch: `feat/namespace-operationalization`
 
 No live cluster resource was changed while producing this build. The current
@@ -18,7 +18,7 @@ AppProjects, Applications, Namespaces and namespace-scoped resources.
   pending Gate 14 verification rather than falsely closing Gate 33.
 - **D108** — active/planned GitOps separation, namespace deletion protection,
   exact AppProject destinations and disabled default AppProject.
-- **D109** — permanent `veridex-policy-test` namespace baseline with restricted
+- **D109** — inert `veridex-policy-test` promotion baseline with restricted
   Pod Security, quota, LimitRange, tokenless ServiceAccount, default deny and
   CoreDNS-only egress.
 - **D110** — fail-closed namespace contract validator, CI integration and seven
@@ -26,7 +26,7 @@ AppProjects, Applications, Namespaces and namespace-scoped resources.
 
 ## Exit checks
 
-- **EG109 PASS** — all ten workload namespaces map exactly once.
+- **EG109 PASS** — all ten workload namespaces and the CNPG/Longhorn operator namespaces map exactly once; every named workload has one placement.
 - **EG110 PASS** — active and planned manifests are path-separated; the Argo
   namespace Application sources only `active/`.
 - **EG111 PASS** — automated namespace pruning is disabled and Namespace
@@ -72,6 +72,14 @@ excluded.
 Static and negative tests found no remaining code-level contract violation.
 The live server dry-run was blocked by least-privilege RBAC, leaving admission
 and behavior checks honestly pending rather than escalating privileges.
+
+### Iteration 4
+
+Final adversarial review found missing cluster-server/source-repository checks,
+semantic map drift, duplicate AppProject handling, and omitted Longhorn/CNPG
+operator placement. The validator and 14-test mutation suite now cover those
+cases. Wave 1 was returned to `planned` so Gate 32 does not bypass Gate 34's
+RBAC/admission prerequisites.
 
 ## Rollback
 

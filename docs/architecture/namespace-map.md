@@ -1,6 +1,6 @@
 # Namespace map
 
-`namespace-map.yaml` is the machine-readable source of truth. This document
+`namespace-map.yaml` and `workload-namespace-map.yaml` are the machine-readable sources of truth. This document
 records the decisions behind it. A namespace is promoted only by changing its
 map lifecycle and moving its manifest from `planned/` to `active/` in the same
 reviewed change. Planned manifests are deliberately outside the Argo CD
@@ -14,6 +14,8 @@ reviewed change. Planned manifests are deliberately outside the Argo CD
 | 4 | `veridex-apps` | Request-driven document, governance and search APIs | Redeploy |
 | 5 | `veridex-workers` | Temporal/NATS clients and reconcilers; initially zero replicas | Redeploy |
 | 5 | `veridex-ai` | OCR, NLP, embeddings, RAG, LiteLLM and Ollama | Redeploy; repull cache |
+| 6 | `cnpg-system` | CloudNativePG operator | Reconcile |
+| 6 | `longhorn-system` | Longhorn storage controllers | Reconcile |
 | 6 | `veridex-database` | Main CNPG, pooler and PITR resources | PITR |
 | 6 | `veridex-object` | Four-domain MinIO and B2 mirroring | Restore or remirror |
 | 6 | `veridex-messaging` | NATS JetStream and Temporal Server | Durable restore |

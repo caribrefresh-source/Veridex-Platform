@@ -5,7 +5,7 @@ metadata:
   name: policy-test-cross-namespace-denied
   namespace: veridex-policy-test
 spec:
-  schedule: "13,43 * * * *"
+  schedule: "*/2 * * * *"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3

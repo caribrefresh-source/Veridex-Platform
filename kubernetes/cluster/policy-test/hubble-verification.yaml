@@ -1,0 +1,70 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-hubble-observer-to-relay
+  namespace: veridex-policy-test
+spec:
+  podSelector:
+    matchLabels:
+      veridex.io/policy-role: hubble-observer
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: hubble-relay
+      ports:
+        - protocol: TCP
+          port: 4245
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: policy-test-hubble
+  namespace: veridex-policy-test
+spec:
+  schedule: "*/2 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    metadata:
+      labels:
+        veridex.io/policy-test-suite: hubble
+    spec:
+      backoffLimit: 0
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels:
+            veridex.io/policy-role: hubble-observer
+            veridex.io/policy-test-suite: hubble
+        spec:
+          serviceAccountName: policy-test
+          automountServiceAccountToken: false
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: hubble
+              image: quay.io/cilium/cilium:v1.20.1@sha256:ae9ea21f7427fe24bc6ea7247eb552157a1b0a431744045d3f641545ca71d11b
+              command: ["sh", "-ec"]
+              args:
+                - >-
+                  hubble observe --server hubble-relay.kube-system.svc.cluster.local:80
+                  --since 10m --namespace veridex-policy-test --output json
+                  | grep -E 'FORWARDED|DROPPED|POLICY_DENIED'
+              resources:
+                requests: {cpu: 10m, memory: 16Mi}
+                limits: {cpu: 50m, memory: 64Mi}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: ["ALL"]}

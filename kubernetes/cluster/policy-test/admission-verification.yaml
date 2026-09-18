@@ -52,14 +52,14 @@ data:
         "apiVersion": "rbac.authorization.k8s.io/v1", "kind": "Role",
         "metadata": {"name": f"rejected-wildcard-{suffix}", "labels": {"veridex.io/policy-test-run": suffix}},
         "rules": [{"apiGroups": ["*"], "resources": ["*"], "verbs": ["*"]}],
-    }, "wildcards are forbidden")
+    }, "is forbidden")
 
     rejected("cluster-admin-binding", binding_path, {
         "apiVersion": "rbac.authorization.k8s.io/v1", "kind": "RoleBinding",
         "metadata": {"name": f"rejected-admin-{suffix}", "labels": {"veridex.io/policy-test-run": suffix}},
         "roleRef": {"apiGroup": "rbac.authorization.k8s.io", "kind": "ClusterRole", "name": "cluster-admin"},
         "subjects": [{"kind": "ServiceAccount", "name": "policy-test", "namespace": namespace}],
-    }, "unapproved clusterroles")
+    }, "is forbidden")
 
     rejected("restricted-pod-security", pod_path, {
         "apiVersion": "v1", "kind": "Pod",

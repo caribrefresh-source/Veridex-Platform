@@ -10,7 +10,7 @@ metadata:
   labels:
     veridex.io/wave: "1"
     veridex.io/role: policy-test
-    veridex.io/lifecycle: planned
+    veridex.io/lifecycle: active
     veridex.io/recovery-class: disposable
     veridex.io/data-classification: synthetic-only
     pod-security.kubernetes.io/enforce: restricted

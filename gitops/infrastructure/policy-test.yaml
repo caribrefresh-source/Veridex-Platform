@@ -1,0 +1,23 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: policy-test
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: veridex
+  source:
+    repoURL: https://github.com/caribrefresh-source/Veridex-Platform.git
+    targetRevision: main
+    path: kubernetes/cluster/policy-test
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: veridex-policy-test
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false

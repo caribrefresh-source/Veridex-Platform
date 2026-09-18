@@ -62,7 +62,7 @@ spec:
       owner: platform-data
       recoveryClass: reconcile
     - name: veridex-policy-test
-      lifecycle: planned
+      lifecycle: active
       wave: 1
       role: policy-test
       owner: platform-security

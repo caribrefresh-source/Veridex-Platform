@@ -69,7 +69,7 @@ Each number is a promotion boundary. Components on the same number may be one at
 4. **Root app-of-apps alignment** — Reconcile current names (`root`, `cluster-namespaces`, `cluster-policies`, `monitoring`, `traefik`) with repository names (`k3s-ha-root`, `infra`, `observability`, `secrets`). Migration must avoid creating two owners for one resource. <!-- provider-drift-ok: historical source platform comparison -->
 5. **Namespaces and security labels** — Create the canonical application, `cnpg-system`, and required infrastructure namespaces with deterministic labels, quotas, LimitRanges, and Pod Security settings.
 6. **RBAC and service accounts** — Apply least-privilege roles/bindings; prove allowed operations work and denied operations fail.
-7. **Cilium core** — Reconcile CNI, VXLAN, WireGuard, MTU 1400, default-deny posture, and deterministic egress rules.
+7. **Cilium core** — Reconcile CNI, VXLAN, WireGuard, MTU auto-detection, default-deny posture, and deterministic egress rules. MTU is deliberately `cilium_mtu: 0` (auto-detect), not a fixed value: 1350 was tested and only lowered usable payload, and the accepted result is ~1354 bytes across nodes over VXLAN + WireGuard (`ansible/inventory/production/group_vars/all.yml`). Verify large single-datagram UDP separately — TCP is protected by MSS clamping, UDP is not.
 8. **Cilium Envoy and Hubble Peer** — Verify node coverage and flow visibility.
 9. **Hubble Relay repair** — Restore ready endpoints before declaring network observability complete.
 10. **CoreDNS** — Prove Kubernetes service discovery and allowlisted external DNS resolution.

@@ -1,20 +1,45 @@
 # D1 — applying the provider firewall: runbook
 
-**Status:** Draft for review. **Nothing has been applied. No `POST` or `PUT`
-has been issued.**
+**Status:** Gate met 2026-09-18 (§0) — D1 may now be executed when the operator
+chooses. **Nothing has been applied yet: no `POST` or `PUT` has been issued.**
 
 Implements the ruleset in `provider-firewall-rules.yml`; rationale and costs in
 `provider-firewall.md`. Evidence labels per `.claude/CLAUDE.md` §1.
 
-## 0. Gate — do not start until all five are true
+## 0. Gate — all five, met 2026-09-18
 
-1. `veridex-agent-2` snapshot created and confirmed.
-2. Console shell reached on `veridex-server-1` and `veridex-agent-2` through the
-   browser, without SSH.
-3. Server recovery command proven from that console.
-4. Worker recovery path proven from that console (`crictl` → Cilium container →
-   `PolicyAuditMode=Enabled`).
-5. Evidence recorded; register entry closed.
+Evidence: `docs/security/incidents/2026-09-18-provider-console-drill.md`.
+
+1. ✅ `veridex-agent-2` snapshot `pre-d1-2026-09-18` (uuid `40d37782…`) created
+   and confirmed. **It paused the VM for ~2½ minutes** — see §0.1.
+2. ✅ Console shell reached on `veridex-server-1` and `veridex-agent-2` through
+   the SCP **Screen** tab, without SSH. Both nodes have a usable root password.
+3. ✅ Server recovery command proven from that console: `k3s kubectl get ccnp`
+   returned `No resources found` on `veridex-server-1`.
+4. ✅ Worker recovery path proven from that console: `k3s crictl ps --name
+   cilium-agent` on `veridex-agent-2` returned the running container
+   `47e1df21855a2` (pod `cilium-t5rm6`) — the same container reached over SSH,
+   where host endpoint 107 reports `PolicyAuditMode: Enabled`.
+5. ✅ Evidence recorded. The register entry is **partially** closed: console
+   access and both recovery paths are proven, which is what Stages D/E depend
+   on; account recovery and SSH restoration remain unexercised and keep the
+   entry open.
+
+The commands above are the read-only forms, because no host policy exists yet
+to remove. The mutating forms use the same access, binaries and container.
+
+### 0.1 Snapshots are not zero-downtime here
+
+netcup's "online" snapshot **paused** `veridex-agent-2` from 14:53:26 to
+14:55:51 UTC on 2026-09-18. The node went `NotReady`, its site pod stopped
+answering, and Argo CD on NodePort 32537 briefly returned 404 because the
+Traefik Deployment pod behind it sits on that node. Everything recovered
+unattended with **0 pod restarts**, and audit mode survived because the Cilium
+agent did not restart.
+
+Consequences for this runbook: take snapshots in a window, expect a short
+outage on the node being snapshotted, and note that snapshotting a
+control-plane node would pause an **etcd member** — do not do it casually.
 
 **Why D1 is gated on the same drill as D2, despite being "cheap to fix":** the
 ruleset includes tcp/22. A provider firewall that blocks SSH is only an API call

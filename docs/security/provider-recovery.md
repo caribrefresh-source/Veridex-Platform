@@ -95,10 +95,21 @@ or disk replacement requires explicit Production Infrastructure Owner approval.
 
 ## Validation status
 
-This runbook is documented but not yet live-proven. The open remediation
-register tracks a provider-console/rescue drill. It is not closed until an
-authorized operator demonstrates account recovery, non-destructive console or
-rescue access, and restoration of normal SSH without exposing private keys.
+**Partially proven, 2026-09-18** —
+`incidents/2026-09-18-provider-console-drill.md`. Console access itself works:
+an authorized operator reached a root shell on `veridex-server-1` and
+`veridex-agent-2` through the SCP **Screen** tab, with no SSH, and ran each node
+type's recovery command from it. Both nodes have a usable root password, so the
+console login path is real rather than assumed.
+
+Still unproven, so the register entry stays open: **account recovery** through
+the provider's independently recoverable path (the drill signed in normally),
+and **restoring SSH** after a real failure (SSH never broke).
+
+Two practical notes from that drill: the console does not take a normal paste —
+use its **Clipboard** button, or type short commands — and netcup's "online"
+snapshot **pauses the VM** for a couple of minutes, so it is not a zero-downtime
+operation on a node that serves traffic.
 
 The drill must additionally exercise the host-policy recovery above **before any
 host-policy enforcement work** (Public TLS plan Stage E): a console shell on one

@@ -2,10 +2,10 @@
 # Dashboards and data sources are immutable, Git-provisioned configuration.
 # Anonymous Viewer access stays on for dashboard browsing. Admin login is
 # enabled via the grafana-admin-credentials Secret, applied directly to the
-# cluster (kubectl) rather than through GitOps -- the repo-wide SOPS+age vs
-# Sealed Secrets decision (docs/Engineering Documents/Initial Stages
-# Plan.txt, the "§6 conflict") is still open, gated behind Gate 22. See
-# docs/security/secret-register.yml for where the value is held.
+# cluster (kubectl) rather than through GitOps. SOPS + age is the chosen
+# mechanism (gate ledger O5), but Argo CD cannot decrypt it until Gates
+# 21/22 are done. See docs/security/secret-register.yml for where the value
+# is held.
 ---
 apiVersion: v1
 kind: ConfigMap

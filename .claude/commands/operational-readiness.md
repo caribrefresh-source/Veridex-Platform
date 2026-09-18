@@ -29,7 +29,7 @@ Pass: All data-plane pods Running. CNPG cluster `Cluster in healthy state`.
 ## Security Gate
 ```
 # No plaintext secrets in manifests
-grep -rn 'password:\|token:\s' gitops/ --include='*.yaml' | grep -v 'secretRef\|SealedSecret\|ExternalSecret\|#'
+grep -rn 'password:\|token:\s' gitops/ --include='*.yaml' | grep -v 'secretRef\|ENC\[\|ExternalSecret\|#'
 # All external certs valid
 kubectl get certificate -A -o json | python3 -c "
 import sys, json

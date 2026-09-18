@@ -40,9 +40,8 @@ kubectl exec -n crowdsec -l app=crowdsec -- cscli collections list | grep enable
 ```
 Expect: traefik, linux, base-http-scenarios collections installed.
 
-## 7. Sealed Secrets for CrowdSec
+## 7. CrowdSec Secrets
 ```
-kubectl get sealedsecret -n crowdsec
 kubectl get secret -n crowdsec | grep -v 'kubernetes.io'
 ```
 Pass: LAPI credentials and bouncer API key secrets present and decrypted.

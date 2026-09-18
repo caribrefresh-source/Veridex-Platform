@@ -38,11 +38,11 @@ kubectl apply -f gitops/infra/cnpg/crds/ --dry-run=server 2>&1 | grep -v unchang
 ```
 Pass: CRDs show unchanged.
 
-## 6. SealedSecret Re-Apply Safety
+## 6. Secret Re-Apply Safety
 ```
 kubectl apply -f gitops/secrets/ --dry-run=server 2>&1 | head -20
 ```
-Pass: SealedSecrets idempotent (same encrypted content re-applies without rotating the underlying secret).
+Pass: SOPS-decrypted secrets re-apply unchanged (same encrypted content does not rotate the underlying secret).
 
 ## 7. CNPG Cluster Re-Apply
 ```

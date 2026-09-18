@@ -8,10 +8,10 @@
 #
 # Why this credential is created by Ansible and not reconciled from Git:
 # Argo CD needs it in order to read the repository at all, so a Secret
-# delivered from that repository -- sealed, SOPS-encrypted or otherwise --
+# delivered from that repository -- SOPS-encrypted or otherwise --
 # cannot exist before Argo CD can already authenticate. It is a bootstrap
 # secret, and Ansible owns bootstrap. Everything downstream of Argo CD's
-# first successful sync should be a SealedSecret instead.
+# first successful sync should be a SOPS + age encrypted Secret instead.
 
 - name: Identify the bootstrap server
   ansible.builtin.set_fact:

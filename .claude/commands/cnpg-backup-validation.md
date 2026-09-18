@@ -45,9 +45,8 @@ kubectl get cluster -n data-plane -o jsonpath='{.items[0].spec.backup}'
 ```
 Confirm: Recovery source, WAL archive, and MinIO credentials are all referenced.
 
-## 7. Sealed Secret for Backup Credentials
+## 7. Backup Credentials Secret
 ```
-kubectl get sealedsecret -n data-plane | grep -i backup
 kubectl get secret -n data-plane | grep -i backup
 ```
 Pass: Backup credentials secret exists and is decrypted.

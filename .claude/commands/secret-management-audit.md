@@ -1,11 +1,11 @@
 # secret-management-audit
 
-Audit secret management across the Veridex platform — SOPS, ESO, SealedSecrets.
+Audit secret management across the Veridex platform — SOPS, ESO.
 
 ## 1. No Plaintext Secrets in Git
 ```
 git log --all --full-history -- '*.env' '**/.env' '**/secrets.yaml' '**/credentials*' 2>/dev/null | head -10
-grep -rn 'password:\|token:\|secret:' gitops/ --include='*.yaml' | grep -v 'secretRef\|secretName\|SealedSecret\|ExternalSecret\|kind: Secret\|#'
+grep -rn 'password:\|token:\|secret:' gitops/ --include='*.yaml' | grep -v 'secretRef\|secretName\|ENC\[\|ExternalSecret\|kind: Secret\|#'
 ```
 Pass: No output. No plaintext credentials committed.
 
@@ -35,12 +35,12 @@ kubectl get clustersecretstore -o json | \
 ```
 Pass: All stores `Ready`.
 
-## 6. SealedSecrets Decryption
+## 6. SOPS Decryption
 ```
-kubectl get sealedsecret -A -o custom-columns='NS:.metadata.namespace,NAME:.metadata.name'
+grep -rl 'ENC\[AES256_GCM' gitops/secrets/ --include='*.yaml'
 kubectl get secret -A | grep -v 'kubernetes.io\|helm.sh\|default-token'
 ```
-Cross-reference: Every SealedSecret should have a corresponding plain Secret (proof it decrypted).
+Cross-reference: Every SOPS-encrypted file in gitops/secrets/ should have a corresponding live Secret (proof Argo CD decrypted it).
 
 ## 7. Secret Rotation Age
 ```
@@ -58,4 +58,4 @@ kubectl get job | grep vault | tail -3
 Pass: Vaultwarden backup CronJob scheduled and last job Completed.
 
 ## Report
-Git scan clean, SOPS coverage, ESO sync status, SealedSecret count, rotation candidates.
+Git scan clean, SOPS coverage, ESO sync status, rotation candidates.

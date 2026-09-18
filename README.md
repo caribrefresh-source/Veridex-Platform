@@ -9,7 +9,7 @@ source for the Veridex platform.
 | --- | --- |
 | `ansible/` | Host preparation and k3s cluster installation (servers, agents, kubeconfig, Argo CD bootstrap). |
 | `kubernetes/cluster/` | Namespaces — **the only place namespaces are declared** — plus quotas, LimitRanges, and the default-deny baseline. |
-| `kubernetes/infrastructure/` | Cluster-level components: Cilium, ingress, cert-manager, storage, sealed-secrets, observability. |
+| `kubernetes/infrastructure/` | Cluster-level components: Cilium, ingress, cert-manager, storage, observability. |
 | `kubernetes/platform/` | Shared services: databases, messaging, workflow, object storage. |
 | `kubernetes/applications/` | Per-application manifests. |
 | `kubernetes/environments/` | Aggregating kustomizations only — **no resources of their own**; each lists the app overlays present in that environment. |

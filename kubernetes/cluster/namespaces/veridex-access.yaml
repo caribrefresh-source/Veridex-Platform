@@ -1,0 +1,14 @@
+---
+# Holds the read-only operator identity and nothing else. A dedicated
+# namespace keeps the identity's ServiceAccount and token Secret away from
+# every workload namespace, so no workload's RBAC can ever reach them.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: veridex-access
+  annotations:
+    veridex.io/owner: platform-security
+    veridex.io/purpose: Read-only operator identity for day-to-day kubectl access
+    argocd.argoproj.io/sync-wave: "0"
+  labels:
+    veridex.io/role: cluster-access

@@ -1,6 +1,6 @@
 # Repository Operating Contract
 
-**Version:** 1.1 (revised 2026-08-24) — supersedes prior undated version.
+**Version:** 1.2 (revised 2026-09-17: Section 6 stack decision — Longhorn approved, SOPS + age confirmed, backups via native producers) — supersedes 1.1 (2026-08-24).
 **Scope:** Governs AI-assisted analysis, changes, and validation in this repository.
 
 ## 0. Precedence (single source of truth)
@@ -79,10 +79,14 @@ Platform focus: document intelligence, workflow automation, AI services.
 - **Ingress**: Traefik — the only component permitted to publish a host port or NodePort, which is why the host-exposure admission policy exempts `kube-system` and nothing else.
 - **Relational**: CloudNativePG / PostgreSQL
 - **Object**: MinIO
+- **Block storage**: Longhorn — replicated PVCs for suitable workloads only. Never MinIO data volumes (MinIO erasure coding is their only replication layer).
 - **Cache**: Redis
 - **Events**: NATS JetStream
 - **Workflows**: Temporal
-- **Secrets**: SOPS + age
+- **Secrets**: SOPS + age — the single secret mechanism for every layer (Ansible and GitOps).
+- **Backups**: each producer's native path to Backblaze B2 (etcd b2-CLI sidecar, CNPG Barman Cloud, Longhorn backupstore, MinIO replication). No data set gets a second restore mechanism (Section 9).
+
+Decided 2026-09-17; rationale in `docs/evidence/gate-ledger.md` ordering decision O5. Adding a component to this list, or removing one, needs the same kind of recorded decision.
 
 ## 7. Data Plane Constraints
 
@@ -107,7 +111,7 @@ Platform focus: document intelligence, workflow automation, AI services.
   2. Restore GitOps/operators/CRDs.
   3. Each data set gets exactly one authoritative restore mechanism.
   4. CNPG PITR must bootstrap from a base backup plus WAL.
-- **Never restore overlapping CNPG PVC data via both Velero and CNPG PITR** — pick one mechanism per data set (see point 3) and do not run both against the same PVC.
+- **Never restore overlapping CNPG PVC data via both a volume-level restore (e.g. Longhorn backup) and CNPG PITR** — pick one mechanism per data set (see point 3) and do not run both against the same PVC.
 - **No routine Cilium DaemonSet restarts.** Any restart requires a root-cause analysis and explicit authorization first (this is the same rule as Section 2 — stated once, here, as the canonical version).
 
 ## 10. Observability & Status Claims
@@ -169,7 +173,7 @@ Never:
 - Bypass a security control to make progress.
 - Use Redis or MinIO as a system of record.
 - Restart Cilium DaemonSets routinely, or without RCA and authorization (Section 9).
-- Restore overlapping CNPG PVC data via both Velero and CNPG PITR (Section 9).
+- Restore overlapping CNPG PVC data via both a volume-level restore and CNPG PITR (Section 9).
 - Recommend `kubectl edit`/`patch`/`apply` or `helm install`/`upgrade` run by hand as a *permanent* solution — these are fine as emergency mutations (Section 4) but the permanent fix goes through Git.
 - Expand a change beyond the explicit user requirement (drive-by refactors, speculative abstractions, unrequested features, extra "nice to have" code) without asking first.
 

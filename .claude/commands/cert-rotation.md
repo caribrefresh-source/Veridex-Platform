@@ -31,7 +31,7 @@ If DNS-01 credentials need rotation (none exist yet: veridexeai.com DNS is at Sq
 # Update the secret referenced by the ClusterIssuer
 kubectl get clusterissuer letsencrypt-dns -o yaml | grep secretName
 kubectl edit secret <dns-secret-name> -n cert-manager
-# Or use SealedSecret/ESO to update credentials
+# Or update the SOPS-encrypted source in Git and let Argo CD reconcile
 ```
 After rotation: trigger re-issue on a test cert to verify DNS-01 still works.
 

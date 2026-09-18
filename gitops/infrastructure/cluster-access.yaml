@@ -1,0 +1,23 @@
+---
+# Read-only operator identity (kubernetes/cluster/access). Sync-wave 1 so its
+# namespace, created at wave 0 by cluster-namespaces, already exists.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cluster-access
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: veridex
+  source:
+    repoURL: https://github.com/caribrefresh-source/Veridex-Platform.git
+    targetRevision: main
+    path: kubernetes/cluster/access
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: veridex-access
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

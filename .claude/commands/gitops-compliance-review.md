@@ -5,7 +5,7 @@ Review GitOps manifests in gitops/ for compliance with platform standards.
 ## 1. No Hardcoded IPs or Secrets
 ```
 grep -rn '\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b' gitops/ --include='*.yaml' | grep -v '#\|clusterIP\|127.0.0.1\|0.0.0.0\|10.43\|10.1'
-grep -rn 'password\|secret\|token\|key' gitops/ --include='*.yaml' | grep -v 'secretRef\|secretName\|SealedSecret\|ExternalSecret\|kind: Secret'
+grep -rn 'password\|secret\|token\|key' gitops/ --include='*.yaml' | grep -v 'secretRef\|secretName\|ENC\[\|ExternalSecret\|kind: Secret'
 ```
 Pass: No plaintext credentials or hardcoded LB IPs in manifests.
 

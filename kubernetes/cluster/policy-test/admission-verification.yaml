@@ -79,22 +79,20 @@ data:
     }, "exceeded quota")
 
     cleanup_name = f"cleanup-{suffix}"
+    cleanup_path = f"/api/v1/namespaces/{namespace}/configmaps"
     compliant = {
-        "apiVersion": "v1", "kind": "Pod",
+        "apiVersion": "v1", "kind": "ConfigMap",
         "metadata": {"name": cleanup_name, "labels": {"veridex.io/policy-test-run": suffix}},
-        "spec": {"restartPolicy": "Never", "automountServiceAccountToken": False,
-          "securityContext": {"runAsNonRoot": True, "runAsUser": 65532, "seccompProfile": {"type": "RuntimeDefault"}},
-          "containers": [{"name": "test", "image": image, "command": ["sh", "-c", "sleep 60"],
-          "resources": {"requests": {"cpu": "10m", "memory": "8Mi"}, "limits": {"cpu": "20m", "memory": "16Mi"}}, "securityContext": restricted}]},
+        "data": {"run": suffix},
     }
-    status, result = request("POST", pod_path, compliant)
+    status, result = request("POST", cleanup_path, compliant)
     if status != 201:
         raise RuntimeError(f"cleanup-create: status={status} result={result}")
-    status, result = request("DELETE", f"{pod_path}/{cleanup_name}", {"apiVersion": "v1", "kind": "DeleteOptions", "gracePeriodSeconds": 0})
+    status, result = request("DELETE", f"{cleanup_path}/{cleanup_name}", {"apiVersion": "v1", "kind": "DeleteOptions"})
     if status not in (200, 202):
         raise RuntimeError(f"cleanup-delete: status={status} result={result}")
     for _ in range(20):
-        status, _ = request("GET", f"{pod_path}/{cleanup_name}")
+        status, _ = request("GET", f"{cleanup_path}/{cleanup_name}")
         if status == 404:
             break
         time.sleep(1)

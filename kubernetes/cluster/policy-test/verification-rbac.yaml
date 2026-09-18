@@ -13,7 +13,7 @@ metadata:
   namespace: veridex-policy-test
 rules:
   - apiGroups: [""]
-    resources: ["pods"]
+    resources: ["pods", "configmaps"]
     verbs: ["create", "get", "delete"]
   - apiGroups: ["rbac.authorization.k8s.io"]
     resources: ["roles", "rolebindings"]

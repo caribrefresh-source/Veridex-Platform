@@ -50,6 +50,50 @@ these conditions holds:
 
 If the node OS cannot accept SSH, use `provider-recovery.md` instead.
 
+## SSH and `kubectl` are one failure domain, not two
+
+`VERIFIED` 2026-09-17 on the operator workstation.
+
+It is tempting to treat cluster administration as having two independent
+routes — SSH to the nodes, and `kubectl` against the Kubernetes API. On this
+workstation they are the same route:
+
+- `kubectl` is configured against `https://127.0.0.1:16443`, a local address.
+- That local port exists only because an `ssh.exe` process is forwarding it to
+  the API server's loopback address on a node. The forwarding is set up by
+  `scripts/start-netcup-kube-tunnel.ps1`.
+- The tunnel terminates on **`veridex-server-1`**, a control-plane/etcd node.
+
+Consequences, which matter most at exactly the moment they are least welcome:
+
+1. **`kubectl` is not a fallback for a loss of SSH.** Anything that stops new
+   SSH connections to that node — a host firewall rule, `sshd` failing, the
+   node itself going down — also removes the API path this workstation uses.
+   A recovery plan whose rollback step is "just run `kubectl delete`" has no
+   independent path to run it from.
+2. **An already-established session is worth more than a documented one.** A
+   connection that exists before a change survives a policy that blocks new
+   connections. That existing session, and the provider's out-of-band console
+   (`provider-recovery.md`), are the only genuinely independent routes.
+3. **`veridex-server-1` carries more than its share.** It is a control-plane
+   and etcd member *and* the administrative entry point. Any staged change
+   across nodes must reach it last.
+
+**Required before any host-policy enforcement work** (Public TLS plan Stages
+D–E, or any change that can filter inbound traffic on a node):
+
+- an already-established SSH session to each node affected, opened before the
+  change and left open; **and**
+- confirmed provider out-of-band console access, exercised recently enough to
+  be trusted — see `provider-recovery.md`, whose drill is still pending.
+
+Audit mode does not remove this requirement. Audit mode proves which flows a
+policy *would* drop; it proves nothing about whether SSH survives enforcement,
+because under audit mode nothing is enforced.
+
+Until the provider console drill is done, this workstation has **one**
+administrative path to the cluster, and both SSH and `kubectl` depend on it.
+
 ## Access procedure
 
 1. Open an incident record from `emergency-access-record-template.md` in

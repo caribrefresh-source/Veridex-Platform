@@ -73,8 +73,9 @@ data:
         "apiVersion": "v1", "kind": "Pod",
         "metadata": {"name": f"rejected-quota-{suffix}", "labels": {"veridex.io/policy-test-run": suffix}},
         "spec": {"restartPolicy": "Never", "securityContext": {"runAsNonRoot": True, "runAsUser": 65532, "seccompProfile": {"type": "RuntimeDefault"}},
-          "containers": [{"name": "test", "image": image, "command": ["true"],
-          "resources": {"requests": {"cpu": "2", "memory": "16Mi"}, "limits": {"cpu": "2", "memory": "16Mi"}}, "securityContext": restricted}]},
+          "containers": [{"name": f"test-{index}", "image": image, "command": ["true"],
+          "resources": {"requests": {"cpu": "250m", "memory": "8Mi"}, "limits": {"cpu": "500m", "memory": "16Mi"}},
+          "securityContext": restricted} for index in range(4)]},
     }, "exceeded quota")
 
     cleanup_name = f"cleanup-{suffix}"

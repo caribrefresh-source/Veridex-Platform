@@ -15,6 +15,7 @@ WORKLOAD_PATH = Path("docs/architecture/workload-namespace-map.yaml")
 PLANNED = "kubernetes/cluster/namespaces/planned/"
 REPO_URL = "https://github.com/caribrefresh-source/Veridex-Platform.git"
 SERVER = "https://kubernetes.default.svc"
+WORKLOAD_KINDS = {"CronJob", "DaemonSet", "Deployment", "Job", "StatefulSet"}
 REQUIRED_MAP_FIELDS = {"name", "lifecycle", "wave", "role", "owner", "recoveryClass"}
 REQUIRED_LABELS = {
     "veridex.io/wave", "veridex.io/role", "veridex.io/lifecycle",
@@ -69,9 +70,39 @@ def load_map(root: Path):
         workloads[name] = namespace
     if not workloads:
         raise ValueError("namespace map workload inventory is empty")
+    deployed = {}
+    for item in workload_spec.get("deployedResources") or []:
+        if not isinstance(item, dict):
+            raise ValueError("each deployed resource must be an object")
+        missing = {"workload", "kind", "name", "namespace", "path"} - set(item)
+        if missing:
+            raise ValueError(f"deployed resource misses {sorted(missing)}")
+        workload = item["workload"]
+        kind = item["kind"]
+        name = item["name"]
+        namespace = item["namespace"]
+        path = item["path"]
+        if kind not in WORKLOAD_KINDS:
+            raise ValueError(f"deployed resource {kind}/{name} has unsupported kind")
+        if workload not in workloads:
+            raise ValueError(f"deployed resource {kind}/{name} references unknown workload {workload!r}")
+        if namespace != workloads[workload]:
+            raise ValueError(
+                f"deployed resource {kind}/{name} namespace {namespace!r} disagrees "
+                f"with workload {workload!r} namespace {workloads[workload]!r}"
+            )
+        if not isinstance(path, str) or not path.startswith("kubernetes/") or not path.endswith((".yaml", ".yml")):
+            raise ValueError(f"deployed resource {kind}/{name} has invalid manifest path")
+        key = (kind, namespace, name)
+        if key in deployed:
+            raise ValueError(f"deployed resource {kind}/{namespace}/{name} is mapped more than once")
+        deployed[key] = {"workload": workload, "path": path}
+    if not deployed:
+        raise ValueError("deployed resource inventory is empty")
     return (
         mapped,
         workloads,
+        deployed,
         set(spec.get("forbiddenNames") or []),
         tuple(spec.get("forbiddenPrefixes") or []),
     )
@@ -80,7 +111,7 @@ def load_map(root: Path):
 def validate(root: Path):
     errors = []
     try:
-        mapped, _, forbidden, prefixes = load_map(root)
+        mapped, _, deployed, forbidden, prefixes = load_map(root)
     except ValueError as exc:
         return [str(exc)]
 
@@ -91,6 +122,7 @@ def validate(root: Path):
     declarations = {}
     applications = []
     projects = {}
+    discovered_workloads = {}
     for base_name in ("kubernetes", "gitops"):
         base = root / base_name
         for path in sorted(base.rglob("*.y*ml")):
@@ -116,6 +148,35 @@ def validate(root: Path):
                     if name in projects:
                         errors.append(f"{name!r}: AppProject declared more than once")
                     projects[name] = (rel, doc)
+                if base_name == "kubernetes" and kind in WORKLOAD_KINDS:
+                    name = meta.get("name")
+                    namespace = meta.get("namespace")
+                    if not isinstance(name, str) or not name:
+                        errors.append(f"{rel}: {kind} has missing/non-string name")
+                        continue
+                    if not isinstance(namespace, str) or not namespace:
+                        errors.append(f"{rel}: {kind}/{name} must declare metadata.namespace")
+                        continue
+                    key = (kind, namespace, name)
+                    if key in discovered_workloads:
+                        errors.append(f"{kind}/{namespace}/{name}: workload controller declared more than once")
+                    discovered_workloads[key] = rel
+                    registered = deployed.get(key)
+                    if not registered:
+                        errors.append(f"{rel}: unregistered deployed workload {kind}/{namespace}/{name}")
+                    elif registered["path"] != rel:
+                        errors.append(
+                            f"{kind}/{namespace}/{name}: manifest path {rel!r} disagrees "
+                            f"with registry path {registered['path']!r}"
+                        )
+
+    for key, registered in sorted(deployed.items()):
+        if key not in discovered_workloads:
+            kind, namespace, name = key
+            errors.append(
+                f"registered deployed workload {kind}/{namespace}/{name} "
+                f"not found at {registered['path']}"
+            )
 
     for name, items in sorted(declarations.items()):
         if len(items) != 1:

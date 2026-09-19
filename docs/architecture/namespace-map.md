@@ -6,6 +6,15 @@ map lifecycle and moving its manifest from `planned/` to `active/` in the same
 reviewed change. Planned manifests are deliberately outside the Argo CD
 `cluster-namespaces` source.
 
+Every coded `Deployment`, `StatefulSet`, `DaemonSet`, `Job`, and `CronJob` must
+also have exactly one `deployedResources` entry in `workload-namespace-map.yaml`.
+That entry binds its kind, Kubernetes name, manifest path, and namespace to one
+architectural workload. CI fails closed for an unregistered controller, a stale
+registration, a duplicate registration, a moved manifest, or a namespace that
+differs from the workload's approved namespace. Adding a future component is
+therefore one reviewed atomic change: add its architectural workload mapping,
+its deployed-resource registration, and its manifest.
+
 | Wave | Namespace | Contents | Recovery contract |
 |---|---|---|---|
 | 1 | `veridex-policy-test` | Permanent policy regression harness; no production data | Disposable contents; retain namespace |

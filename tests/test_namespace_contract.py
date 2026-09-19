@@ -24,11 +24,7 @@ class NamespaceContractTests(unittest.TestCase):
         shutil.copytree(ROOT / "gitops", self.root / "gitops")
         (self.root / "docs").mkdir()
         shutil.copytree(ROOT / "docs" / "architecture", self.root / "docs" / "architecture")
-        (self.root / "kubernetes" / "cluster").mkdir(parents=True)
-        shutil.copytree(
-            ROOT / "kubernetes" / "cluster" / "namespaces",
-            self.root / "kubernetes" / "cluster" / "namespaces",
-        )
+        shutil.copytree(ROOT / "kubernetes", self.root / "kubernetes")
 
     def tearDown(self):
         self.temp.cleanup()
@@ -135,6 +131,51 @@ class NamespaceContractTests(unittest.TestCase):
             ),
         )
         self.assertTrue(any("mapped more than once" in error for error in self.errors()))
+
+    def test_rejects_unregistered_deployed_workload(self):
+        path = self.root / "kubernetes" / "applications" / "site" / "rogue.yaml"
+        path.write_text(
+            "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n"
+            "  name: rogue\n  namespace: site\n",
+            encoding="utf-8",
+        )
+        self.assertTrue(any("unregistered deployed workload" in error for error in self.errors()))
+
+    def test_rejects_workload_in_wrong_namespace(self):
+        self.mutate_one(
+            "kubernetes/applications/site/deployment.yaml",
+            lambda doc: doc["metadata"].update(namespace="monitoring"),
+        )
+        errors = self.errors()
+        self.assertTrue(any("unregistered deployed workload" in error for error in errors))
+        self.assertTrue(any("registered deployed workload Deployment/site/site not found" in error for error in errors))
+
+    def test_rejects_registered_workload_with_wrong_namespace(self):
+        self.mutate_one(
+            "docs/architecture/workload-namespace-map.yaml",
+            lambda doc: doc["spec"]["deployedResources"][0].update(namespace="monitoring"),
+        )
+        self.assertTrue(any("disagrees with workload" in error for error in self.errors()))
+
+    def test_rejects_stale_deployed_workload_registration(self):
+        (self.root / "kubernetes" / "applications" / "site" / "deployment.yaml").unlink()
+        self.assertTrue(any("registered deployed workload Deployment/site/site not found" in error for error in self.errors()))
+
+    def test_rejects_wrong_registered_manifest_path(self):
+        self.mutate_one(
+            "docs/architecture/workload-namespace-map.yaml",
+            lambda doc: doc["spec"]["deployedResources"][0].update(path="kubernetes/applications/site/wrong.yaml"),
+        )
+        self.assertTrue(any("manifest path" in error and "disagrees" in error for error in self.errors()))
+
+    def test_rejects_duplicate_deployed_resource_registration(self):
+        self.mutate_one(
+            "docs/architecture/workload-namespace-map.yaml",
+            lambda doc: doc["spec"]["deployedResources"].append(
+                dict(doc["spec"]["deployedResources"][0])
+            ),
+        )
+        self.assertTrue(any("deployed resource" in error and "mapped more than once" in error for error in self.errors()))
 
     def test_rejects_external_appproject_server(self):
         self.mutate_one(

@@ -57,3 +57,117 @@ spec:
     - {name: meilisearch, namespace: veridex-derived}
     - {name: memgraph, namespace: veridex-derived}
     - {name: shared-redis, namespace: veridex-derived}
+  # Exact inventory of coded workload controllers. CI discovers Deployment,
+  # StatefulSet, DaemonSet, Job and CronJob manifests and requires a one-to-one
+  # match here. `workload` binds each resource back to the architectural map.
+  deployedResources:
+    - workload: public-site
+      kind: Deployment
+      name: site
+      namespace: site
+      path: kubernetes/applications/site/deployment.yaml
+    - workload: policy-regression-harness
+      kind: CronJob
+      name: policy-test-admission
+      namespace: veridex-policy-test
+      path: kubernetes/cluster/policy-test/admission-verification.yaml
+    - workload: policy-regression-harness
+      kind: CronJob
+      name: policy-test-allowed
+      namespace: veridex-policy-test
+      path: kubernetes/cluster/policy-test/connectivity-tests.yaml
+    - workload: policy-regression-harness
+      kind: CronJob
+      name: policy-test-denied
+      namespace: veridex-policy-test
+      path: kubernetes/cluster/policy-test/connectivity-tests.yaml
+    - workload: policy-regression-harness
+      kind: CronJob
+      name: policy-test-cross-namespace-denied
+      namespace: veridex-policy-test
+      path: kubernetes/cluster/policy-test/cross-namespace-test.yaml
+    - workload: policy-regression-harness
+      kind: CronJob
+      name: policy-test-hubble
+      namespace: veridex-policy-test
+      path: kubernetes/cluster/policy-test/hubble-verification.yaml
+    - workload: policy-regression-harness
+      kind: Deployment
+      name: policy-test-echo
+      namespace: veridex-policy-test
+      path: kubernetes/cluster/policy-test/workloads.yaml
+    - workload: cert-manager
+      kind: Deployment
+      name: cert-manager-cainjector
+      namespace: cert-manager
+      path: kubernetes/infrastructure/cert-manager/controller.yaml
+    - workload: cert-manager
+      kind: Deployment
+      name: cert-manager
+      namespace: cert-manager
+      path: kubernetes/infrastructure/cert-manager/controller.yaml
+    - workload: cert-manager
+      kind: Deployment
+      name: cert-manager-webhook
+      namespace: cert-manager
+      path: kubernetes/infrastructure/cert-manager/controller.yaml
+    - workload: traefik
+      kind: DaemonSet
+      name: traefik-ingress-ds
+      namespace: kube-system
+      path: kubernetes/infrastructure/ingress/daemonset.yaml
+    - workload: monitoring-stack
+      kind: Deployment
+      name: alert-sink
+      namespace: monitoring
+      path: kubernetes/infrastructure/monitoring/alert-sink-deployment.yaml
+    - workload: monitoring-stack
+      kind: Deployment
+      name: alertmanager
+      namespace: monitoring
+      path: kubernetes/infrastructure/monitoring/alertmanager-deployment.yaml
+    - workload: monitoring-stack
+      kind: Deployment
+      name: events-exporter
+      namespace: monitoring
+      path: kubernetes/infrastructure/monitoring/events-exporter-deployment.yaml
+    - workload: monitoring-stack
+      kind: DaemonSet
+      name: fluent-bit
+      namespace: monitoring
+      path: kubernetes/infrastructure/monitoring/fluent-bit-daemonset.yaml
+    - workload: monitoring-stack
+      kind: Deployment
+      name: grafana
+      namespace: monitoring
+      path: kubernetes/infrastructure/monitoring/grafana.yaml
+    - workload: monitoring-stack
+      kind: Deployment
+      name: kube-state-metrics
+      namespace: monitoring
+      path: kubernetes/infrastructure/monitoring/kube-state-metrics-deployment.yaml
+    - workload: monitoring-stack
+      kind: Deployment
+      name: loki
+      namespace: monitoring
+      path: kubernetes/infrastructure/monitoring/loki-deployment.yaml
+    - workload: monitoring-stack
+      kind: DaemonSet
+      name: node-exporter
+      namespace: monitoring
+      path: kubernetes/infrastructure/monitoring/node-exporter-daemonset.yaml
+    - workload: monitoring-stack
+      kind: Deployment
+      name: vmagent
+      namespace: monitoring
+      path: kubernetes/infrastructure/monitoring/vmagent-deployment.yaml
+    - workload: monitoring-stack
+      kind: Deployment
+      name: vmalert
+      namespace: monitoring
+      path: kubernetes/infrastructure/monitoring/vmalert-deployment.yaml
+    - workload: monitoring-stack
+      kind: Deployment
+      name: vmsingle
+      path: kubernetes/infrastructure/monitoring/vmsingle-deployment.yaml
+      namespace: monitoring

@@ -57,10 +57,16 @@ spec:
               image: quay.io/cilium/cilium:v1.20.1@sha256:ae9ea21f7427fe24bc6ea7247eb552157a1b0a431744045d3f641545ca71d11b
               command: ["sh", "-ec"]
               args:
-                - >-
-                  hubble observe --server hubble-relay.kube-system.svc.cluster.local:80
-                  --since 10m --namespace veridex-policy-test --output json
-                  | grep -E 'FORWARDED|DROPPED|POLICY_DENIED'
+                - |
+                  sleep 60
+                  flows="$(hubble observe --server hubble-relay.kube-system.svc.cluster.local:80 \
+                    --since 10m --namespace veridex-policy-test --output json \
+                    | grep -E 'FORWARDED|DROPPED|POLICY_DENIED')"
+                  printf '%s\n' "$flows"
+                  printf '%s\n' "$flows" | grep '"verdict":"FORWARDED"' >/dev/null
+                  printf '%s\n' "$flows" | grep '"verdict":"DROPPED"' >/dev/null
+                  printf '%s\n' "$flows" | grep '"drop_reason_desc":"POLICY_DENIED"' >/dev/null
+                  echo POLICY_TEST_HUBBLE_PASS
               resources:
                 requests: {cpu: 10m, memory: 16Mi}
                 limits: {cpu: 50m, memory: 64Mi}

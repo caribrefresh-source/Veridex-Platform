@@ -1,14 +1,15 @@
 ---
-# CANDIDATE host policy — D98. NOT APPLIED, and deliberately NOT in
-# kubernetes/cluster/policies/.
+# Stage D2 host policy -- promoted 2026-09-19 from
+# docs/evidence/gap-closure/tls-public/stage-d/candidate-host-policy.yaml,
+# per stage-d/procedure.md. Merging this file IS the act of applying it: the
+# `cluster-policies` Argo CD Application (project veridex, targetRevision
+# main, path kubernetes/cluster/policies) syncs with automated prune +
+# selfHeal, so it enforces within a sync interval, on all five nodes at once.
 #
-# ┌──────────────────────────────────────────────────────────────────────────┐
-# │ Putting this file under kubernetes/cluster/policies/ IS the act of        │
-# │ applying it: that path is an auto-synced, self-healing Argo CD            │
-# │ Application. Merging it there enforces it within a sync interval, on all  │
-# │ five nodes at once, with no audit window. Do not move this file until     │
-# │ audit mode is confirmed active on every node (EG101).                     │
-# └──────────────────────────────────────────────────────────────────────────┘
+# Audit state is NOT in this file. Audit mode is per-endpoint, imperative, and
+# does not survive a cilium-agent restart; EG101 is re-run immediately before
+# merge, and any agent restart while this policy exists begins enforcement on
+# that node immediately.
 #
 # Why that matters here more than usual: both the operational and break-glass
 # credentials are SSH keys on the same workstation, so a host policy that drops

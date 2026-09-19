@@ -7,6 +7,7 @@ metadata:
 spec:
   schedule: "*/2 * * * *"
   concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 60
   successfulJobsHistoryLimit: 2
   failedJobsHistoryLimit: 0
   jobTemplate:

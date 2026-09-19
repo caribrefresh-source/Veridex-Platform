@@ -5,8 +5,9 @@ metadata:
   name: policy-test-allowed
   namespace: veridex-policy-test
 spec:
-  schedule: "*/2 * * * *"
+  schedule: "1-59/2 * * * *"
   concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 60
   successfulJobsHistoryLimit: 2
   failedJobsHistoryLimit: 0
   jobTemplate:
@@ -56,6 +57,7 @@ metadata:
 spec:
   schedule: "*/2 * * * *"
   concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 60
   successfulJobsHistoryLimit: 2
   failedJobsHistoryLimit: 0
   jobTemplate:

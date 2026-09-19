@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Stage E desired runtime state for Cilium reserved:host endpoints",
+  "sourceOfTruthLimit": "PolicyAuditMode is imperative endpoint state. This file is checked or applied by a human-run reconciler; Argo CD does not continuously reconcile it.",
+  "nodes": {
+    "veridex-agent-1": "Disabled",
+    "veridex-agent-2": "Disabled",
+    "veridex-server-1": "Enabled",
+    "veridex-server-2": "Disabled",
+    "veridex-server-3": "Disabled"
+  }
+}

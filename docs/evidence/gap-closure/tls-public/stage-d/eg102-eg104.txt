@@ -1,0 +1,176 @@
+Stage D exit gates -- host policy in audit mode (D100)
+======================================================
+Recorded 2026-09-19. Evidence labels per .claude/CLAUDE.md S1.
+
+WHAT WAS APPLIED
+----------------
+PR #93 (commit d05e2aa) merged 2026-09-19T02:28:58Z, moving
+docs/evidence/.../stage-d/candidate-host-policy.yaml to
+kubernetes/cluster/policies/host-ingress-policy.yaml. Verified before merge as
+a comment-only change: both CiliumClusterwideNetworkPolicy specs and metadata
+were identical to the reviewed candidate; only the file header differed.
+Argo CD reconciled at revision f97a92a; both objects created 02:30:40Z.
+
+  veridex-host-baseline         nodeSelector: {}
+  veridex-host-public-ingress   nodeSelector: veridex.io/role=worker
+
+All five host endpoints reported PolicyAuditMode: Enabled and
+POLICY (ingress) ENFORCEMENT: (Audit) for the whole window. Nothing was
+dropped at any point.
+
+PREREQUISITES -- STATED HONESTLY
+--------------------------------
+Two of the three procedure prerequisites were NOT met when the merge happened:
+
+  EG101 re-run, all five Enabled ....... MET (02:25:08Z, and again at 03:42:42Z)
+  netcup snapshot taken ................ NOT TAKEN
+  five SSH sessions open and held ...... NOT ESTABLISHED
+
+The merge proceeded on the repository owner's explicit and repeated
+instruction after the gap was raised three times. It carried no cost: audit
+mode held throughout and no cilium-agent restarted (restart count 0 on all
+five nodes, unchanged since 2026-09-17T09:59Z). That outcome was luck, not
+the safety design: the snapshot and the held sessions the procedure required
+for this exact step were never in place, so nothing in the design prevented
+the lockout failure mode -- it simply did not occur. The exposure that was
+accepted is nonetheless real and should not be read out of this record: had an agent
+restarted while the policy existed, that node would have begun enforcing with
+no held SSH session and no snapshot, leaving the provider console as the only
+recovery path.
+
+EG102 -- would any legitimate flow be dropped?          PASS
+--------------------------------------------------------------
+Method: hubble observe --verdict AUDIT, filtered POSITIVELY to flows whose
+source or destination carries reserved:host. Stage D policies select host
+endpoints only, so every verdict they can produce is in that set.
+
+Result over a 45-minute window: 31 host-ingress audit verdicts, ZERO of them
+legitimate traffic. All were reserved:world probing closed ports.
+
+THREE CRITERIA WERE TRIED. The first two were WRONG and are recorded so the
+conclusion cannot be misread:
+
+  (a) "any host-scoped audit is a failure"          -> reported 36 failures
+      Rejected: counts internet background scanning, which the policy is
+      SUPPOSED to drop.
+
+  (b) "any audit against a protected port"          -> reported 1 failure, twice
+      Rejected: counts world -> 9100 and world -> 6443 scans. Those ports are
+      protected FROM the internet and reachable only from the vLAN or pod
+      CIDR; auditing them is the policy working, not failing.
+
+  (c) "protected port AND legitimate source"        -> ZERO failures  <-- correct
+      A failure requires either an internal source (10.2.0.0/16, 10.44.0.0/16,
+      10.45.0.0/16, or a cluster/remote-node/health/kube-apiserver identity)
+      hitting an internal port, or reserved:world hitting a deliberately
+      public port (22, 80, 443, 32537, 32538). Neither occurred.
+
+Positive confirmation -- protected flows were being FORWARDED to the host
+during the same window:
+
+     610x  UDP/8472   VXLAN
+      20x  TCP/4244   hubble-peer
+       5x  TCP/9100   node-exporter
+       4x  TCP/9963   cilium-operator-metrics
+       4x  TCP/9962   cilium-metrics
+       3x  TCP/22     SSH
+       2x  TCP/4240   cilium-health
+
+UNEXPECTED FINDING -- the policy is already earning its place. While purely in
+audit mode it showed it would close the Kubernetes API (TCP/6443) and
+node-exporter (TCP/9100) to the public internet, and live scans against both
+were observed from 85.217.140.34 and 100.29.192.26 during the window. That is
+the NodePort/hostPort-bypasses-nftables exposure Stage D exists to close
+(docs/security/nodeport-bypasses-host-firewall.md), with live evidence of
+attempts against it.
+
+Operational note: this Cilium build (v1.20.1) DOES emit a distinct AUDIT
+verdict, so --verdict AUDIT works as written. No DROPPED/drop_reason fallback
+was needed. The earlier caveat about that is resolved.
+
+EG103 -- continuity during the window                   PASS
+--------------------------------------------------------------
+Sampled every 20-25s from outside the cluster for the duration:
+
+  site (443, SNI veridexeai.com) ....... 200 on both worker IPs, throughout
+  Argo CD (NodePort 32537) ............. 200 on both worker IPs, throughout
+  Grafana (NodePort 32538) ............. 200 on both worker IPs, throughout
+  nodes Ready .......................... 5/5 throughout
+  Argo CD Applications ................. 9/9 Synced/Healthy throughout
+  cilium-agent restarts ................ 0 on all five, throughout
+
+No degraded sample occurred at any point.
+
+EG104 -- rollback drill                                 PASS, with a finding
+--------------------------------------------------------------
+Method: delete both CCNPs while audit mode held, observe, allow Argo CD
+selfHeal to restore them.
+
+  03:41:05Z  kubectl delete -- both objects reported deleted
+  03:41:07Z  veridex-host-baseline recreated by selfHeal        (+2s)
+  03:41:13Z  veridex-host-public-ingress recreated by selfHeal  (+8s)
+  03:42:42Z  post-state: 2 CCNPs, 5/5 audit=Enabled (Audit),
+             0 restarts, 9/9 apps, all probes 200
+
+FINDING 1 -- the escape hatch does not work the obvious way. A bare
+kubectl delete was undone in TWO SECONDS. The warning in the policy header is
+now VERIFIED rather than asserted: in a real lockout, deleting the CCNPs buys
+seconds, not a fix. The Git commit must be reverted as well or selfHeal closes
+the hatch while the operator is still working.
+
+FINDING 2 -- the rollback has its own transient failure window. NEW, and not
+anticipated by the procedure. During the recreate, legitimate VXLAN
+(UDP/8472 from 10.2.1.11, veridex-server-2) was audited as a would-be drop:
+the host endpoint had policy ACTIVE but its rules NOT YET COMPUTED. Confirmed
+transient -- zero internal-source audits before the delete, zero within 90
+seconds after.
+
+  In audit mode this cost nothing.
+  UNDER ENFORCEMENT it would have been a brief cross-node network partition,
+  because VXLAN carries all inter-node pod traffic.
+
+Consequence for Stage E: reverting under enforcement is not instantly safe. It
+has its own few-second outage. The safer emergency order is to disable
+enforcement FIRST (return the host endpoints to audit mode), and only then
+revert Git -- rather than reverting and hoping. This should be decided before
+Stage E, not discovered during an incident.
+
+LIMITATIONS -- what this evidence does NOT establish
+----------------------------------------------------
+1. NO ANSIBLE RUN occurred inside the window. The procedure requires one so
+   node-to-node and control-plane flows are exercised deliberately rather than
+   waited for. EG102 therefore passes on ORGANIC TRAFFIC ONLY. Ansible-driven
+   flows are untested. Neither party in the session had SSH access to the
+   nodes (10.2.1.10:22 unreachable from the operator workstation; no private
+   keys present), so this is an access limitation, not an oversight.
+
+2. THE COLD-APPLY PATH IS UNMEASURED. EG104 exercised delete-then-recreate.
+   Stage E actual sequence is a cold apply against endpoints leaving audit
+   mode, which may behave differently. Finding 2 above may or may not
+   reproduce there.
+
+3. RECOVERY IS NOT CLAIMED. No node loss, no eviction, no real lockout and no
+   console recovery was exercised during this window. The console path itself
+   was proven separately on 2026-09-18 on one server and one worker only
+   (docs/security/incidents/2026-09-18-provider-console-drill.md); three nodes
+   remain undrilled.
+
+4. AUDIT MODE REMAINS IMPERATIVE AND UNDOCUMENTED. It is absent from
+   cilium-config, is not a cilium-agent argument, and is set by no Ansible
+   role. It does not survive a cilium-agent restart. Every one of the results
+   above is therefore conditional on a state that no source of truth
+   describes, and that CLAUDE.md S15 forbids treating as intended design. This
+   should be made declarative or recorded as an expiring emergency mutation
+   under S4 before Stage E.
+
+STATE AT CLOSE OF THIS RECORD
+-----------------------------
+  CCNP objects .................. 2, both present, audit mode holding
+  Host endpoints ................ 5/5 PolicyAuditMode: Enabled, (Audit)
+  Enforcement ................... NONE -- nothing is being dropped
+  cilium-agent restarts ......... 0 on all five since 2026-09-17T09:59Z
+  Argo CD ....................... 9/9 Synced/Healthy
+  Public endpoints .............. site/www/argocd/grafana 200 on both workers
+  Certificate ................... Ready, notAfter 2026-12-17T17:57:04Z
+
+Stage E (enforcement) is NOT started and is gated on the decisions above.
